@@ -1,0 +1,2465 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// PERMANENT ENTITIES
+// ==========================================
+
+model SchoolProfile {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  contactInfo  String?
+  address      String?
+  email        String? // Admin root email
+  phone        String? // Admin root phone
+  passwordHash String? // Admin root password
+  status       String   @default("Active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    String?
+  updatedBy    String?
+  campuses     Campus[]
+  roles        Role[]
+
+  @@map("school_profile")
+}
+
+model Campus {
+  id                   String                @id @default(uuid()) @db.Uuid
+  schoolProfileId      String                @db.Uuid
+  schoolProfile        SchoolProfile         @relation(fields: [schoolProfileId], references: [id], onDelete: Cascade)
+  name                 String                @unique
+  address              String
+  capacity             Int
+  status               String                @default("Active")
+  latitude             Float?
+  longitude            Float?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  createdBy            String?
+  updatedBy            String?
+  classes              Class[]
+  assets               Asset[]
+  rooms                Room[]
+  purchaseRequisitions PurchaseRequisition[]
+  enrollments          StudentEnrollment[]
+
+  attendanceRecords AttendanceRecord[]
+  feeInvoices       FeeInvoice[]
+  acmsHolidays      ACMSHolidayMaster[]
+
+  @@map("campuses")
+}
+
+model Role {
+  id              String         @id @default(uuid()) @db.Uuid
+  name            String         @unique
+  description     String?
+  permissions     String[]
+  status          String         @default("Active") // Active, Inactive
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  createdBy       String?
+  updatedBy       String?
+  staff           Staff[]
+  schoolProfileId String?        @db.Uuid
+  schoolProfile   SchoolProfile? @relation(fields: [schoolProfileId], references: [id], onDelete: Cascade)
+
+  @@map("roles")
+}
+
+model Staff {
+  id           String              @id @default(uuid()) @db.Uuid
+  email        String              @unique
+  passwordHash String
+  fullName     String
+  roleId       String              @db.Uuid
+  role         Role                @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  status       String              @default("Active") // Active, Inactive, Suspended
+  gender       String?
+  education    String?
+  experience   String?
+  photoUrl     String?
+  details      Json?               @db.JsonB
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  createdBy    String?
+  updatedBy    String?
+  assignments  TeacherAssignment[]
+  attendance   AttendanceRecord[]
+
+  // HR & Payroll Relations
+  leaveBalances         LeaveBalance[]
+  leaveApplications     LeaveApplication[]
+  resolvedLeaves        LeaveApplication[]        @relation("ResolvedLeaves")
+  resolvedStudentLeaves StudentLeaveApplication[] @relation("ResolvedStudentLeaves")
+  payrollStructure      PayrollStructure?
+  transportAssignments  TransportVehicleStaff[]
+  payslips              Payslip[]
+  performanceReviews   PerformanceReview[]     @relation("StaffReviews")
+  givenReviews         PerformanceReview[]     @relation("ReviewerStaff")
+  TransportTrip        TransportTrip[]
+  TransportBreakdown   TransportBreakdown[]
+  TransportAccident    TransportAccident[]
+  LMSCourseSection     LMSCourseSection[]
+  LMSLiveClass         LMSLiveClass[]
+  EMSInvigilator       EMSInvigilator[]
+  EMSEvaluationRecord  EMSEvaluationRecord[]
+  EMSModerationRecord  EMSModerationRecord[]
+  IdCards              IdCard[]
+
+  healthVisitsLogged        HealthVisit[]
+  disciplineIncidentsFiled  DisciplineIncident[]      @relation("DisciplineReportedBy")
+  disciplineCounselingNotes DisciplineCounselingNote[]
+  assignedInquiries         AdmissionInquiry[]
+  inquiryFollowUps          AdmissionInquiryFollowUp[]
+
+  @@map("staff")
+}
+
+model Student {
+  id                  String               @id @default(uuid()) @db.Uuid
+  admissionNumber     String               @unique
+  fullName            String
+  gender              String
+  guardianName        String
+  phone               String
+  status              String               @default("Active")
+  documentsVerified   Boolean              @default(false)
+  dateOfBirth         DateTime?
+  photoUrl            String?
+  profilePicture      String?
+  faceEmbedding       Json?                @db.JsonB
+  passwordHash        String?
+  documentDetails     Json?                @db.JsonB
+  details             Json?                @db.JsonB
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  createdBy           String?
+  updatedBy           String?
+  enrollments         StudentEnrollment[]
+  parents             ParentStudent[]
+  documents           AdmissionDocument[]
+  LMSSubmission       LMSSubmission[]
+  LMSQuizAttempt      LMSQuizAttempt[]
+  LMSGrade            LMSGrade[]
+  LMSStudentPortfolio LMSStudentPortfolio?
+  EMSExamSeating      EMSExamSeating[]
+  EMSExamAttempt      EMSExamAttempt[]
+  EMSResult           EMSResult[]
+  EMSReportCard       EMSReportCard[]
+  EMSCertificate      EMSCertificate[]
+  IdCards             IdCard[]
+
+  healthProfile       HealthProfile?
+  healthVisits        HealthVisit[]
+  vaccinations        Vaccination[]
+  disciplineIncidents DisciplineIncident[]
+  admissionInquiry    AdmissionInquiry?
+
+  @@map("students")
+}
+
+// ==========================================
+// ACADEMIC SESSION & HIERARCHY
+// ==========================================
+
+model AcademicSession {
+  id              String              @id @default(uuid()) @db.Uuid
+  name            String              @unique // e.g. "2026-2027"
+  isActive        Boolean             @default(false)
+  status          String              @default("Active")
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  createdBy       String?
+  updatedBy       String?
+  classes         Class[]
+  enrollments     StudentEnrollment[]
+  assignments     TeacherAssignment[]
+  timetables      Timetable[]
+  slots           TimetableSlot[]
+  feeStructures   FeeStructure[]
+  exams           Exam[]
+  acmsTerms       ACMSAcademicTerm[]
+  acmsWorkingDays ACMSWorkingDay[]
+  acmsEvents      ACMSEvent[]
+  attendanceRecords AttendanceRecord[]
+
+  @@map("academic_sessions")
+}
+
+model Class {
+  id            String          @id @default(uuid()) @db.Uuid
+  grade         String // e.g. "Grade 10"
+  campusId      String          @db.Uuid
+  campus        Campus          @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  sessionId     String          @db.Uuid
+  session       AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  status        String          @default("Active")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  createdBy     String?
+  updatedBy     String?
+  sections      Section[]
+  subjects      ClassSubject[]
+  feeStructures FeeStructure[]
+  examSlots     ExamSlot[]
+  LMSCourse     LMSCourse[]
+  EMSGradebook  EMSGradebook[]
+
+  @@map("classes")
+}
+
+model Section {
+  id               String              @id @default(uuid()) @db.Uuid
+  name             String // e.g. "Section A"
+  classId          String              @db.Uuid
+  class            Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  status           String              @default("Active")
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  createdBy        String?
+  updatedBy        String?
+  enrollments      StudentEnrollment[]
+  assignments      TeacherAssignment[]
+  timetable        TimetablePeriod[]
+  lmsAssignments   Assignment[]
+  quizzes          Quiz[]
+  LMSCourseSection LMSCourseSection[]
+
+  @@map("sections")
+}
+
+model Subject {
+  id               String              @id @default(uuid()) @db.Uuid
+  name             String
+  classes          ClassSubject[]
+  medium           String // e.g. "English", "French"
+  status           String              @default("Active")
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  createdBy        String?
+  updatedBy        String?
+  assignments      Assignment[]
+  allocations      TeacherAssignment[]
+  timetable        TimetablePeriod[]
+  examSlots        ExamSlot[]
+  content          CourseContent[]
+  quizzes          Quiz[]
+  LMSCourse        LMSCourse[]
+  LMSQuestionBank  LMSQuestionBank[]
+  EMSExamSchedule  EMSExamSchedule[]
+  EMSQuestionBank  EMSQuestionBank[]
+  EMSQuestionPaper EMSQuestionPaper[]
+
+  @@map("subjects")
+}
+
+// ==========================================
+// SESSION-BASED RELATIONSHIPS
+// ==========================================
+
+model StudentEnrollment {
+  id          String             @id @default(uuid()) @db.Uuid
+  studentId   String             @db.Uuid
+  student     Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sessionId   String             @db.Uuid
+  session     AcademicSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sectionId   String             @db.Uuid
+  section     Section            @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  rollNumber  String?
+  status      String             @default("Enrolled") // Enrolled, Promoted, Archived
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  createdBy   String?
+  updatedBy   String?
+  attendance  AttendanceRecord[]
+  reportCards ReportCard[]
+  invoices    FeeInvoice[]
+  examMarks   ExamMarks[]
+
+  assignmentSubmissions AssignmentSubmission[]
+  quizAttempts          QuizAttempt[]
+  transportAssignments  TransportStudentAssignment[]
+  hostelAllocations     HostelAllocation[]
+  hostelAttendance      HostelAttendance[]
+  hostelGrievances      HostelGrievance[]
+  bookIssues            BookIssue[]
+
+  campusId            String?               @db.Uuid
+  campus              Campus?               @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  TransportAttendance TransportAttendance[]
+  studentLeaveApplications StudentLeaveApplication[]
+
+  @@index([sectionId, sessionId])
+  @@index([campusId, sectionId, sessionId])
+  @@map("student_enrollments")
+}
+
+model TeacherAssignment {
+  id           String            @id @default(uuid()) @db.Uuid
+  staffId      String            @db.Uuid
+  staff        Staff             @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  sessionId    String            @db.Uuid
+  session      AcademicSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  subjectId    String?           @db.Uuid
+  subject      Subject?          @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  sectionId    String?           @db.Uuid
+  section      Section?          @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  roomId         String?           @db.Uuid
+  room           Room?             @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  isClassTeacher Boolean           @default(false)
+  hoursPerWeek   Float?
+  status         String            @default("Active")
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  createdBy    String?
+  updatedBy    String?
+  timetable    TimetablePeriod[]
+
+  @@index([staffId, sessionId])
+  @@map("teacher_assignments")
+}
+
+// ==========================================
+// TRANSACTIONAL DATA (TIED TO ENROLLMENT/ASSIGNMENT)
+// ==========================================
+
+model AttendanceRecord {
+  id           String             @id @default(uuid()) @db.Uuid
+  enrollmentId String?            @db.Uuid
+  enrollment   StudentEnrollment? @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  staffId      String?            @db.Uuid
+  staff        Staff?             @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date         String // YYYY-MM-DD
+  status       String // Present, Absent, Late, Leave
+  checkInTime  String?
+  checkOutTime String?
+  faceVerified Boolean            @default(false)
+  location     String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  createdBy    String?
+  updatedBy    String?
+
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  
+  sessionId String? @db.Uuid
+  session   AcademicSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([enrollmentId, date])
+  @@index([campusId, date])
+  @@index([sessionId, date])
+  @@map("attendance_records")
+}
+
+model Assignment {
+  id          String                 @id @default(uuid()) @db.Uuid
+  title       String
+  subjectId   String                 @db.Uuid
+  subject     Subject                @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  sectionId   String?                @db.Uuid
+  section     Section?               @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  type        String                 @default("Homework") // Homework, Weekly Test, Semester Exam
+  dueDate     String // YYYY-MM-DD
+  maxMarks    Int                    @default(100)
+  description String?
+  status      String                 @default("Active")
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  createdBy   String?
+  updatedBy   String?
+  submissions AssignmentSubmission[]
+
+  @@map("assignments")
+}
+
+model AssignmentSubmission {
+  id            String            @id @default(uuid()) @db.Uuid
+  assignmentId  String            @db.Uuid
+  assignment    Assignment        @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  enrollmentId  String            @db.Uuid
+  enrollment    StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  status        String            @default("Submitted") // Submitted, Graded, Late
+  submissionUrl String?
+  grade         Float?
+  feedback      String?
+  submittedAt   DateTime          @default(now())
+
+  @@map("assignment_submissions")
+}
+
+// ==========================================
+// LMS (PHASE 7)
+// ==========================================
+
+model CourseContent {
+  id        String   @id @default(uuid()) @db.Uuid
+  subjectId String   @db.Uuid
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  title     String
+  type      String // "PDF" | "VIDEO" | "LINK"
+  url       String
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@map("course_content")
+}
+
+model Quiz {
+  id        String         @id @default(uuid()) @db.Uuid
+  title     String
+  subjectId String         @db.Uuid
+  subject   Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  sectionId String?        @db.Uuid
+  section   Section?       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  maxMarks  Int            @default(100)
+  deadline  DateTime?
+  status    String         @default("Active")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id            String @id @default(uuid()) @db.Uuid
+  quizId        String @db.Uuid
+  quiz          Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  text          String
+  type          String @default("MCQ") // "MCQ" | "SHORT_ANSWER"
+  options       Json?  @db.JsonB // ["Option A", "Option B"]
+  correctAnswer String // the correct option or expected answer
+
+  @@map("quiz_questions")
+}
+
+model QuizAttempt {
+  id           String            @id @default(uuid()) @db.Uuid
+  quizId       String            @db.Uuid
+  quiz         Quiz              @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  score        Float
+  status       String            @default("Completed")
+  submittedAt  DateTime          @default(now())
+
+  @@map("quiz_attempts")
+}
+
+model ReportCard {
+  id             String            @id @default(uuid()) @db.Uuid
+  enrollmentId   String            @db.Uuid
+  enrollment     StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  examId         String?           @db.Uuid
+  exam           Exam?             @relation(fields: [examId], references: [id], onDelete: SetNull)
+  attendanceRate String
+  gpa            String
+  computedData   Json?             @db.JsonB
+  remarks        String?
+  isApproved     Boolean           @default(false)
+  status         String            @default("Active")
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  createdBy      String?
+  updatedBy      String?
+
+  @@map("report_cards")
+}
+
+// ==========================================
+// EXAMS & GRADING
+// ==========================================
+
+model Exam {
+  id          String          @id @default(uuid()) @db.Uuid
+  name        String // e.g. "Mid-Term 2026"
+  term        String?
+  sessionId   String          @db.Uuid
+  session     AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  status      String          @default("Scheduled") // Scheduled, Ongoing, Completed
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  createdBy   String?
+  updatedBy   String?
+  slots       ExamSlot[]
+  reportCards ReportCard[]
+
+  @@map("exams")
+}
+
+model ExamSlot {
+  id        String      @id @default(uuid()) @db.Uuid
+  examId    String      @db.Uuid
+  exam      Exam        @relation(fields: [examId], references: [id], onDelete: Cascade)
+  classId   String      @db.Uuid
+  class     Class       @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectId String      @db.Uuid
+  subject   Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  date      String // YYYY-MM-DD
+  startTime String // HH:MM
+  endTime   String // HH:MM
+  room      String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  createdBy String?
+  updatedBy String?
+  marks     ExamMarks[]
+
+  @@map("exam_slots")
+}
+
+model ExamMarks {
+  id            String            @id @default(uuid()) @db.Uuid
+  examSlotId    String            @db.Uuid
+  examSlot      ExamSlot          @relation(fields: [examSlotId], references: [id], onDelete: Cascade)
+  enrollmentId  String            @db.Uuid
+  enrollment    StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  marksObtained Float?
+  isAbsent      Boolean           @default(false)
+  remarks       String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  createdBy     String?
+  updatedBy     String?
+
+  @@map("exam_marks")
+}
+
+model GradingRule {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String // e.g. "Standard Absolute Scale"
+  rules     Json     @db.JsonB // Stores the scale e.g. [{"min": 90, "grade": "A+"}, ...]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+  updatedBy String?
+
+  @@map("grading_rules")
+}
+
+// ==========================================
+// PORTAL & USERS (PHASE 5)
+// ==========================================
+
+model Parent {
+  id           String          @id @default(uuid()) @db.Uuid
+  name         String
+  phone        String?
+  email        String?         @unique
+  passwordHash String?
+  status       String          @default("Active")
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  students     ParentStudent[]
+
+  @@map("parents")
+}
+
+model ParentStudent {
+  id           String   @id @default(uuid()) @db.Uuid
+  parentId     String   @db.Uuid
+  parent       Parent   @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  studentId    String   @db.Uuid
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  relationship String   @default("Parent") // e.g. Father, Mother, Guardian
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([parentId, studentId])
+  @@map("parent_students")
+}
+
+model PortalAccount {
+  id           String   @id @default(uuid()) @db.Uuid
+  username     String   @unique // email or admissionNumber
+  passwordHash String
+  userType     String // "STUDENT" | "PARENT"
+  referenceId  String   @db.Uuid // UUID of Student or Parent
+  status       String   @default("Active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("portal_accounts")
+}
+
+// ==========================================
+// COMMUNICATION (PHASE 6)
+// ==========================================
+
+model Notification {
+  id          String   @id @default(uuid()) @db.Uuid
+  recipientId String   @db.Uuid // Links to PortalAccount
+  type        String // "SMS" | "EMAIL" | "PUSH"
+  title       String?
+  content     String
+  priority    String   @default("NORMAL") // "URGENT" | "NORMAL" | "LOW"
+  readStatus  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model Announcement {
+  id             String    @id @default(uuid()) @db.Uuid
+  title          String
+  body           String
+  targetAudience String    @default("ALL") // "ALL" | "PARENTS" | "STUDENTS" | "STAFF"
+  eventDate      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+
+  @@map("announcements")
+}
+
+model Conversation {
+  id        String    @id @default(uuid()) @db.Uuid
+  parentId  String    @db.Uuid
+  staffId   String    @db.Uuid
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  @@unique([parentId, staffId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String       @db.Uuid // UUID of the sender (Parent or Staff)
+  senderType     String // "PARENT" | "STAFF"
+  content        String
+  readStatus     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@map("messages")
+}
+
+model Timetable {
+  id        String            @id @default(uuid()) @db.Uuid
+  name      String
+  sessionId String            @db.Uuid
+  session   AcademicSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  status    String            @default("Draft") // Draft, Active, Archived
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  periods   TimetablePeriod[]
+
+  @@map("timetables")
+}
+
+model TimetableSlot {
+  id        String          @id @default(uuid()) @db.Uuid
+  name      String
+  startTime String
+  endTime   String
+  isBreak   Boolean         @default(false)
+  sessionId String          @db.Uuid
+  session   AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  createdBy String?
+  updatedBy String?
+
+  @@map("timetable_slots")
+}
+
+model TimetablePeriod {
+  id           String            @id @default(uuid()) @db.Uuid
+  timetableId  String            @db.Uuid
+  timetable    Timetable         @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  sectionId    String            @db.Uuid
+  section      Section           @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  subjectId    String?           @db.Uuid
+  subject      Subject?          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  assignmentId String            @db.Uuid
+  assignment   TeacherAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  dayOfWeek    String // Monday, Tuesday, etc.
+  startTime    String // HH:MM
+  endTime      String // HH:MM
+  room         String
+  status       String            @default("Active")
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  createdBy    String?
+  updatedBy    String?
+
+  @@map("timetable_periods")
+}
+
+// ==========================================
+// PHASE 8: OPERATIONAL MODULES
+// ==========================================
+
+// --- TRANSPORT (Replaced at bottom of schema) ---
+
+// --- HOSTEL & MESS ---
+model Hostel {
+  id         String            @id @default(uuid()) @db.Uuid
+  name       String
+  type       String // "BOYS" | "GIRLS" | "COED"
+  warden     String?
+  status     String            @default("Active")
+  rooms      HostelRoom[]
+  grievances HostelGrievance[]
+  menus      MessMenu[]
+
+  @@map("hostels")
+}
+
+model HostelRoom {
+  id          String             @id @default(uuid()) @db.Uuid
+  hostelId    String             @db.Uuid
+  hostel      Hostel             @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  roomNumber  String
+  capacity    Int
+  status      String             @default("Active")
+  allocations HostelAllocation[]
+
+  @@map("hostel_rooms")
+}
+
+model HostelAllocation {
+  id           String            @id @default(uuid()) @db.Uuid
+  roomId       String            @db.Uuid
+  room         HostelRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  status       String            @default("Active")
+  createdAt    DateTime          @default(now())
+
+  @@map("hostel_allocations")
+}
+
+model HostelAttendance {
+  id           String            @id @default(uuid()) @db.Uuid
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  date         String // YYYY-MM-DD
+  status       String // Present, Absent, Leave
+  createdAt    DateTime          @default(now())
+
+  @@map("hostel_attendance")
+}
+
+model HostelGrievance {
+  id           String            @id @default(uuid()) @db.Uuid
+  hostelId     String            @db.Uuid
+  hostel       Hostel            @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  title        String
+  description  String
+  status       String            @default("Open") // Open, Resolved
+  createdAt    DateTime          @default(now())
+
+  @@map("hostel_grievances")
+}
+
+model MessMenu {
+  id        String   @id @default(uuid()) @db.Uuid
+  hostelId  String   @db.Uuid
+  hostel    Hostel   @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  dayOfWeek String
+  mealType  String // Breakfast, Lunch, Dinner
+  items     String
+  createdAt DateTime @default(now())
+
+  @@map("mess_menus")
+}
+
+// --- LIBRARY ---
+model LibraryBook {
+  id          String      @id @default(uuid()) @db.Uuid
+  title       String
+  author      String?
+  isbn        String?
+  category    String?
+  totalCopies Int         @default(1)
+  available   Int         @default(1)
+  status      String      @default("Active")
+  createdAt   DateTime    @default(now())
+  issues      BookIssue[]
+
+  @@map("library_books")
+}
+
+model BookIssue {
+  id           String            @id @default(uuid()) @db.Uuid
+  bookId       String            @db.Uuid
+  book         LibraryBook       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  issueDate    DateTime          @default(now())
+  dueDate      DateTime
+  returnDate   DateTime?
+  status       String            @default("Issued") // Issued, Returned, Lost
+  fines        LibraryFine[]
+
+  @@map("book_issues")
+}
+
+model LibraryFine {
+  id        String    @id @default(uuid()) @db.Uuid
+  issueId   String    @db.Uuid
+  issue     BookIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  amount    Float
+  status    String    @default("Unpaid") // Unpaid, Paid, Waived
+  createdAt DateTime  @default(now())
+
+  @@map("library_fines")
+}
+
+// --- INVENTORY ---
+model AssetCategory {
+  id     String  @id @default(uuid()) @db.Uuid
+  name   String
+  status String  @default("Active")
+  assets Asset[]
+
+  @@map("asset_categories")
+}
+
+model Asset {
+  id         String        @id @default(uuid()) @db.Uuid
+  categoryId String        @db.Uuid
+  category   AssetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  campusId   String        @db.Uuid
+  campus     Campus        @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  name       String
+  quantity   Int
+  status     String        @default("Active") // Active, Damaged, Discarded
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@map("assets")
+}
+
+model PurchaseRequisition {
+  id            String   @id @default(uuid()) @db.Uuid
+  campusId      String   @db.Uuid
+  campus        Campus   @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  itemName      String
+  quantity      Int
+  estimatedCost Float?
+  purpose       String?
+  status        String   @default("Pending") // Pending, Approved, Ordered, Received, Rejected
+  createdAt     DateTime @default(now())
+  createdBy     String?
+
+  @@map("purchase_requisitions")
+}
+
+// ==========================================
+// PHASE 9: HR & PAYROLL
+// ==========================================
+
+model LeaveBalance {
+  id           String   @id @default(uuid()) @db.Uuid
+  staffId      String   @db.Uuid
+  staff        Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  leaveType    String // e.g. "Casual", "Sick", "Annual"
+  totalAllowed Float
+  used         Float    @default(0)
+  year         Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("leave_balances")
+}
+
+model LeaveApplication {
+  id           String    @id @default(uuid()) @db.Uuid
+  staffId      String    @db.Uuid
+  staff        Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  leaveType    String
+  startDate    DateTime
+  endDate      DateTime
+  reason       String?
+  status       String    @default("Pending") // Pending, Approved, Rejected
+  appliedAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?   @db.Uuid
+  resolvedBy   Staff?    @relation("ResolvedLeaves", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@map("leave_applications")
+}
+
+model StudentLeaveApplication {
+  id           String            @id @default(uuid()) @db.Uuid
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  leaveType    String
+  startDate    DateTime
+  endDate      DateTime
+  reason       String?
+  status       String            @default("Pending") // Pending, Approved, Rejected
+  appliedAt    DateTime          @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?           @db.Uuid
+  resolvedBy   Staff?            @relation("ResolvedStudentLeaves", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@map("student_leave_applications")
+}
+
+model PayrollStructure {
+  id          String   @id @default(uuid()) @db.Uuid
+  staffId     String   @unique @db.Uuid
+  staff       Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  basicSalary Float
+  allowances  Float    @default(0)
+  deductions  Float    @default(0) // fixed standard deductions
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("payroll_structures")
+}
+
+model Payslip {
+  id              String   @id @default(uuid()) @db.Uuid
+  staffId         String   @db.Uuid
+  staff           Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  month           Int // 1-12
+  year            Int
+  basicSalary     Float
+  allowances      Float
+  fixedDeductions Float
+  lopDeductions   Float    @default(0) // Loss of Pay for unapproved absences
+  netSalary       Float
+  generatedAt     DateTime @default(now())
+  status          String   @default("Generated") // Generated, Paid
+
+  @@map("payslips")
+}
+
+model PerformanceReview {
+  id         String   @id @default(uuid()) @db.Uuid
+  staffId    String   @db.Uuid
+  staff      Staff    @relation("StaffReviews", fields: [staffId], references: [id], onDelete: Cascade)
+  reviewerId String   @db.Uuid
+  reviewer   Staff    @relation("ReviewerStaff", fields: [reviewerId], references: [id], onDelete: Restrict)
+  cycle      String // e.g. "2026 Q1"
+  rating     Int // e.g. 1-5
+  comments   String?
+  createdAt  DateTime @default(now())
+
+  @@map("performance_reviews")
+}
+
+model FeeStructure {
+  id        String          @id @default(uuid()) @db.Uuid
+  name      String // e.g. "Grade 10 General", "Grade 10 Scholarship"
+  amount    Decimal // Base amount
+  cycle     String // Monthly, Quarterly, Annual
+  sessionId String          @db.Uuid
+  session   AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  classId   String?         @db.Uuid
+  class     Class?          @relation(fields: [classId], references: [id], onDelete: SetNull)
+  status    String          @default("Active")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("fee_structures")
+}
+
+model FeeInvoice {
+  id            String            @id @default(uuid()) @db.Uuid
+  enrollmentId  String            @db.Uuid
+  enrollment    StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  structureId   String?           @db.Uuid
+  amount        Decimal
+  lateFeeAmount Decimal?          @default(0)
+  totalAmount   Decimal?
+  dueDate       String // YYYY-MM-DD
+  status        String // Paid, Unpaid, Overdue
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  createdBy     String?
+  updatedBy     String?
+  payments      FeePayment[]
+
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: Cascade)
+
+  @@index([enrollmentId, status])
+  @@index([campusId, status])
+  @@map("fee_invoices")
+}
+
+model FeePayment {
+  id               String     @id @default(uuid()) @db.Uuid
+  invoiceId        String     @db.Uuid
+  invoice          FeeInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amountPaid       Decimal
+  paymentMode      String // Cash, UPI, NetBanking, Cheque, Stripe, Razorpay
+  referenceNo      String?
+  paymentDate      String // YYYY-MM-DD
+  transactionRef   String?
+  gatewayPaymentId String?
+  gatewayResponse  Json?      @db.JsonB
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  createdBy        String?
+  updatedBy        String?
+
+  @@map("fee_payments")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  userEmail String?
+  action    String
+  tableName String
+  recordId  String
+  oldValue  Json?    @db.JsonB
+  newValue  Json?    @db.JsonB
+  ipAddress String
+  userAgent String?
+  timestamp DateTime @default(now())
+
+  @@index([userId, timestamp])
+  @@map("audit_logs")
+}
+
+model ClassSubject {
+  classId   String  @db.Uuid
+  class     Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectId String  @db.Uuid
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([classId, subjectId])
+  @@map("class_subjects")
+}
+
+model Room {
+  id          String              @id @default(uuid()) @db.Uuid
+  name        String
+  capacity    Int
+  campusId    String              @db.Uuid
+  campus      Campus              @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  status      String              @default("Active")
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  assignments TeacherAssignment[]
+
+  @@map("rooms")
+}
+
+model AdmissionDocument {
+  id           String   @id @default(uuid()) @db.Uuid
+  studentId    String   @db.Uuid
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  documentType String // e.g. "Birth Certificate", "Transfer Certificate"
+  fileUrl      String
+  isVerified   Boolean  @default(false)
+  uploadedAt   DateTime @default(now())
+
+  @@map("admission_documents")
+}
+
+model DocumentTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  type           String // "ID_CARD" | "CERTIFICATE"
+  targetAudience String // "STAFF" | "STUDENT"
+  designJson     Json     @db.JsonB
+  status         String   @default("Active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("document_templates")
+}
+
+// ==========================================
+// TRANSPORT MANAGEMENT
+// ==========================================
+
+model TransportVehicle {
+  id                     String   @id @default(uuid()) @db.Uuid
+  vehicleNumber          String   @unique
+  internalBusCode        String?
+  busName                String?
+  vehicleType            String // School Bus, Mini Bus, Van
+  manufacturer           String?
+  model                  String?
+  manufacturingYear      Int?
+  purchaseDate           String?
+  registrationNumber     String?
+  engineNumber           String?
+  chassisNumber          String?
+  vin                    String?
+  profilePicture         String?
+  seatingCapacity        Int
+  standingCapacity       Int?
+  currentOdometer        Float?
+  color                  String?
+  fuelType               String?
+  transmission           String?
+  insuranceCompany       String?
+  insurancePolicyNumber  String?
+  insuranceExpiry        String?
+  roadTaxExpiry          String?
+  fitnessCertificate     String?
+  permitNumber           String?
+  permitExpiry           String?
+  pollutionCertificate   String?
+  fireExtinguisherExpiry String?
+  gpsDevice              Boolean  @default(false)
+  rfidDevice             Boolean  @default(false)
+  cameraInstalled        Boolean  @default(false)
+  panicButton            Boolean  @default(false)
+  firstAidKit            Boolean  @default(false)
+  speedGovernorInstalled Boolean  @default(false)
+  wheelchairAccessible   Boolean  @default(false)
+  status                 String   @default("Active") // Active, Maintenance, Accident, Retired
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  staff                TransportVehicleStaff[]
+  documents            TransportVehicleDocument[]
+  TransportTrip        TransportTrip[]
+  TransportFuelLog     TransportFuelLog[]
+  TransportOdometerLog TransportOdometerLog[]
+  TransportService     TransportService[]
+  TransportTyre        TransportTyre[]
+  TransportBattery     TransportBattery[]
+  TransportBreakdown   TransportBreakdown[]
+  TransportAccident    TransportAccident[]
+  TransportExpense     TransportExpense[]
+  TransportRoute       TransportRoute[]
+
+  @@map("transport_vehicles")
+}
+
+model IdCardTemplate {
+  id              String   @id @default(uuid()) @db.Uuid
+  templateName    String
+  targetRole      String // Student, Staff
+  schoolName      String   @default("Aetheria Academy")
+  logoUrl         String?
+  signatureUrl    String?
+  primaryColor    String   @default("#3b82f6")
+  secondaryColor  String   @default("#1e40af")
+  backgroundUrl   String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cards IdCard[]
+  @@map("id_card_templates")
+}
+
+model IdCard {
+  id              String   @id @default(uuid()) @db.Uuid
+  idNumber        String   @unique
+  templateId      String   @db.Uuid
+  template        IdCardTemplate @relation(fields: [templateId], references: [id])
+  studentId       String?  @db.Uuid
+  student         Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  staffId         String?  @db.Uuid
+  staff           Staff?   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  barcodeData     String?
+  issueDate       DateTime @default(now())
+  expiryDate      DateTime?
+  status          String   @default("Active") // Active, Revoked, Expired
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("id_cards")
+}
+
+model TransportVehicleDocument {
+  id           String           @id @default(uuid()) @db.Uuid
+  vehicleId    String           @db.Uuid
+  vehicle      TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  documentType String // RC, Insurance, Permit, Fitness, Pollution
+  fileUrl      String
+  issueDate    String?
+  expiryDate   String?
+  status       String           @default("Valid")
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@map("transport_vehicle_documents")
+}
+
+model TransportVehicleStaff {
+  id        String           @id @default(uuid()) @db.Uuid
+  vehicleId String           @db.Uuid
+  vehicle   TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  staffId   String           @db.Uuid
+  staff     Staff            @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  shift     String // Morning, Afternoon, Full Day
+  status    String           @default("Assigned") // Assigned, Unassigned
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("transport_vehicle_staff")
+}
+
+model TransportRoute {
+  id                 String   @id @default(uuid()) @db.Uuid
+  routeName          String
+  distance           Float?
+  estimatedTime      String? // e.g., "55 Minutes"
+  morningStartTime   String?
+  afternoonStartTime String?
+  status             String            @default("Active")
+  vehicleId          String?           @db.Uuid
+  vehicle            TransportVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime @updatedAt
+
+  stops         TransportRouteStop[]
+  TransportTrip TransportTrip[]
+  studentAssignments TransportStudentAssignment[]
+
+  @@map("transport_routes")
+}
+
+model TransportRouteStop {
+  id               String         @id @default(uuid()) @db.Uuid
+  routeId          String         @db.Uuid
+  route            TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  stopName         String
+  latitude         Float?
+  longitude        Float?
+  arrivalTime      String?
+  departureTime    String?
+  distanceFromPrev Float?
+  orderIndex       Int
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  studentAssignments TransportStudentAssignment[]
+  TransportTripLog   TransportTripLog[]
+
+  @@map("transport_route_stops")
+}
+
+model TransportStudentAssignment {
+  id            String             @id @default(uuid()) @db.Uuid
+  enrollmentId  String             @db.Uuid
+  enrollment    StudentEnrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  
+  routeId       String?            @db.Uuid
+  route         TransportRoute?    @relation(fields: [routeId], references: [id], onDelete: Restrict)
+
+  stopId        String?            @db.Uuid
+  stop          TransportRouteStop? @relation(fields: [stopId], references: [id], onDelete: Restrict)
+  morningPickup Boolean            @default(true)
+  afternoonDrop Boolean            @default(true)
+  seatNumber    String?
+  feePeriod     String? // Monthly, Quarterly, Yearly
+  guardianAuth  String? // Authorized Person Info
+  status        String             @default("Active")
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@map("transport_student_assignments")
+}
+
+// --- PHASE 1: OPERATIONS & TRACKING ---
+
+model TransportTrip {
+  id            String           @id @default(uuid()) @db.Uuid
+  vehicleId     String           @db.Uuid
+  vehicle       TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  routeId       String           @db.Uuid
+  route         TransportRoute   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  tripType      String // Morning, Afternoon, Special
+  driverId      String?          @db.Uuid
+  driver        Staff?           @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  date          String // YYYY-MM-DD
+  startTime     DateTime?
+  endTime       DateTime?
+  startOdometer Float?
+  endOdometer   Float?
+  status        String           @default("Scheduled") // Scheduled, In Progress, Completed, Cancelled
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  logs       TransportTripLog[]
+  attendance TransportAttendance[]
+
+  @@map("transport_trips")
+}
+
+model TransportTripLog {
+  id        String              @id @default(uuid()) @db.Uuid
+  tripId    String              @db.Uuid
+  trip      TransportTrip       @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  stopId    String?             @db.Uuid
+  stop      TransportRouteStop? @relation(fields: [stopId], references: [id], onDelete: SetNull)
+  latitude  Float?
+  longitude Float?
+  timestamp DateTime            @default(now())
+  speed     Float?
+  status    String // Reached Stop, Left Stop, En Route, Delayed
+  remarks   String?
+
+  @@map("transport_trip_logs")
+}
+
+model TransportAttendance {
+  id           String            @id @default(uuid()) @db.Uuid
+  tripId       String            @db.Uuid
+  trip         TransportTrip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  status       String // Boarded, Dropped, Absent
+  timestamp    DateTime          @default(now())
+  markedBy     String // RFID, Manual, Face
+  stopId       String?           @db.Uuid
+
+  @@map("transport_attendance")
+}
+
+model TransportFuelLog {
+  id               String           @id @default(uuid()) @db.Uuid
+  vehicleId        String           @db.Uuid
+  vehicle          TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date             String // YYYY-MM-DD
+  fuelStation      String?
+  invoiceNumber    String?
+  fuelType         String
+  litres           Float
+  ratePerLitre     Float
+  totalCost        Float
+  currentOdometer  Float
+  previousOdometer Float?
+  mileage          Float? // Auto-calculated
+  filledBy         String?
+  receiptUrl       String?
+  remarks          String?
+  createdAt        DateTime         @default(now())
+
+  @@map("transport_fuel_logs")
+}
+
+model TransportOdometerLog {
+  id                String           @id @default(uuid()) @db.Uuid
+  vehicleId         String           @db.Uuid
+  vehicle           TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date              String // YYYY-MM-DD
+  openingReading    Float
+  closingReading    Float?
+  distanceTravelled Float?
+  remarks           String?
+  createdAt         DateTime         @default(now())
+
+  @@map("transport_odometer_logs")
+}
+
+// --- PHASE 2: MAINTENANCE, ASSETS, INCIDENTS & EXPENSES ---
+
+model TransportVendor {
+  id            String   @id @default(uuid()) @db.Uuid
+  vendorName    String
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  vendorType    String // Garage, Spare Parts, Tyres, Battery, Insurance
+  status        String   @default("Active")
+  createdAt     DateTime @default(now())
+
+  services  TransportService[]
+  inventory TransportInventory[]
+  expenses  TransportExpense[]
+
+  @@map("transport_vendors")
+}
+
+model TransportInventory {
+  id              String           @id @default(uuid()) @db.Uuid
+  itemName        String
+  category        String // Spare Part, Consumable, Tools
+  partNumber      String?
+  quantity        Int              @default(0)
+  unitPrice       Float
+  vendorId        String?          @db.Uuid
+  vendor          TransportVendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  minimumStock    Int              @default(5)
+  lastRestockedAt DateTime?
+  status          String           @default("Available")
+  createdAt       DateTime         @default(now())
+
+  @@map("transport_inventory")
+}
+
+model TransportService {
+  id              String           @id @default(uuid()) @db.Uuid
+  vehicleId       String           @db.Uuid
+  vehicle         TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  serviceDate     String // YYYY-MM-DD
+  serviceType     String // Preventive, Repair, Ad-hoc
+  odometerReading Float
+  vendorId        String?          @db.Uuid
+  vendor          TransportVendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  mechanicName    String?
+  totalCost       Float            @default(0.0)
+  description     String?
+  invoiceUrl      String?
+  status          String           @default("Completed") // Scheduled, In Progress, Completed
+  nextServiceDate String?
+  nextServiceOdo  Float?
+  createdAt       DateTime         @default(now())
+
+  @@map("transport_services")
+}
+
+model TransportTyre {
+  id             String           @id @default(uuid()) @db.Uuid
+  vehicleId      String           @db.Uuid
+  vehicle        TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  tyreNumber     String           @unique
+  brand          String?
+  type           String // Front Left, Front Right, Rear Left Outer, etc.
+  installedDate  String // YYYY-MM-DD
+  installedOdo   Float
+  currentOdo     Float?
+  treadDepth     Float? // In mm
+  status         String           @default("In Use") // In Use, Retreaded, Scrapped
+  warrantyExpiry String?
+  createdAt      DateTime         @default(now())
+
+  @@map("transport_tyres")
+}
+
+model TransportBattery {
+  id             String           @id @default(uuid()) @db.Uuid
+  vehicleId      String           @db.Uuid
+  vehicle        TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  batteryNumber  String           @unique
+  brand          String?
+  capacity       String? // e.g., 150Ah
+  installedDate  String // YYYY-MM-DD
+  status         String           @default("In Use") // In Use, Replaced, Dead
+  warrantyExpiry String?
+  createdAt      DateTime         @default(now())
+
+  @@map("transport_batteries")
+}
+
+model TransportBreakdown {
+  id             String           @id @default(uuid()) @db.Uuid
+  vehicleId      String           @db.Uuid
+  vehicle        TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driverId       String?          @db.Uuid
+  driver         Staff?           @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  date           String // YYYY-MM-DD
+  time           String
+  location       String?
+  description    String
+  actionTaken    String?
+  towingRequired Boolean          @default(false)
+  costIncurred   Float?
+  status         String           @default("Reported") // Reported, Under Repair, Resolved
+  createdAt      DateTime         @default(now())
+
+  @@map("transport_breakdowns")
+}
+
+model TransportAccident {
+  id               String           @id @default(uuid()) @db.Uuid
+  vehicleId        String           @db.Uuid
+  vehicle          TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driverId         String?          @db.Uuid
+  driver           Staff?           @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  date             String // YYYY-MM-DD
+  time             String
+  location         String
+  severity         String // Minor, Major, Fatal
+  description      String
+  policeReport     Boolean          @default(false)
+  firNumber        String?
+  insuranceClaimed Boolean          @default(false)
+  claimAmount      Float?
+  status           String           @default("Under Investigation") // Under Investigation, Closed
+  createdAt        DateTime         @default(now())
+
+  @@map("transport_accidents")
+}
+
+model TransportExpense {
+  id              String            @id @default(uuid()) @db.Uuid
+  vehicleId       String?           @db.Uuid
+  vehicle         TransportVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  date            String // YYYY-MM-DD
+  category        String // Fuel, Maintenance, Toll, Parking, Fine, Salary, Insurance, Taxes, Other
+  amount          Float
+  paymentMode     String // Cash, Card, UPI, Bank Transfer
+  referenceNumber String?
+  vendorId        String?           @db.Uuid
+  vendor          TransportVendor?  @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  remarks         String?
+  receiptUrl      String?
+  createdAt       DateTime          @default(now())
+
+  @@map("transport_expenses")
+}
+
+// ==========================================
+// LEARNING MANAGEMENT SYSTEM (LMS)
+// ==========================================
+
+model LMSCourse {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+  subjectId   String?  @db.Uuid
+  subject     Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  classId     String?  @db.Uuid
+  class       Class?   @relation(fields: [classId], references: [id], onDelete: SetNull)
+  status      String   @default("Draft") // Draft, Published, Archived
+  isTemplate  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+
+  sections            LMSCourseSection[]
+  curriculum          LMSCurriculum?
+  LMSGradebook        LMSGradebook?
+  LMSLiveClass        LMSLiveClass[]
+  LMSDiscussionThread LMSDiscussionThread[]
+  LMSCertificate      LMSCertificate[]
+
+  @@map("lms_courses")
+}
+
+model LMSCourseSection {
+  id        String    @id @default(uuid()) @db.Uuid
+  courseId  String    @db.Uuid
+  course    LMSCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sectionId String?   @db.Uuid
+  section   Section?  @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  teacherId String?   @db.Uuid
+  teacher   Staff?    @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  startDate DateTime?
+  endDate   DateTime?
+  status    String    @default("Active")
+  createdAt DateTime  @default(now())
+
+  @@map("lms_course_sections")
+}
+
+model LMSCurriculum {
+  id          String    @id @default(uuid()) @db.Uuid
+  courseId    String    @unique @db.Uuid
+  course      LMSCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  board       String? // CBSE, ICSE, Custom
+  description String?
+  createdAt   DateTime  @default(now())
+
+  units LMSUnit[]
+
+  @@map("lms_curriculum")
+}
+
+model LMSUnit {
+  id           String        @id @default(uuid()) @db.Uuid
+  curriculumId String        @db.Uuid
+  curriculum   LMSCurriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  title        String
+  orderIndex   Int           @default(0)
+  createdAt    DateTime      @default(now())
+
+  chapters LMSChapter[]
+
+  @@map("lms_units")
+}
+
+model LMSChapter {
+  id               String   @id @default(uuid()) @db.Uuid
+  unitId           String   @db.Uuid
+  unit             LMSUnit  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  learningOutcomes String?
+  orderIndex       Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  topics LMSTopic[]
+
+  @@map("lms_chapters")
+}
+
+model LMSTopic {
+  id         String     @id @default(uuid()) @db.Uuid
+  chapterId  String     @db.Uuid
+  chapter    LMSChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  title      String
+  orderIndex Int        @default(0)
+  createdAt  DateTime   @default(now())
+
+  lessons LMSLesson[]
+
+  @@map("lms_topics")
+}
+
+model LMSLesson {
+  id          String   @id @default(uuid()) @db.Uuid
+  topicId     String   @db.Uuid
+  topic       LMSTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  title       String
+  content     String? // HTML or Markdown content
+  durationMin Int      @default(30)
+  orderIndex  Int      @default(0)
+  isDraft     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  resources     LMSContentResource[]
+  LMSAssignment LMSAssignment[]
+  LMSQuiz       LMSQuiz[]
+
+  @@map("lms_lessons")
+}
+
+model LMSContentResource {
+  id         String     @id @default(uuid()) @db.Uuid
+  lessonId   String?    @db.Uuid
+  lesson     LMSLesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  title      String
+  type       String // PDF, VIDEO, SCORM, LINK, IMAGE
+  url        String
+  sizeBytes  Int?
+  uploadedBy String?    @db.Uuid
+  createdAt  DateTime   @default(now())
+
+  @@map("lms_content_resources")
+}
+
+// ==========================================
+// LMS PHASE 2: ASSESSMENT ENGINE
+// ==========================================
+
+model LMSAssignment {
+  id          String     @id @default(uuid()) @db.Uuid
+  lessonId    String?    @db.Uuid
+  lesson      LMSLesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  title       String
+  description String?
+  dueDate     DateTime?
+  maxScore    Float      @default(100.0)
+  createdAt   DateTime   @default(now())
+
+  submissions LMSSubmission[]
+  rubrics     LMSRubric[]
+
+  @@map("lms_assignments")
+}
+
+model LMSSubmission {
+  id           String        @id @default(uuid()) @db.Uuid
+  assignmentId String        @db.Uuid
+  assignment   LMSAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId    String        @db.Uuid
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  content      String?
+  fileUrl      String?
+  score        Float?
+  feedback     String?
+  submittedAt  DateTime      @default(now())
+  gradedAt     DateTime?
+
+  @@map("lms_submissions")
+}
+
+model LMSRubric {
+  id           String        @id @default(uuid()) @db.Uuid
+  assignmentId String        @db.Uuid
+  assignment   LMSAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  criteria     String
+  maxPoints    Float
+  createdAt    DateTime      @default(now())
+
+  @@map("lms_rubrics")
+}
+
+model LMSQuestionBank {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+  subjectId   String?  @db.Uuid
+  subject     Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  questions LMSQuestion[]
+
+  @@map("lms_question_banks")
+}
+
+model LMSQuestion {
+  id             String          @id @default(uuid()) @db.Uuid
+  questionBankId String          @db.Uuid
+  questionBank   LMSQuestionBank @relation(fields: [questionBankId], references: [id], onDelete: Cascade)
+  type           String // MCQ, TRUE_FALSE, ESSAY
+  text           String
+  options        Json?           @db.JsonB // [{id, text, isCorrect}]
+  explanation    String?
+  difficulty     String          @default("MEDIUM")
+  createdAt      DateTime        @default(now())
+
+  @@map("lms_questions")
+}
+
+model LMSQuiz {
+  id          String     @id @default(uuid()) @db.Uuid
+  lessonId    String?    @db.Uuid
+  lesson      LMSLesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  title       String
+  description String?
+  durationMin Int?
+  maxScore    Float      @default(100.0)
+  createdAt   DateTime   @default(now())
+
+  attempts LMSQuizAttempt[]
+
+  @@map("lms_quizzes")
+}
+
+model LMSQuizAttempt {
+  id        String    @id @default(uuid()) @db.Uuid
+  quizId    String    @db.Uuid
+  quiz      LMSQuiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  studentId String    @db.Uuid
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  score     Float?
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  responses Json?     @db.JsonB // [{questionId, selectedOptionId}]
+
+  @@map("lms_quiz_attempts")
+}
+
+model LMSGradebook {
+  id        String    @id @default(uuid()) @db.Uuid
+  courseId  String    @unique @db.Uuid
+  course    LMSCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  grades LMSGrade[]
+
+  @@map("lms_gradebooks")
+}
+
+model LMSGrade {
+  id          String       @id @default(uuid()) @db.Uuid
+  gradebookId String       @db.Uuid
+  gradebook   LMSGradebook @relation(fields: [gradebookId], references: [id], onDelete: Cascade)
+  studentId   String       @db.Uuid
+  student     Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  totalScore  Float        @default(0.0)
+  letterGrade String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("lms_grades")
+}
+
+// ==========================================
+// LMS PHASE 3: LIVE CLASSES, SOCIAL, GAMIFICATION & AI
+// ==========================================
+
+model LMSLiveClass {
+  id          String    @id @default(uuid()) @db.Uuid
+  courseId    String    @db.Uuid
+  course      LMSCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  meetingUrl  String
+  scheduledAt DateTime
+  durationMin Int       @default(60)
+  hostId      String?   @db.Uuid
+  host        Staff?    @relation(fields: [hostId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@map("lms_live_classes")
+}
+
+model LMSDiscussionThread {
+  id        String    @id @default(uuid()) @db.Uuid
+  courseId  String    @db.Uuid
+  course    LMSCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title     String
+  authorId  String?   @db.Uuid // UUID of Staff or Student
+  createdAt DateTime  @default(now())
+
+  posts LMSDiscussionPost[]
+
+  @@map("lms_discussion_threads")
+}
+
+model LMSDiscussionPost {
+  id        String              @id @default(uuid()) @db.Uuid
+  threadId  String              @db.Uuid
+  thread    LMSDiscussionThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  content   String
+  authorId  String?             @db.Uuid
+  createdAt DateTime            @default(now())
+
+  @@map("lms_discussion_posts")
+}
+
+model LMSStudentPortfolio {
+  id        String   @id @default(uuid()) @db.Uuid
+  studentId String   @unique @db.Uuid
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  totalXP   Int      @default(0)
+  createdAt DateTime @default(now())
+
+  badges       LMSBadge[]
+  certificates LMSCertificate[]
+
+  @@map("lms_student_portfolios")
+}
+
+model LMSBadge {
+  id          String              @id @default(uuid()) @db.Uuid
+  portfolioId String              @db.Uuid
+  portfolio   LMSStudentPortfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  name        String
+  iconUrl     String?
+  earnedAt    DateTime            @default(now())
+
+  @@map("lms_badges")
+}
+
+model LMSCertificate {
+  id          String              @id @default(uuid()) @db.Uuid
+  portfolioId String              @db.Uuid
+  portfolio   LMSStudentPortfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  courseId    String              @db.Uuid
+  course      LMSCourse           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  issueDate   DateTime            @default(now())
+  fileUrl     String?
+
+  @@map("lms_certificates")
+}
+
+model LMSAIGeneration {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid // UUID of Staff generating it
+  prompt    String
+  result    String?
+  type      String // LESSON_PLAN, QUIZ_GEN, STUDENT_TUTOR
+  createdAt DateTime @default(now())
+
+  @@map("lms_ai_generations")
+}
+
+// ==========================================
+// EMS PHASE 1: FOUNDATION & OPERATIONS
+// ==========================================
+
+model EMSExamSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String // e.g. "Final Exams 2026-2027"
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  schedules     EMSExamSchedule[]
+  EMSGradebook  EMSGradebook[]
+  EMSReportCard EMSReportCard[]
+
+  @@map("ems_exam_sessions")
+}
+
+model EMSExamType {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String // Unit Test, Mid Term, Final, Practical
+  description String?
+  createdAt   DateTime @default(now())
+
+  templates EMSExamTemplate[]
+
+  @@map("ems_exam_types")
+}
+
+model EMSExamTemplate {
+  id         String      @id @default(uuid()) @db.Uuid
+  typeId     String      @db.Uuid
+  type       EMSExamType @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  name       String
+  totalMarks Float
+  passMarks  Float
+  createdAt  DateTime    @default(now())
+
+  schedules EMSExamSchedule[]
+
+  @@map("ems_exam_templates")
+}
+
+model EMSExamSchedule {
+  id         String          @id @default(uuid()) @db.Uuid
+  sessionId  String          @db.Uuid
+  session    EMSExamSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  templateId String          @db.Uuid
+  template   EMSExamTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  subjectId  String          @db.Uuid
+  subject    Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  date       DateTime
+  startTime  DateTime
+  endTime    DateTime
+  createdAt  DateTime        @default(now())
+
+  mode              String            @default("OFFLINE") // OFFLINE | ONLINE
+  durationMin       Int?
+  questionPaperId   String?           @db.Uuid
+  questionPaper     EMSQuestionPaper? @relation(fields: [questionPaperId], references: [id], onDelete: SetNull)
+  onlineSubmissions EMSOnlineSubmission[]
+
+  rooms               EMSExamRoom[]
+  EMSExamAttempt      EMSExamAttempt[]
+  EMSModerationRecord EMSModerationRecord[]
+
+  @@map("ems_exam_schedules")
+}
+
+model EMSExamRoom {
+  id         String          @id @default(uuid()) @db.Uuid
+  scheduleId String          @db.Uuid
+  schedule   EMSExamSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  roomId     String          @db.Uuid // UUID referencing a generic MasterData Room
+  capacity   Int
+
+  seatings     EMSExamSeating[]
+  invigilators EMSInvigilator[]
+
+  @@map("ems_exam_rooms")
+}
+
+model EMSExamSeating {
+  id         String      @id @default(uuid()) @db.Uuid
+  roomId     String      @db.Uuid
+  room       EMSExamRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  studentId  String      @db.Uuid
+  student    Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  seatNumber String
+
+  @@map("ems_exam_seatings")
+}
+
+model EMSInvigilator {
+  id      String      @id @default(uuid()) @db.Uuid
+  roomId  String      @db.Uuid
+  room    EMSExamRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  staffId String      @db.Uuid
+  staff   Staff       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@map("ems_invigilators")
+}
+
+model EMSQuestionBank {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+  subjectId   String?  @db.Uuid
+  subject     Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  questions EMSQuestion[]
+
+  @@map("ems_question_banks")
+}
+
+model EMSQuestion {
+  id             String          @id @default(uuid()) @db.Uuid
+  questionBankId String          @db.Uuid
+  questionBank   EMSQuestionBank @relation(fields: [questionBankId], references: [id], onDelete: Cascade)
+  type           String // MCQ, DESCRIPTIVE, PRACTICAL
+  text           String
+  bloomLevel     String?
+  difficulty     String          @default("MEDIUM")
+  createdAt      DateTime        @default(now())
+
+  options         Json?   @db.JsonB // [{id, text}], MCQ only
+  correctOptionId String?
+  marks           Float   @default(1)
+
+  paperItems EMSQuestionPaperItem[]
+  answers    EMSAnswer[]
+
+  @@map("ems_questions")
+}
+
+model EMSQuestionPaper {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  subjectId   String   @db.Uuid
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  totalMarks  Float
+  durationMin Int
+  isApproved  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  items     EMSQuestionPaperItem[]
+  schedules EMSExamSchedule[]
+
+  @@map("ems_question_papers")
+}
+
+model EMSQuestionPaperItem {
+  id              String           @id @default(uuid()) @db.Uuid
+  questionPaperId String           @db.Uuid
+  questionPaper   EMSQuestionPaper @relation(fields: [questionPaperId], references: [id], onDelete: Cascade)
+  questionId      String           @db.Uuid
+  question        EMSQuestion      @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  sequence        Int
+  marks           Float
+
+  @@unique([questionPaperId, questionId])
+  @@map("ems_question_paper_items")
+}
+
+// ==========================================
+// EMS PHASE 2: EVALUATION & RESULT PROCESSING
+// ==========================================
+
+model EMSExamAttempt {
+  id         String          @id @default(uuid()) @db.Uuid
+  scheduleId String          @db.Uuid
+  schedule   EMSExamSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  studentId  String          @db.Uuid
+  student    Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status     String          @default("PRESENT") // PRESENT, ABSENT, MALPRACTICE
+  startedAt  DateTime?
+  endedAt    DateTime?
+  createdAt  DateTime        @default(now())
+
+  answerSheets     EMSAnswerSheet[]
+  evaluations      EMSEvaluationRecord[]
+  onlineSubmission EMSOnlineSubmission?
+
+  @@map("ems_exam_attempts")
+}
+
+model EMSOnlineSubmission {
+  id            String          @id @default(uuid()) @db.Uuid
+  attemptId     String          @unique @db.Uuid
+  attempt       EMSExamAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  scheduleId    String          @db.Uuid
+  schedule      EMSExamSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  startedAt     DateTime?
+  submittedAt   DateTime?
+  autoSubmitted Boolean         @default(false)
+  status        String          @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | SUBMITTED | GRADED
+  createdAt     DateTime        @default(now())
+
+  answers EMSAnswer[]
+
+  @@map("ems_online_submissions")
+}
+
+model EMSAnswer {
+  id               String              @id @default(uuid()) @db.Uuid
+  submissionId     String              @db.Uuid
+  submission       EMSOnlineSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  questionId       String              @db.Uuid
+  question         EMSQuestion         @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOptionId String?
+  textAnswer       String?
+  isCorrect        Boolean?
+  marksAwarded     Float?
+  answeredAt       DateTime            @updatedAt
+
+  @@unique([submissionId, questionId])
+  @@map("ems_answers")
+}
+
+model EMSAnswerSheet {
+  id        String         @id @default(uuid()) @db.Uuid
+  attemptId String         @db.Uuid
+  attempt   EMSExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  fileUrl   String?
+  content   String? // Digital text
+  isGraded  Boolean        @default(false)
+  createdAt DateTime       @default(now())
+
+  @@map("ems_answer_sheets")
+}
+
+model EMSEvaluationRecord {
+  id            String         @id @default(uuid()) @db.Uuid
+  attemptId     String         @db.Uuid
+  attempt       EMSExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  evaluatorId   String         @db.Uuid
+  evaluator     Staff          @relation(fields: [evaluatorId], references: [id], onDelete: Cascade)
+  marksObtained Float
+  remarks       String?
+  gradedAt      DateTime       @default(now())
+
+  @@map("ems_evaluation_records")
+}
+
+model EMSModerationRecord {
+  id          String          @id @default(uuid()) @db.Uuid
+  scheduleId  String          @db.Uuid
+  schedule    EMSExamSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  moderatorId String          @db.Uuid
+  moderator   Staff           @relation(fields: [moderatorId], references: [id], onDelete: Cascade)
+  graceMarks  Float
+  reason      String
+  approvedAt  DateTime        @default(now())
+
+  @@map("ems_moderation_records")
+}
+
+model EMSGradingScheme {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  ranges      Json     @db.JsonB // [{min: 90, max: 100, grade: "A+"}]
+  createdAt   DateTime @default(now())
+
+  @@map("ems_grading_schemes")
+}
+
+model EMSGradebook {
+  id          String         @id @default(uuid()) @db.Uuid
+  sessionId   String         @db.Uuid
+  session     EMSExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  classId     String         @db.Uuid
+  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  isPublished Boolean        @default(false)
+
+  results EMSResult[]
+
+  @@map("ems_gradebooks")
+}
+
+model EMSResult {
+  id          String       @id @default(uuid()) @db.Uuid
+  gradebookId String       @db.Uuid
+  gradebook   EMSGradebook @relation(fields: [gradebookId], references: [id], onDelete: Cascade)
+  studentId   String       @db.Uuid
+  student     Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  totalMarks  Float
+  percentage  Float
+  grade       String?
+  gpa         Float?
+  rank        Int?
+  createdAt   DateTime     @default(now())
+
+  @@map("ems_results")
+}
+
+model EMSReportCard {
+  id          String         @id @default(uuid()) @db.Uuid
+  studentId   String         @db.Uuid
+  student     Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sessionId   String         @db.Uuid
+  session     EMSExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  fileUrl     String?
+  remarks     String?
+  attendance  Float?
+  publishedAt DateTime       @default(now())
+
+  @@map("ems_report_cards")
+}
+
+model EMSCertificate {
+  id        String   @id @default(uuid()) @db.Uuid
+  studentId String   @db.Uuid
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  type      String // MERIT, PARTICIPATION, COMPLETION
+  title     String
+  fileUrl   String?
+  issueDate DateTime @default(now())
+
+  @@map("ems_certificates")
+}
+
+// ==========================================
+// ACMS PHASE 1: ACADEMIC CALENDAR & TERMS
+// ==========================================
+
+model ACMSAcademicTerm {
+  id        String          @id @default(uuid()) @db.Uuid
+  sessionId String          @db.Uuid
+  session   AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name      String // e.g. "Term 1", "Semester 1"
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime        @default(now())
+
+  @@map("acms_academic_terms")
+}
+
+model ACMSHolidayMaster {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  date        DateTime
+  type        String // NATIONAL, REGIONAL, SCHOOL
+  description String?
+  campusId    String?  @db.Uuid
+  campus      Campus?  @relation(fields: [campusId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@map("acms_holiday_master")
+}
+
+model ACMSWorkingDay {
+  id           String          @id @default(uuid()) @db.Uuid
+  sessionId    String          @db.Uuid
+  session      AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  dayOfWeek    Int // 1=Monday...7=Sunday
+  isWorkingDay Boolean         @default(true)
+  isHalfDay    Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+
+  @@map("acms_working_days")
+}
+
+// ==========================================
+// ACMS PHASE 2: EVENTS & RESOURCES
+// ==========================================
+
+model ACMSEvent {
+  id          String          @id @default(uuid()) @db.Uuid
+  sessionId   String          @db.Uuid
+  session     AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  type        String // ACADEMIC, SPORTS, CULTURAL, TRIP
+  organizer   String?
+  createdAt   DateTime        @default(now())
+
+  @@map("acms_events")
+}
+
+model ACMSResourceBooking {
+  id           String   @id @default(uuid()) @db.Uuid
+  resourceName String // e.g. "Main Auditorium", "Chemistry Lab"
+  bookedBy     String // Could be staff name or ID
+  purpose      String
+  startDate    DateTime
+  endDate      DateTime
+  status       String   @default("CONFIRMED") // PENDING, CONFIRMED, CANCELLED
+  createdAt    DateTime @default(now())
+
+  @@map("acms_resource_bookings")
+}
+
+// ==========================================
+// ACMS PHASE 3: NOTIFICATIONS & AUDIT
+// ==========================================
+
+model ACMSNotification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String // Targeting a specific user (Staff/Student)
+  title     String
+  message   String
+  type      String // EMAIL, SMS, PUSH
+  status    String   @default("UNREAD")
+  createdAt DateTime @default(now())
+
+  @@map("acms_notifications")
+}
+
+model ACMSAuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  action      String
+  entityType  String
+  entityId    String
+  performedBy String
+  timestamp   DateTime @default(now())
+  details     String?
+
+  @@map("acms_audit_logs")
+}
+
+// ==========================================
+// SYSTEM AUDIT & MOBILE METADATA
+// ==========================================
+
+model SystemAuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  action      String   // e.g. "MOBILE_LOGIN", "ATTENDANCE_MARKED"
+  module      String   // e.g. "AUTH", "TRANSPORT", "ATTENDANCE"
+  entityType  String?
+  entityId    String?
+  performedBy String   // user ID
+  role        String   // TEACHER, PARENT, DRIVER, CONDUCTOR
+  details     Json?    @db.JsonB
+  ipAddress   String?
+  deviceInfo  String?
+  timestamp   DateTime @default(now())
+
+  @@map("system_audit_logs")
+}
+
+model PushToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid // Staff.id, Parent.id, or Student.id depending on userType
+  userType  String // "STAFF" | "PARENT" | "STUDENT"
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, userType])
+  @@map("push_tokens")
+}
+
+// ==========================================
+// HEALTH RECORDS
+// ==========================================
+
+model HealthProfile {
+  id                     String    @id @default(uuid()) @db.Uuid
+  studentId              String    @unique @db.Uuid
+  student                Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  bloodGroup             String?
+  allergies              String?
+  chronicConditions      String?
+  currentMedications     String?
+  emergencyContactName   String?
+  emergencyContactPhone  String?
+  familyDoctorName       String?
+  familyDoctorPhone      String?
+  insuranceProvider      String?
+  insurancePolicyNo      String?
+  notes                  String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  visits       HealthVisit[]
+  vaccinations Vaccination[]
+
+  @@map("health_profiles")
+}
+
+model HealthVisit {
+  id              String         @id @default(uuid()) @db.Uuid
+  studentId       String         @db.Uuid
+  student         Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  healthProfileId String?        @db.Uuid
+  healthProfile   HealthProfile? @relation(fields: [healthProfileId], references: [id], onDelete: SetNull)
+  visitDate       DateTime       @default(now())
+  reason          String
+  symptoms        String?
+  temperature     Float?
+  treatmentGiven  String?
+  actionTaken     String         @default("Observed and Released") // Observed and Released, Sent Home, Referred to Doctor, Hospitalized
+  parentNotified  Boolean        @default(false)
+  loggedByStaffId String         @db.Uuid
+  loggedByStaff   Staff          @relation(fields: [loggedByStaffId], references: [id], onDelete: Restrict)
+  createdAt       DateTime       @default(now())
+
+  @@map("health_visits")
+}
+
+model Vaccination {
+  id               String         @id @default(uuid()) @db.Uuid
+  studentId        String         @db.Uuid
+  student          Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  healthProfileId  String?        @db.Uuid
+  healthProfile    HealthProfile? @relation(fields: [healthProfileId], references: [id], onDelete: SetNull)
+  vaccineName      String
+  doseNumber       Int            @default(1)
+  dateAdministered DateTime
+  nextDueDate      DateTime?
+  administeredBy   String?
+  certificateUrl   String?
+  createdAt        DateTime       @default(now())
+
+  @@map("vaccinations")
+}
+
+// ==========================================
+// DISCIPLINE / BEHAVIOR TRACKING
+// ==========================================
+
+model DisciplineIncident {
+  id                 String   @id @default(uuid()) @db.Uuid
+  studentId          String   @db.Uuid
+  student            Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  incidentDate       DateTime @default(now())
+  category           String   // Bullying, Disruption, Academic Dishonesty, Property Damage, Attendance, Other
+  severity           String   @default("Minor") // Minor, Moderate, Major
+  description        String
+  actionTaken        String?  // Verbal Warning, Written Warning, Detention, Suspension, Parent Meeting, Counseling Referral
+  status             String   @default("Open") // Open, Resolved, Escalated
+  reportedByStaffId  String   @db.Uuid
+  reportedByStaff    Staff    @relation("DisciplineReportedBy", fields: [reportedByStaffId], references: [id], onDelete: Restrict)
+  parentNotified     Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  counselingNotes DisciplineCounselingNote[]
+
+  @@map("discipline_incidents")
+}
+
+model DisciplineCounselingNote {
+  id               String             @id @default(uuid()) @db.Uuid
+  incidentId       String             @db.Uuid
+  incident         DisciplineIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  note             String
+  createdByStaffId String             @db.Uuid
+  createdByStaff   Staff              @relation(fields: [createdByStaffId], references: [id], onDelete: Restrict)
+  createdAt        DateTime           @default(now())
+
+  @@map("discipline_counseling_notes")
+}
+
+// ==========================================
+// ADMISSION INQUIRY / LEAD PIPELINE
+// ==========================================
+
+model AdmissionInquiry {
+  id                  String    @id @default(uuid()) @db.Uuid
+  childName           String
+  gradeInterested     String
+  parentName          String
+  phone               String
+  email               String?
+  source              String    @default("Walk-in") // Walk-in, Website, Referral, Phone, Social Media, Other
+  status              String    @default("New") // New, Contacted, Campus Visit Scheduled, Application Sent, Converted, Lost
+  notes               String?
+  assignedToStaffId   String?   @db.Uuid
+  assignedToStaff     Staff?    @relation(fields: [assignedToStaffId], references: [id], onDelete: SetNull)
+  convertedStudentId  String?   @unique @db.Uuid
+  convertedStudent    Student?  @relation(fields: [convertedStudentId], references: [id], onDelete: SetNull)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  followUps AdmissionInquiryFollowUp[]
+
+  @@map("admission_inquiries")
+}
+
+model AdmissionInquiryFollowUp {
+  id               String           @id @default(uuid()) @db.Uuid
+  inquiryId        String           @db.Uuid
+  inquiry          AdmissionInquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  note             String
+  followUpDate     DateTime         @default(now())
+  createdByStaffId String           @db.Uuid
+  createdByStaff   Staff            @relation(fields: [createdByStaffId], references: [id], onDelete: Restrict)
+  createdAt        DateTime         @default(now())
+
+  @@map("admission_inquiry_followups")
+}

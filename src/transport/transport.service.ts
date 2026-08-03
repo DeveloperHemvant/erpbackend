@@ -1,0 +1,382 @@
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { CreateTripDto } from "./dto/transport.dto";
+
+@Injectable()
+export class TransportService {
+  constructor(private prisma: PrismaService, private notificationsService: NotificationsService) {}
+
+  // ---------------------------------------------------------
+  // VEHICLES
+  // ---------------------------------------------------------
+  async createVehicle(data: any) {
+    return this.prisma.transportVehicle.create({ data });
+  }
+
+  async getVehicles() {
+    return this.prisma.transportVehicle.findMany({
+      include: {
+        staff: { include: { staff: true } },
+        documents: true
+      }
+    });
+  }
+
+  async getVehicleProfile(id: string) {
+    const vehicle = await this.prisma.transportVehicle.findUnique({
+      where: { id },
+      include: {
+        staff: { include: { staff: true } },
+        documents: true,
+        TransportTrip: {
+          take: 5,
+          orderBy: { date: 'desc' },
+          include: { route: true, driver: true, logs: true }
+        },
+        TransportFuelLog: { take: 5, orderBy: { createdAt: 'desc' } },
+        TransportService: { take: 5, orderBy: { createdAt: 'desc' }, include: { vendor: true } },
+        TransportTyre: true,
+        TransportBattery: true,
+        TransportBreakdown: { take: 5, orderBy: { createdAt: 'desc' } },
+        TransportAccident: { take: 5, orderBy: { createdAt: 'desc' } },
+        TransportExpense: { take: 5, orderBy: { createdAt: 'desc' } }
+      }
+    });
+
+    if (!vehicle) throw new NotFoundException("Vehicle not found");
+
+    // Calculate total students assigned to this vehicle's trips/routes
+    // Find all trips for this vehicle today or generally, and get route -> stops -> students
+    const routes = await this.prisma.transportRoute.findMany({
+      where: { TransportTrip: { some: { vehicleId: id } } },
+      include: {
+        stops: {
+          include: {
+            studentAssignments: { where: { status: 'Active' } }
+          }
+        }
+      }
+    });
+
+    let totalStudents = 0;
+    routes.forEach(r => {
+      if (r.stops) {
+        r.stops.forEach((s: any) => {
+          if (s.studentAssignments) totalStudents += s.studentAssignments.length;
+        });
+      }
+    });
+
+    return { 
+      ...vehicle, 
+      totalStudents, 
+      assignedRoutes: routes,
+      trips: vehicle.TransportTrip,
+      fuelLogs: vehicle.TransportFuelLog,
+      services: vehicle.TransportService,
+      tyres: vehicle.TransportTyre,
+      batteries: vehicle.TransportBattery,
+      breakdowns: vehicle.TransportBreakdown,
+      accidents: vehicle.TransportAccident,
+      expenses: vehicle.TransportExpense
+    };
+  }
+
+  async updateVehicle(id: string, data: any) {
+    return this.prisma.transportVehicle.update({ where: { id }, data });
+  }
+
+  async deleteVehicle(id: string) {
+    return this.prisma.transportVehicle.delete({ where: { id } });
+  }
+
+  // ---------------------------------------------------------
+  // STAFF ASSIGNMENTS (Drivers & Conductors)
+  // ---------------------------------------------------------
+  async assignStaffToVehicle(vehicleId: string, staffId: string, shift: string) {
+    return this.prisma.transportVehicleStaff.create({
+      data: { vehicleId, staffId, shift }
+    });
+  }
+
+  async removeStaffFromVehicle(id: string) {
+    return this.prisma.transportVehicleStaff.delete({ where: { id } });
+  }
+
+  // ---------------------------------------------------------
+  // ROUTES & STOPS
+  // ---------------------------------------------------------
+  async createRoute(data: any) {
+    return this.prisma.transportRoute.create({ data });
+  }
+
+  async getRoutes() {
+    return this.prisma.transportRoute.findMany({
+      include: {
+        stops: { orderBy: { orderIndex: 'asc' } },
+        vehicle: true,
+        _count: { select: { studentAssignments: true } },
+      },
+    });
+  }
+
+  async addStop(routeId: string, data: any) {
+    return this.prisma.transportRouteStop.create({
+      data: { routeId, ...data }
+    });
+  }
+
+  async removeStop(id: string) {
+    return this.prisma.transportRouteStop.delete({ where: { id } });
+  }
+
+  // ---------------------------------------------------------
+  // STUDENT ASSIGNMENTS
+  // ---------------------------------------------------------
+  async assignStudentToStop(enrollmentId: string, stopId: string | undefined, data: any) {
+    // Archive previous active assignments
+    await this.prisma.transportStudentAssignment.updateMany({
+      where: { enrollmentId, status: "Active" },
+      data: { status: "Archived" }
+    });
+
+    return this.prisma.transportStudentAssignment.create({
+      data: { 
+        enrollmentId, 
+        stopId: stopId || null, 
+        routeId: data.routeId,
+        ...data, 
+        status: "Active" 
+      }
+    });
+  }
+
+  async getRouteRoster(routeId: string) {
+    return this.prisma.transportStudentAssignment.findMany({
+      where: { routeId, status: "Active" },
+      include: {
+        enrollment: { include: { student: true } },
+        stop: true,
+      },
+      orderBy: { stop: { orderIndex: "asc" } },
+    });
+  }
+
+  async getStudentTransport(enrollmentId: string) {
+    return this.prisma.transportStudentAssignment.findFirst({
+      where: { enrollmentId, status: "Active" },
+      include: {
+        route: {
+          include: {
+            TransportTrip: {
+              take: 1,
+              orderBy: { date: 'desc' },
+              include: {
+                vehicle: {
+                  include: {
+                    staff: {
+                      include: { staff: true }
+                    }
+                  }
+                },
+                driver: true
+              }
+            }
+          }
+        },
+        stop: { 
+          include: { 
+            route: {
+              include: {
+                TransportTrip: {
+                  take: 1,
+                  orderBy: { date: 'desc' },
+                  include: {
+                    vehicle: {
+                      include: {
+                        staff: {
+                          include: { staff: true }
+                        }
+                      }
+                    },
+                    driver: true
+                  }
+                }
+              }
+            } 
+          } 
+        }
+      }
+    });
+  }
+  // ---------------------------------------------------------
+  // TRIPS & GPS LOGS
+  // ---------------------------------------------------------
+  async createTrip(data: CreateTripDto) {
+    return this.prisma.transportTrip.create({ data });
+  }
+
+  async getTrips() {
+    return this.prisma.transportTrip.findMany({
+      include: {
+        vehicle: true,
+        route: true,
+        driver: true,
+        logs: { orderBy: { timestamp: 'desc' }, take: 1 }
+      }
+    });
+  }
+
+  async updateTrip(id: string, data: any) {
+    return this.prisma.transportTrip.update({
+      where: { id },
+      data
+    });
+  }
+
+  async logTripLocation(tripId: string, data: any) {
+    const log = await this.prisma.transportTripLog.create({
+      data: { tripId, ...data }
+    });
+
+    if (data.status === 'Reached Stop' && data.stopId) {
+      this.notifyParentsOfStopArrival(data.stopId).catch((err) =>
+        console.error('Failed to notify parents of stop arrival', err)
+      );
+    }
+
+    return log;
+  }
+
+  private async notifyParentsOfStopArrival(stopId: string) {
+    const stop = await this.prisma.transportRouteStop.findUnique({ where: { id: stopId } });
+    if (!stop) return;
+
+    const assignments = await this.prisma.transportStudentAssignment.findMany({
+      where: { stopId, status: 'Active' },
+      include: { enrollment: { include: { student: { include: { parents: true } } } } }
+    });
+
+    const parentIds = new Set<string>();
+    for (const a of assignments) {
+      const student = a.enrollment?.student;
+      if (!student) continue;
+      for (const ps of student.parents) {
+        parentIds.add(ps.parentId);
+      }
+    }
+
+    if (parentIds.size === 0) return;
+
+    const tokens = await this.notificationsService.getTokensForUsers(Array.from(parentIds), 'PARENT');
+    if (tokens.length === 0) return;
+
+    await this.notificationsService.sendPushNotifications(
+      tokens,
+      'Bus Arrived',
+      `The school bus has reached ${stop.stopName}.`,
+      { type: 'TRANSPORT_STOP_ARRIVAL', stopId }
+    );
+  }
+
+  // ---------------------------------------------------------
+  // ATTENDANCE
+  // ---------------------------------------------------------
+  async markAttendance(data: any) {
+    return this.prisma.transportAttendance.create({ data });
+  }
+
+  async getTripAttendance(tripId: string) {
+    return this.prisma.transportAttendance.findMany({
+      where: { tripId },
+      include: { enrollment: { include: { student: true } } }
+    });
+  }
+
+  // ---------------------------------------------------------
+  // FUEL & ODOMETER
+  // ---------------------------------------------------------
+  async logFuel(data: any) {
+    // Auto-calculate mileage if previous reading exists
+    let mileage: number | null = null;
+    if (data.previousOdometer && data.currentOdometer && data.litres > 0) {
+      mileage = (data.currentOdometer - data.previousOdometer) / data.litres;
+    }
+    
+    return this.prisma.transportFuelLog.create({
+      data: { ...data, mileage }
+    });
+  }
+
+  async getFuelLogs() {
+    return this.prisma.transportFuelLog.findMany({
+      include: { vehicle: true },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+  // ---------------------------------------------------------
+  // MAINTENANCE & ASSETS (Phase 2)
+  // ---------------------------------------------------------
+  async createService(data: any) {
+    return this.prisma.transportService.create({ data });
+  }
+
+  async getServices() {
+    return this.prisma.transportService.findMany({ include: { vehicle: true, vendor: true } });
+  }
+
+  async createTyre(data: any) {
+    return this.prisma.transportTyre.create({ data });
+  }
+
+  async getTyres() {
+    return this.prisma.transportTyre.findMany({ include: { vehicle: true } });
+  }
+
+  async createBattery(data: any) {
+    return this.prisma.transportBattery.create({ data });
+  }
+
+  async getBatteries() {
+    return this.prisma.transportBattery.findMany({ include: { vehicle: true } });
+  }
+
+  // ---------------------------------------------------------
+  // INCIDENTS (Accidents, Breakdowns)
+  // ---------------------------------------------------------
+  async reportBreakdown(data: any) {
+    return this.prisma.transportBreakdown.create({ data });
+  }
+
+  async getBreakdowns() {
+    return this.prisma.transportBreakdown.findMany({ include: { vehicle: true, driver: true } });
+  }
+
+  async reportAccident(data: any) {
+    return this.prisma.transportAccident.create({ data });
+  }
+
+  async getAccidents() {
+    return this.prisma.transportAccident.findMany({ include: { vehicle: true, driver: true } });
+  }
+
+  // ---------------------------------------------------------
+  // VENDORS & EXPENSES
+  // ---------------------------------------------------------
+  async createVendor(data: any) {
+    return this.prisma.transportVendor.create({ data });
+  }
+
+  async getVendors() {
+    return this.prisma.transportVendor.findMany();
+  }
+
+  async createExpense(data: any) {
+    return this.prisma.transportExpense.create({ data });
+  }
+
+  async getExpenses() {
+    return this.prisma.transportExpense.findMany({ include: { vehicle: true, vendor: true } });
+  }
+}
