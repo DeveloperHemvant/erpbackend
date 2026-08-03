@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  atom_dev_backend:
+    image: 793938076396.dkr.ecr.ap-south-1.amazonaws.com/ecr:latest
+    container_name: atom_dev_backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - backend_network
+
+networks:
+  backend_network:
+    driver: bridge
