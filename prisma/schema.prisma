@@ -229,8 +229,6 @@ model Section {
   enrollments      StudentEnrollment[]
   assignments      TeacherAssignment[]
   timetable        TimetablePeriod[]
-  lmsAssignments   Assignment[]
-  quizzes          Quiz[]
   LMSCourseSection LMSCourseSection[]
 
   @@map("sections")
@@ -246,12 +244,9 @@ model Subject {
   updatedAt        DateTime            @updatedAt
   createdBy        String?
   updatedBy        String?
-  assignments      Assignment[]
   allocations      TeacherAssignment[]
   timetable        TimetablePeriod[]
   examSlots        ExamSlot[]
-  content          CourseContent[]
-  quizzes          Quiz[]
   LMSCourse        LMSCourse[]
   LMSQuestionBank  LMSQuestionBank[]
   EMSExamSchedule  EMSExamSchedule[]
@@ -284,13 +279,12 @@ model StudentEnrollment {
   invoices    FeeInvoice[]
   examMarks   ExamMarks[]
 
-  assignmentSubmissions AssignmentSubmission[]
-  quizAttempts          QuizAttempt[]
   transportAssignments  TransportStudentAssignment[]
   hostelAllocations     HostelAllocation[]
   hostelAttendance      HostelAttendance[]
   hostelGrievances      HostelGrievance[]
   bookIssues            BookIssue[]
+  libraryReservations   LibraryReservation[]
 
   campusId            String?               @db.Uuid
   campus              Campus?               @relation(fields: [campusId], references: [id], onDelete: Cascade)
@@ -360,103 +354,9 @@ model AttendanceRecord {
   @@map("attendance_records")
 }
 
-model Assignment {
-  id          String                 @id @default(uuid()) @db.Uuid
-  title       String
-  subjectId   String                 @db.Uuid
-  subject     Subject                @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  sectionId   String?                @db.Uuid
-  section     Section?               @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  type        String                 @default("Homework") // Homework, Weekly Test, Semester Exam
-  dueDate     String // YYYY-MM-DD
-  maxMarks    Int                    @default(100)
-  description String?
-  status      String                 @default("Active")
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
-  createdBy   String?
-  updatedBy   String?
-  submissions AssignmentSubmission[]
-
-  @@map("assignments")
-}
-
-model AssignmentSubmission {
-  id            String            @id @default(uuid()) @db.Uuid
-  assignmentId  String            @db.Uuid
-  assignment    Assignment        @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  enrollmentId  String            @db.Uuid
-  enrollment    StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  status        String            @default("Submitted") // Submitted, Graded, Late
-  submissionUrl String?
-  grade         Float?
-  feedback      String?
-  submittedAt   DateTime          @default(now())
-
-  @@map("assignment_submissions")
-}
-
 // ==========================================
 // LMS (PHASE 7)
 // ==========================================
-
-model CourseContent {
-  id        String   @id @default(uuid()) @db.Uuid
-  subjectId String   @db.Uuid
-  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  title     String
-  type      String // "PDF" | "VIDEO" | "LINK"
-  url       String
-  status    String   @default("Active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  createdBy String?
-
-  @@map("course_content")
-}
-
-model Quiz {
-  id        String         @id @default(uuid()) @db.Uuid
-  title     String
-  subjectId String         @db.Uuid
-  subject   Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  sectionId String?        @db.Uuid
-  section   Section?       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  maxMarks  Int            @default(100)
-  deadline  DateTime?
-  status    String         @default("Active")
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  questions QuizQuestion[]
-  attempts  QuizAttempt[]
-
-  @@map("quizzes")
-}
-
-model QuizQuestion {
-  id            String @id @default(uuid()) @db.Uuid
-  quizId        String @db.Uuid
-  quiz          Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  text          String
-  type          String @default("MCQ") // "MCQ" | "SHORT_ANSWER"
-  options       Json?  @db.JsonB // ["Option A", "Option B"]
-  correctAnswer String // the correct option or expected answer
-
-  @@map("quiz_questions")
-}
-
-model QuizAttempt {
-  id           String            @id @default(uuid()) @db.Uuid
-  quizId       String            @db.Uuid
-  quiz         Quiz              @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  enrollmentId String            @db.Uuid
-  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  score        Float
-  status       String            @default("Completed")
-  submittedAt  DateTime          @default(now())
-
-  @@map("quiz_attempts")
-}
 
 model ReportCard {
   id             String            @id @default(uuid()) @db.Uuid
@@ -795,6 +695,7 @@ model LibraryBook {
   status      String      @default("Active")
   createdAt   DateTime    @default(now())
   issues      BookIssue[]
+  reservations LibraryReservation[]
 
   @@map("library_books")
 }
@@ -823,6 +724,24 @@ model LibraryFine {
   createdAt DateTime  @default(now())
 
   @@map("library_fines")
+}
+
+// --- LIBRARY RESERVATIONS ---
+model LibraryReservation {
+  id            String            @id @default(uuid()) @db.Uuid
+  bookId        String            @db.Uuid
+  book          LibraryBook      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  enrollmentId  String            @db.Uuid
+  enrollment    StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  status        String            @default("Reserved") // Reserved, Fulfilled, Cancelled, Expired
+  reservedAt    DateTime          @default(now())
+  expiresAt     DateTime
+  fulfilledAt   DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([bookId, status])
+  @@map("library_reservations")
 }
 
 // --- INVENTORY ---

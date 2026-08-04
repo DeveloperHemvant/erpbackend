@@ -59,3 +59,51 @@ export class FileGrievanceDto {
   @IsNotEmpty()
   description: string;
 }
+
+export class MarkHostelAttendanceDto {
+  @IsUUID()
+  @IsNotEmpty()
+  enrollmentId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  date: string;
+
+  @IsString()
+  @IsNotEmpty()
+  status: string;
+}
+
+export class UpdateHostelAllocationDto {
+  @IsString()
+  @IsOptional()
+  status?: string;
+
+  @IsUUID()
+  @IsOptional()
+  roomId?: string;
+}
+
+export class CreateMessMenuDto {
+  @IsUUID()
+  @IsNotEmpty()
+  hostelId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  dayOfWeek: string;
+
+  @IsString()
+  @IsNotEmpty()
+  mealType: string;
+
+  @IsString()
+  @IsNotEmpty()
+  items: string;
+}
+
+export class UpdateHostelGrievanceDto {
+  @IsString()
+  @IsNotEmpty()
+  status: string;
+}

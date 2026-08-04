@@ -57,3 +57,19 @@ export class CreatePurchaseRequisitionDto {
   @IsOptional()
   status?: string;
 }
+
+export class UpdateAssetDto {
+  @IsString()
+  @IsOptional()
+  status?: string;
+
+  @IsInt()
+  @IsOptional()
+  quantity?: number;
+}
+
+export class UpdatePurchaseRequisitionStatusDto {
+  @IsString()
+  @IsNotEmpty()
+  status: string; // Pending, Approved, Ordered, Received, Rejected
+}

@@ -30,4 +30,24 @@ export class InventoryService {
     const where = campusId ? { campusId } : {};
     return this.prisma.purchaseRequisition.findMany({ where, include: { campus: true } });
   }
+
+  async updateRequisitionStatus(id: string, data: { status: string }) {
+    return this.prisma.purchaseRequisition.update({
+      where: { id },
+      data: { status: data.status },
+    });
+  }
+
+  async updateAssetStatus(id: string, data: { status?: string; quantity?: number }) {
+    const payload: any = {};
+    if (data.status !== undefined) payload.status = data.status;
+    if (data.quantity !== undefined) payload.quantity = data.quantity;
+    if (!Object.keys(payload).length) return this.prisma.asset.findUnique({ where: { id } });
+
+    return this.prisma.asset.update({
+      where: { id },
+      data: payload,
+      include: { category: true, campus: true },
+    });
+  }
 }

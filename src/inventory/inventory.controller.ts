@@ -1,7 +1,13 @@
-import { Controller, Get, Post, Body, Query } from "@nestjs/common";
+import { Controller, Get, Post, Body, Query, Patch, Param, ParseUUIDPipe } from "@nestjs/common";
 import { ApiTags, ApiOperation } from "@nestjs/swagger";
 import { InventoryService } from "./inventory.service";
-import { CreateAssetCategoryDto, CreateAssetDto, CreatePurchaseRequisitionDto } from "./dto/inventory.dto";
+import {
+  CreateAssetCategoryDto,
+  CreateAssetDto,
+  CreatePurchaseRequisitionDto,
+  UpdateAssetDto,
+  UpdatePurchaseRequisitionStatusDto,
+} from "./dto/inventory.dto";
 
 @ApiTags("Inventory")
 @Controller("inventory")
@@ -42,5 +48,23 @@ export class InventoryController {
   @ApiOperation({ summary: "Get Requisitions" })
   async getRequisitions(@Query("campusId") campusId?: string) {
     return this.inventoryService.getRequisitions(campusId);
+  }
+
+  @Patch("requisitions/:id")
+  @ApiOperation({ summary: "Update Purchase Requisition Status" })
+  async updateRequisitionStatus(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() data: UpdatePurchaseRequisitionStatusDto
+  ) {
+    return this.inventoryService.updateRequisitionStatus(id, data);
+  }
+
+  @Patch("assets/:id")
+  @ApiOperation({ summary: "Update Asset Status / Quantity" })
+  async updateAsset(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() data: UpdateAssetDto
+  ) {
+    return this.inventoryService.updateAssetStatus(id, data);
   }
 }

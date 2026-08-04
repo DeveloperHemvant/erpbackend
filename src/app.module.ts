@@ -8,7 +8,6 @@ import { AuthModule } from "./auth/auth.module";
 import { MasterDataModule } from "./master-data/master-data.module";
 import { StudentsModule } from "./students/students.module";
 import { AttendanceModule } from "./attendance/attendance.module";
-import { AcademicsModule } from "./academics/academics.module";
 import { ExamsModule } from "./exams/exams.module";
 import { ReportCardsModule } from "./report-cards/report-cards.module";
 import { TimetableModule } from "./timetable/timetable.module";
@@ -69,7 +68,6 @@ import { PromotionsModule } from './promotions/promotions.module';
     MasterDataModule,
     StudentsModule,
     AttendanceModule,
-    AcademicsModule,
     ExamsModule,
     ReportCardsModule,
     TimetableModule,

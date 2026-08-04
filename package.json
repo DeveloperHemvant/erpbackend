@@ -9,6 +9,9 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "scripts": {
+    "seed": "ts-node prisma/seed.ts",
+    "seed:demo": "ts-node prisma/seed.ts",
+    "seed:db": "prisma db seed",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
