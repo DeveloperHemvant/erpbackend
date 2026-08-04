@@ -12,4 +12,10 @@ export class MonitoringController {
   async getSystemMetrics() {
     return this.monitoringService.getSystemMetrics();
   }
+
+  @Get('queue-status')
+  @ApiOperation({ summary: 'Get background job queue counts and error rate' })
+  async getQueueStatus() {
+    return this.monitoringService.getQueueStatus();
+  }
 }

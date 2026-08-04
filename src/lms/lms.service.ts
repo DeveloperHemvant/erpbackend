@@ -81,8 +81,11 @@ export class LmsService {
     return this.prisma.lMSContentResource.create({ data });
   }
 
-  async getResources() {
+  async getResources(classId?: string) {
     return this.prisma.lMSContentResource.findMany({
+      where: classId
+        ? { lesson: { topic: { chapter: { unit: { curriculum: { course: { classId } } } } } } }
+        : undefined,
       include: { lesson: { include: { topic: { include: { chapter: true } } } } }
     });
   }
@@ -92,11 +95,14 @@ export class LmsService {
     return this.prisma.lMSAssignment.create({ data });
   }
 
-  async getAssignments(courseId?: string) {
+  async getAssignments(courseId?: string, classId?: string) {
+    const where = courseId
+      ? { lesson: { topic: { chapter: { unit: { curriculum: { courseId } } } } } }
+      : classId
+        ? { lesson: { topic: { chapter: { unit: { curriculum: { course: { classId } } } } } } }
+        : undefined;
     return this.prisma.lMSAssignment.findMany({
-      where: courseId
-        ? { lesson: { topic: { chapter: { unit: { curriculum: { courseId } } } } } }
-        : undefined,
+      where,
       include: { submissions: true },
     });
   }

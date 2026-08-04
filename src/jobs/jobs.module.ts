@@ -13,5 +13,6 @@ import { PrismaService } from '../prisma/prisma.service';
   ],
   controllers: [JobsController],
   providers: [JobsService, FeeGenerationProcessor, PrismaService],
+  exports: [JobsService],
 })
 export class JobsModule {}

@@ -63,12 +63,39 @@ export class JobsService {
   
   async getRecentJobs() {
     // Get last 10 jobs across all states
-    const active = await this.feeQueue.getJobs(['active', 'waiting', 'completed', 'failed'], 0, 10, true);
-    return active.map(job => ({
+    const jobs = await this.feeQueue.getJobs(['active', 'waiting', 'completed', 'failed'], 0, 10, true);
+    return Promise.all(jobs.map(async job => ({
       id: job.id,
       name: job.name,
       progress: job.progress,
-      timestamp: job.timestamp
-    }));
+      timestamp: job.timestamp,
+      status: await job.getState(),
+      failedReason: job.failedReason || null,
+    })));
+  }
+
+  async retryJob(jobId: string) {
+    const job = await this.feeQueue.getJob(jobId);
+    if (!job) throw new BadRequestException('Job not found');
+
+    const state = await job.getState();
+    if (state !== 'failed') {
+      throw new BadRequestException(`Only failed jobs can be retried (current state: ${state})`);
+    }
+
+    await job.retry();
+    return { message: 'Job requeued', jobId: job.id };
+  }
+
+  async getQueueStatus() {
+    const counts = await this.feeQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
+    const finished = counts.completed + counts.failed;
+    const errorRatePercent = finished > 0 ? Math.round((counts.failed / finished) * 10000) / 100 : 0;
+
+    return {
+      queue: 'fee-generation',
+      counts,
+      errorRatePercent,
+    };
   }
 }

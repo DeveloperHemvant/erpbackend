@@ -16,7 +16,7 @@ export class PortalService {
             attendance: true,
             examMarks: { include: { examSlot: { include: { exam: true, subject: true } } } },
             reportCards: { include: { exam: true } },
-            invoices: true
+            invoices: { include: { payments: { include: { refunds: true } } } }
           }
         }
       }
@@ -232,12 +232,19 @@ export class PortalService {
         include: { staff: true, vehicle: true }
       });
 
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todaysDailyCheck = await this.prisma.transportDailyCheck.findFirst({
+        where: { vehicleId, date: todayStr },
+        orderBy: { createdAt: 'desc' }
+      });
+
       widgets.transportTripWidget = {
         vehicleAssignments: staff.transportAssignments,
         vehicleStaff,
         activeTrip,
         pastTrips,
-        availableRoutes: allRoutes
+        availableRoutes: allRoutes,
+        todaysDailyCheck
       };
     }
 

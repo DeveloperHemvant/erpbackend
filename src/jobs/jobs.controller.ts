@@ -25,4 +25,16 @@ export class JobsController {
   async getRecentJobs() {
     return this.jobsService.getRecentJobs();
   }
+
+  @Get('queue-status')
+  @ApiOperation({ summary: 'Get job queue counts (waiting/active/completed/failed) and error rate' })
+  async getQueueStatus() {
+    return this.jobsService.getQueueStatus();
+  }
+
+  @Post(':jobId/retry')
+  @ApiOperation({ summary: 'Retry a failed background job' })
+  async retryJob(@Param('jobId') jobId: string) {
+    return this.jobsService.retryJob(jobId);
+  }
 }

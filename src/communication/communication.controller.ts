@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, ParseUUIDPipe, ForbiddenException } from "@nestjs/common";
+import { Controller, Get, Post, Patch, Body, Param, ParseUUIDPipe, ForbiddenException } from "@nestjs/common";
 import { ApiTags, ApiOperation } from "@nestjs/swagger";
 import { CommunicationService } from "./communication.service";
 import { CreateAnnouncementDto, SendMessageDto, InitConversationDto } from "./dto/communication.dto";
@@ -15,6 +15,18 @@ export class CommunicationController {
   @ApiOperation({ summary: "Get User Notifications" })
   async getNotifications(@Param("userId", ParseUUIDPipe) userId: string) {
     return this.commService.getNotifications(userId);
+  }
+
+  @Patch("notifications/:id/read")
+  @ApiOperation({ summary: "Mark a notification as read" })
+  async markNotificationRead(@Param("id", ParseUUIDPipe) id: string) {
+    return this.commService.markNotificationRead(id);
+  }
+
+  @Patch("notifications/:userId/read-all")
+  @ApiOperation({ summary: "Mark all of a user's notifications as read" })
+  async markAllNotificationsRead(@Param("userId", ParseUUIDPipe) userId: string) {
+    return this.commService.markAllNotificationsRead(userId);
   }
 
   @Get("announcements")

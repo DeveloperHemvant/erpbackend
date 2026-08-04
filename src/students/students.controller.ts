@@ -9,11 +9,14 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
+  UseGuards,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiQuery, ApiParam } from "@nestjs/swagger";
 import { StudentsService } from "./students.service";
 import { CreateStudentDto, UpdateStudentDto, UpdateParentCredentialsDto, SetupParentPortalDto } from "./dto/student.dto";
 import { RequirePermissions } from "../auth/permissions.decorator";
+import { RequireAnyPermission } from "../auth/any-permission.decorator";
+import { AnyPermissionGuard } from "../auth/any-permission.guard";
 
 @ApiTags("ERP Core Features")
 @Controller("erp-core")
@@ -27,6 +30,9 @@ export class StudentsController {
   }
 
   @Get("students")
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_STUDENTS", "MANAGE_TRANSPORT")
+  @RequirePermissions()
   @ApiOperation({ summary: "List all students" })
   @ApiQuery({ name: "page", required: false })
   @ApiQuery({ name: "limit", required: false })

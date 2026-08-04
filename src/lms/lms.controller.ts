@@ -76,8 +76,8 @@ export class LmsController {
   }
 
   @Get("resources")
-  getResources() {
-    return this.lmsService.getResources();
+  getResources(@Query("classId") classId?: string) {
+    return this.lmsService.getResources(classId);
   }
 
   // --- PHASE 2: ASSESSMENTS ---
@@ -87,8 +87,8 @@ export class LmsController {
   }
 
   @Get("assignments")
-  getAssignments(@Query("courseId") courseId?: string) {
-    return this.lmsService.getAssignments(courseId);
+  getAssignments(@Query("courseId") courseId?: string, @Query("classId") classId?: string) {
+    return this.lmsService.getAssignments(courseId, classId);
   }
 
   @Post("assignments/:id/submit")

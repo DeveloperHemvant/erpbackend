@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsNumber } from "class-validator";
+import { IsString, IsNotEmpty, IsOptional, IsUUID, IsNumber, IsIn } from "class-validator";
 
 export class CreateFeeStructureDto {
   @ApiProperty({ example: "Grade 10 General" })
@@ -74,6 +74,50 @@ export class CreateFeePaymentDto {
   @ApiProperty({ example: {}, required: false })
   @IsOptional()
   gatewayResponse?: any;
+}
+
+export class RequestRefundDto {
+  @ApiProperty({ example: "500" })
+  @IsString()
+  @IsNotEmpty()
+  amount: string;
+
+  @ApiProperty({ example: "Duplicate payment recorded by front desk" })
+  @IsString()
+  @IsNotEmpty()
+  reason: string;
+
+  @ApiProperty({ example: "UPI", enum: ["Cash", "UPI", "NetBanking", "Cheque", "Original"], required: false })
+  @IsString()
+  @IsOptional()
+  refundMode?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  requestedBy?: string;
+}
+
+export class ResolveRefundDto {
+  @ApiProperty({ example: "Approved", enum: ["Approved", "Rejected"] })
+  @IsIn(["Approved", "Rejected"])
+  @IsNotEmpty()
+  status: string;
+
+  @ApiProperty({ example: "REFUND-UPI-REF-1", required: false })
+  @IsString()
+  @IsOptional()
+  referenceNo?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  approvedBy?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  remarks?: string;
 }
 
 export class WebhookPaymentDto {

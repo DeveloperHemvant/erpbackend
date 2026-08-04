@@ -13,7 +13,7 @@ import {
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { FeesService } from "./fees.service";
-import { CreateFeeInvoiceDto, CreateFeeStructureDto, CreateFeePaymentDto, WebhookPaymentDto } from "./dto/fee.dto";
+import { CreateFeeInvoiceDto, CreateFeeStructureDto, CreateFeePaymentDto, RequestRefundDto, ResolveRefundDto, WebhookPaymentDto } from "./dto/fee.dto";
 import { RequirePermissions } from "../auth/permissions.decorator";
 import { RequireAnyPermission } from "../auth/any-permission.decorator";
 import { AnyPermissionGuard } from "../auth/any-permission.guard";
@@ -106,6 +106,40 @@ export class FeesController {
   @ApiOperation({ summary: "List all fee payment transactions" })
   getFeePayments() {
     return this.feesService.getFeePayments();
+  }
+
+  @Post("fees/payments/:paymentId/refunds")
+  @RequirePermissions("MANAGE_FEES")
+  @ApiOperation({ summary: "Request a refund against a recorded payment" })
+  @ApiParam({ name: "paymentId", format: "uuid" })
+  requestRefund(
+    @Param("paymentId", ParseUUIDPipe) paymentId: string,
+    @Body() dto: RequestRefundDto,
+  ) {
+    return this.feesService.requestRefund(paymentId, dto);
+  }
+
+  @Get("fees/payments/:paymentId/refunds")
+  @RequirePermissions("MANAGE_FEES")
+  @ApiOperation({ summary: "List refund requests for one payment" })
+  @ApiParam({ name: "paymentId", format: "uuid" })
+  getRefundsForPayment(@Param("paymentId", ParseUUIDPipe) paymentId: string) {
+    return this.feesService.getRefundsForPayment(paymentId);
+  }
+
+  @Patch("fees/refunds/:id/resolve")
+  @RequirePermissions("MANAGE_FEES")
+  @ApiOperation({ summary: "Approve or reject a pending refund request" })
+  @ApiParam({ name: "id", format: "uuid" })
+  resolveRefund(@Param("id", ParseUUIDPipe) id: string, @Body() dto: ResolveRefundDto) {
+    return this.feesService.resolveRefund(id, dto);
+  }
+
+  @Get("fees/refunds")
+  @RequirePermissions("MANAGE_FEES")
+  @ApiOperation({ summary: "List all refund requests" })
+  getRefunds() {
+    return this.feesService.getRefunds();
   }
 
   @Get("audit-logs")

@@ -114,4 +114,53 @@ export class FeeRepository {
       include: { enrollment: { include: { student: true, section: { include: { class: true } } } } },
     });
   }
+
+  findPaymentWithRefunds(paymentId: string) {
+    return this.prisma.feePayment.findUnique({
+      where: { id: paymentId },
+      include: { refunds: true, invoice: { include: { payments: true } } },
+    });
+  }
+
+  createRefund(data: Prisma.FeeRefundUncheckedCreateInput) {
+    return this.prisma.feeRefund.create({ data });
+  }
+
+  findRefundById(id: string) {
+    return this.prisma.feeRefund.findUnique({
+      where: { id },
+      include: { payment: { include: { invoice: { include: { payments: true } } } } },
+    });
+  }
+
+  updateRefundStatus(id: string, data: Prisma.FeeRefundUncheckedUpdateInput) {
+    return this.prisma.feeRefund.update({ where: { id }, data });
+  }
+
+  findAllRefunds() {
+    return this.prisma.feeRefund.findMany({
+      include: {
+        payment: {
+          include: {
+            invoice: { include: { enrollment: { include: { student: true, section: { include: { class: true } } } } } },
+          },
+        },
+      },
+      orderBy: { requestedAt: "desc" },
+    });
+  }
+
+  findRefundsForPayment(paymentId: string) {
+    return this.prisma.feeRefund.findMany({
+      where: { paymentId },
+      orderBy: { requestedAt: "desc" },
+    });
+  }
+
+  findInvoiceWithPaymentsAndRefunds(id: string) {
+    return this.prisma.feeInvoice.findUnique({
+      where: { id },
+      include: { payments: { include: { refunds: true } } },
+    });
+  }
 }

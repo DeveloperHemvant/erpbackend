@@ -203,6 +203,22 @@ export class CommunicationService {
     });
   }
 
+  async markNotificationRead(id: string) {
+    return this.prisma.notification.update({
+      where: { id },
+      data: { readStatus: true },
+    });
+  }
+
+  async markAllNotificationsRead(referenceId: string) {
+    const account = await this.prisma.portalAccount.findFirst({ where: { referenceId } });
+    if (!account) return { count: 0 };
+    return this.prisma.notification.updateMany({
+      where: { recipientId: account.id, readStatus: false },
+      data: { readStatus: true },
+    });
+  }
+
   async getAnnouncements() {
     return this.prisma.announcement.findMany({
       orderBy: { createdAt: "desc" }

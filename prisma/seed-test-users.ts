@@ -15,6 +15,11 @@ async function main() {
     update: {},
     create: { name: "Driver", description: "Transport Driver", permissions: ["MANAGE_TRANSPORT", "VIEW_TRANSPORT", "read"] }
   });
+  const transportManagerRole = await prisma.role.upsert({
+    where: { name: "Transport Manager" },
+    update: {},
+    create: { name: "Transport Manager", description: "Runs the whole transport fleet", permissions: ["MANAGE_TRANSPORT", "MANAGE_TRANSPORT_FLEET", "VIEW_REPORTS"] }
+  });
 
   // 2. Create Teacher
   if (teacherRole) {
@@ -43,6 +48,19 @@ async function main() {
     }
   });
   console.log("✅ Created Staff/Driver: driver@school.com (Password@123)");
+
+  // 3b. Create Transport Manager
+  await prisma.staff.upsert({
+    where: { email: "transport-manager@school.com" },
+    update: {},
+    create: {
+      email: "transport-manager@school.com",
+      passwordHash,
+      fullName: "Tina Manager",
+      roleId: transportManagerRole.id,
+    }
+  });
+  console.log("✅ Created Staff/Transport Manager: transport-manager@school.com (Password@123)");
 
   // 4. Create Student & PortalAccount
   const student = await prisma.student.upsert({

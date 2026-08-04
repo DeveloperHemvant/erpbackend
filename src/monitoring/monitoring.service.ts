@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { JobsService } from '../jobs/jobs.service';
 import * as os from 'os';
 
 @Injectable()
@@ -7,7 +8,7 @@ export class MonitoringService {
   private previousCpuTimes: { idle: number, total: number } | null = null;
   private currentCpuUsage: number = 0;
 
-  constructor(private prisma: PrismaService) {
+  constructor(private prisma: PrismaService, private jobsService: JobsService) {
     // Periodically calculate CPU usage (works on Windows & Linux)
     setInterval(() => this.calculateCpuUsage(), 2000);
   }
@@ -92,5 +93,9 @@ export class MonitoringService {
         pingMs: dbPing,
       }
     };
+  }
+
+  async getQueueStatus() {
+    return this.jobsService.getQueueStatus();
   }
 }

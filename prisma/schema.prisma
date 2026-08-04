@@ -107,6 +107,7 @@ model Staff {
   TransportTrip        TransportTrip[]
   TransportBreakdown   TransportBreakdown[]
   TransportAccident    TransportAccident[]
+  TransportDailyCheck  TransportDailyCheck[]
   LMSCourseSection     LMSCourseSection[]
   LMSLiveClass         LMSLiveClass[]
   EMSInvigilator       EMSInvigilator[]
@@ -935,8 +936,28 @@ model FeePayment {
   updatedAt        DateTime   @updatedAt
   createdBy        String?
   updatedBy        String?
+  refunds          FeeRefund[]
 
   @@map("fee_payments")
+}
+
+model FeeRefund {
+  id          String     @id @default(uuid()) @db.Uuid
+  paymentId   String     @db.Uuid
+  payment     FeePayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amount      Decimal
+  reason      String
+  status      String     @default("Requested") // Requested, Approved, Rejected
+  refundMode  String? // Cash, UPI, NetBanking, Cheque, Original
+  referenceNo String?
+  requestedBy String?
+  approvedBy  String?
+  remarks     String?
+  requestedAt DateTime   @default(now())
+  resolvedAt  DateTime?
+
+  @@index([paymentId])
+  @@map("fee_refunds")
 }
 
 model AuditLog {
@@ -1062,6 +1083,7 @@ model TransportVehicle {
   TransportAccident    TransportAccident[]
   TransportExpense     TransportExpense[]
   TransportRoute       TransportRoute[]
+  TransportDailyCheck  TransportDailyCheck[]
 
   @@map("transport_vehicles")
 }
@@ -1216,6 +1238,7 @@ model TransportTrip {
 
   logs       TransportTripLog[]
   attendance TransportAttendance[]
+  dailyChecks TransportDailyCheck[]
 
   @@map("transport_trips")
 }
@@ -1267,6 +1290,10 @@ model TransportFuelLog {
   filledBy         String?
   receiptUrl       String?
   remarks          String?
+  status           String           @default("Pending") // Pending, Approved, Rejected
+  approvedBy       String?
+  approvedAt       DateTime?
+  rejectionReason  String?
   createdAt        DateTime         @default(now())
 
   @@map("transport_fuel_logs")
@@ -1284,6 +1311,31 @@ model TransportOdometerLog {
   createdAt         DateTime         @default(now())
 
   @@map("transport_odometer_logs")
+}
+
+model TransportDailyCheck {
+  id                 String           @id @default(uuid()) @db.Uuid
+  vehicleId          String           @db.Uuid
+  vehicle            TransportVehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driverId           String?          @db.Uuid
+  driver             Staff?           @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  tripId             String?          @db.Uuid
+  trip               TransportTrip?   @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  date               String // YYYY-MM-DD
+  shift              String // Morning, Afternoon
+  brakesOk           Boolean          @default(true)
+  tyresOk            Boolean          @default(true)
+  lightsIndicatorsOk Boolean          @default(true)
+  hornOk             Boolean          @default(true)
+  firstAidKitOk      Boolean          @default(true)
+  fireExtinguisherOk Boolean          @default(true)
+  fuelLevelOk        Boolean          @default(true)
+  odometerReading    Float?
+  overallStatus      String           @default("Fit") // Fit, Not Fit
+  remarks            String?
+  createdAt          DateTime         @default(now())
+
+  @@map("transport_daily_checks")
 }
 
 // --- PHASE 2: MAINTENANCE, ASSETS, INCIDENTS & EXPENSES ---
@@ -1390,7 +1442,9 @@ model TransportBreakdown {
   actionTaken    String?
   towingRequired Boolean          @default(false)
   costIncurred   Float?
-  status         String           @default("Reported") // Reported, Under Repair, Resolved
+  status         String           @default("Reported") // Reported, Acknowledged, Under Repair, Resolved
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
   createdAt      DateTime         @default(now())
 
   @@map("transport_breakdowns")
@@ -1411,7 +1465,9 @@ model TransportAccident {
   firNumber        String?
   insuranceClaimed Boolean          @default(false)
   claimAmount      Float?
-  status           String           @default("Under Investigation") // Under Investigation, Closed
+  status           String           @default("Under Investigation") // Under Investigation, Acknowledged, Closed
+  acknowledgedBy   String?
+  acknowledgedAt   DateTime?
   createdAt        DateTime         @default(now())
 
   @@map("transport_accidents")
@@ -1430,6 +1486,10 @@ model TransportExpense {
   vendor          TransportVendor?  @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   remarks         String?
   receiptUrl      String?
+  status          String            @default("Pending") // Pending, Approved, Rejected
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectionReason String?
   createdAt       DateTime          @default(now())
 
   @@map("transport_expenses")

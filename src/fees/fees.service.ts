@@ -3,7 +3,7 @@ import { CommunicationService } from "../communication/communication.service";
 import { StudentRepository } from "../students/repositories/student.repository";
 import { FeeRepository } from "./repositories/fee.repository";
 import { ErpCoreAuditLogRepository } from "./repositories/audit-log.repository";
-import { CreateFeeStructureDto, CreateFeeInvoiceDto, CreateFeePaymentDto, WebhookPaymentDto } from "./dto/fee.dto";
+import { CreateFeeStructureDto, CreateFeeInvoiceDto, CreateFeePaymentDto, RequestRefundDto, ResolveRefundDto, WebhookPaymentDto } from "./dto/fee.dto";
 
 @Injectable()
 export class FeesService {
@@ -195,6 +195,87 @@ export class FeesService {
 
   async getFeePayments() {
     return this.feeRepository.findAllPayments();
+  }
+
+  // ==========================================
+  // REFUNDS
+  // ==========================================
+  async requestRefund(paymentId: string, dto: RequestRefundDto) {
+    const payment = await this.feeRepository.findPaymentWithRefunds(paymentId);
+    if (!payment) throw new NotFoundException("Payment not found.");
+
+    const requestedAmount = Number(dto.amount);
+    if (!(requestedAmount > 0)) {
+      throw new BadRequestException("Refund amount must be greater than zero.");
+    }
+
+    // Requested + Approved refunds both hold a claim against the payment; only
+    // Rejected ones free up the balance again.
+    const alreadyClaimed = (payment.refunds || [])
+      .filter((r) => r.status !== "Rejected")
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+    const remaining = Number(payment.amountPaid) - alreadyClaimed;
+
+    if (requestedAmount > remaining) {
+      throw new BadRequestException(
+        `Refund amount exceeds the remaining refundable balance (${remaining}) on this payment.`,
+      );
+    }
+
+    return this.feeRepository.createRefund({
+      paymentId,
+      amount: dto.amount,
+      reason: dto.reason,
+      refundMode: dto.refundMode || payment.paymentMode,
+      requestedBy: dto.requestedBy || "SYSTEM",
+    });
+  }
+
+  async resolveRefund(id: string, dto: ResolveRefundDto) {
+    const refund = await this.feeRepository.findRefundById(id);
+    if (!refund) throw new NotFoundException("Refund request not found.");
+    if (refund.status !== "Requested") {
+      throw new BadRequestException(`Only pending requests can be resolved (current status: ${refund.status}).`);
+    }
+
+    const updated = await this.feeRepository.updateRefundStatus(id, {
+      status: dto.status,
+      referenceNo: dto.referenceNo || null,
+      approvedBy: dto.approvedBy || null,
+      remarks: dto.remarks || null,
+      resolvedAt: new Date(),
+    });
+
+    if (dto.status === "Approved") {
+      await this.recalculateInvoiceAfterRefund(refund.payment.invoiceId);
+    }
+
+    return updated;
+  }
+
+  private async recalculateInvoiceAfterRefund(invoiceId: string) {
+    const invoice = await this.feeRepository.findInvoiceWithPaymentsAndRefunds(invoiceId);
+    if (!invoice) return;
+
+    const netPaid = invoice.payments.reduce((sum, p) => {
+      const refundedOnThisPayment = (p.refunds || [])
+        .filter((r) => r.status === "Approved")
+        .reduce((s, r) => s + Number(r.amount), 0);
+      return sum + (Number(p.amountPaid) - refundedOnThisPayment);
+    }, 0);
+
+    const invoiceAmount = Number(invoice.totalAmount || invoice.amount);
+    const newStatus = netPaid >= invoiceAmount ? "Paid" : "Unpaid";
+
+    await this.feeRepository.updateInvoiceStatusSimple(invoiceId, newStatus);
+  }
+
+  async getRefunds() {
+    return this.feeRepository.findAllRefunds();
+  }
+
+  async getRefundsForPayment(paymentId: string) {
+    return this.feeRepository.findRefundsForPayment(paymentId);
   }
 
   async getAuditLogs() {
