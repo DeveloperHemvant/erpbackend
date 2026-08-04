@@ -57,6 +57,9 @@ export class StudentsController {
   }
 
   @Get("students/:id/profile")
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_STUDENTS", "MANAGE_TRANSPORT")
+  @RequirePermissions()
   @ApiParam({ name: "id", format: "uuid" })
   @ApiOperation({ summary: "Get detailed student profile" })
   getStudentProfile(@Param("id", ParseUUIDPipe) id: string) {

@@ -104,6 +104,7 @@ export class TransportController {
   }
 
   @Get("students/:enrollmentId")
+  @RequirePermissions("MANAGE_TRANSPORT")
   getStudentTransport(@Param("enrollmentId") enrollmentId: string) {
     return this.transportService.getStudentTransport(enrollmentId);
   }
