@@ -17,6 +17,7 @@ async function bootstrap() {
 
   console.log("Shutting down ESOS Standalone Context.");
   await app.close();
+  process.exit(0);
 }
 
 bootstrap().catch((err) => {

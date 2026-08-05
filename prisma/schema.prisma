@@ -54,6 +54,7 @@ model Campus {
   feeInvoices       FeeInvoice[]
   acmsHolidays      ACMSHolidayMaster[]
   morningAssemblies MorningAssembly[]
+  events            SchoolEvent[]
 
   @@map("campuses")
 }
@@ -135,6 +136,7 @@ model Staff {
   assignedGrievances        GrievanceRecord[]
   lostFoundItems            LostFoundItem[]
   supervisedAssemblies      MorningAssembly[]
+  issuedAchievements        StudentAchievement[]       @relation("IssuedBy")
 
   @@map("staff")
 }
@@ -183,6 +185,7 @@ model Student {
   housesCaptained     SchoolHouse[]             @relation("HouseCaptain")
   housesViceCaptained SchoolHouse[]             @relation("HouseViceCaptain")
   diaryEntries        SchoolDiaryEntry[]
+  achievements        StudentAchievement[]
 
   @@map("students")
 }
@@ -2710,4 +2713,33 @@ model MorningAssembly {
   updatedAt           DateTime @updatedAt
 
   @@map("morning_assemblies")
+}
+
+model SchoolEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  type        String
+  date        DateTime
+  campusId    String   @db.Uuid
+  campus      Campus   @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("school_events")
+}
+
+model StudentAchievement {
+  id              String   @id @default(uuid()) @db.Uuid
+  studentId       String   @db.Uuid
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  type            String
+  title           String
+  award           String
+  issuedById      String   @db.Uuid
+  issuedBy        Staff    @relation("IssuedBy", fields: [issuedById], references: [id])
+  certificateData Json?
+  issuedAt        DateTime @default(now())
+
+  @@map("student_achievements")
 }

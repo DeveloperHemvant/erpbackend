@@ -6,18 +6,18 @@ import { PrismaService } from "../../prisma/prisma.service";
 export class MedicalRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  createVisit(data: Prisma.MedicalVisitUncheckedCreateInput) {
-    return this.prisma.medicalVisit.create({
+  createVisit(data: Prisma.HealthVisitUncheckedCreateInput) {
+    return this.prisma.healthVisit.create({
       data,
-      include: { student: true, loggedBy: true },
+      include: { student: true, loggedByStaff: true },
     });
   }
 
-  findVisits(where?: Prisma.MedicalVisitWhereInput) {
-    return this.prisma.medicalVisit.findMany({
+  findVisits(where?: Prisma.HealthVisitWhereInput) {
+    return this.prisma.healthVisit.findMany({
       where,
-      include: { student: true, loggedBy: true },
-      orderBy: { entryTime: "desc" },
+      include: { student: true, loggedByStaff: true },
+      orderBy: { visitDate: "desc" },
     });
   }
 }

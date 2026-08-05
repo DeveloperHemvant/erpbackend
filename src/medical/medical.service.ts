@@ -9,12 +9,12 @@ export class MedicalService {
   async createVisit(staffId: string, dto: CreateMedicalVisitDto) {
     return this.repository.createVisit({
       studentId: dto.studentId,
+      reason: dto.symptoms || "Medical Room Visit",
       symptoms: dto.symptoms,
-      treatment: dto.treatment,
-      medicineIssued: dto.medicineIssued,
-      referredToDoctor: dto.referredToDoctor,
-      loggedById: staffId,
-      status: "COMPLETED",
+      treatmentGiven: dto.treatment || dto.medicineIssued || "First Aid",
+      actionTaken: dto.referredToDoctor ? "Referred to Doctor" : "Observed and Released",
+      loggedByStaffId: staffId,
+      visitDate: new Date(),
     });
   }
 
