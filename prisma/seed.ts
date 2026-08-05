@@ -239,7 +239,7 @@ async function main() {
     },
   });
 
-  const sessions = [];
+  const sessions: any[] = [];
   for (const def of SESSION_DEFS) {
     const created = await prisma.academicSession.create({
       data: { name: def.name, isActive: def.isActive, status: 'Active' },
@@ -384,12 +384,22 @@ async function main() {
 
   function makeStaff(name: string, email: string, roleName: string, gender: string, salary: number, extras: Record<string, any> = {}) {
     const id = randomUUID();
+    let resolvedRoleName = roleName;
+    if (['Administrative Officer', 'Receptionist', 'HR Manager', 'Nurse', 'Mess Supervisor', 'Security Guard', 'Peon', 'Cleaner'].includes(roleName)) {
+      resolvedRoleName = 'Admin Staff';
+    } else if (['PET Teacher', 'Music Teacher', 'Art Teacher', 'Computer Teacher', 'Lab Assistant'].includes(roleName)) {
+      resolvedRoleName = 'Teacher';
+    }
+    const roleId = roles[resolvedRoleName];
+    if (!roleId) {
+      console.warn(`WARNING: Role '${roleName}' (resolved to '${resolvedRoleName}') not found in DB roles dictionary!`);
+    }
     staffRecords.push({
       id,
       fullName: name,
       email,
       passwordHash: sharedHash,
-      roleId: roles[roleName],
+      roleId: roleId,
       status: 'Active',
       gender,
       education: 'B.Ed',
@@ -477,17 +487,17 @@ async function main() {
   console.log('\n5) Generating complete section timetables...');
   const timetable = await prisma.timetable.create({ data: { name: '2026-2027 Master Timetable', sessionId: session.id, status: 'Active' } });
   const slots = [
-    { name: 'Assembly', start: '08:30', end: '09:00', isBreak: false },
-    { name: 'Period 1', start: '09:00', end: '09:40', isBreak: false },
-    { name: 'Period 2', start: '09:40', end: '10:20', isBreak: false },
-    { name: 'Period 3', start: '10:20', end: '11:00', isBreak: false },
-    { name: 'Recess', start: '11:00', end: '11:20', isBreak: true },
-    { name: 'Period 4', start: '11:20', end: '12:00', isBreak: false },
-    { name: 'Period 5', start: '12:00', end: '12:40', isBreak: false },
-    { name: 'Period 6', start: '12:40', end: '13:20', isBreak: false },
-    { name: 'Lunch', start: '13:20', end: '14:00', isBreak: true },
-    { name: 'Period 7', start: '14:00', end: '14:40', isBreak: false },
-    { name: 'Period 8', start: '14:40', end: '15:20', isBreak: false },
+    { name: 'Assembly', startTime: '08:30', endTime: '09:00', isBreak: false },
+    { name: 'Period 1', startTime: '09:00', endTime: '09:40', isBreak: false },
+    { name: 'Period 2', startTime: '09:40', endTime: '10:20', isBreak: false },
+    { name: 'Period 3', startTime: '10:20', endTime: '11:00', isBreak: false },
+    { name: 'Recess', startTime: '11:00', endTime: '11:20', isBreak: true },
+    { name: 'Period 4', startTime: '11:20', endTime: '12:00', isBreak: false },
+    { name: 'Period 5', startTime: '12:00', endTime: '12:40', isBreak: false },
+    { name: 'Period 6', startTime: '12:40', endTime: '13:20', isBreak: false },
+    { name: 'Lunch', startTime: '13:20', endTime: '14:00', isBreak: true },
+    { name: 'Period 7', startTime: '14:00', endTime: '14:40', isBreak: false },
+    { name: 'Period 8', startTime: '14:40', endTime: '15:20', isBreak: false },
   ];
   await batchInsert('timetable_slots', prisma.timetableSlot, slots.map((slot) => ({ ...slot, sessionId: session.id })));
   const timetablePeriods: any[] = [];
@@ -507,8 +517,8 @@ async function main() {
                 timetableId: timetable.id,
                 sectionId: section.id,
                 dayOfWeek: day,
-                startTime: slot.start,
-                endTime: slot.end,
+                startTime: slot.startTime,
+                endTime: slot.endTime,
                 room: 'Cafeteria',
                 status: 'Active',
                 assignmentId: assignmentRows.find((row) => row.sectionId === section.id && row.isClassTeacher)?.id ?? assignmentRows[0].id,
@@ -521,7 +531,7 @@ async function main() {
             (row) => row.sectionId === section.id && row.subjectId === subjectMap[subjectName]
           );
           if (!teacherAssignment) continue;
-          const teacherKey = `${teacherAssignment.staffId}_${day}_${slot.start}`;
+          const teacherKey = `${teacherAssignment.staffId}_${day}_${slot.startTime}`;
           if (teacherBusy[teacherKey]) {
             subjectIndex++;
             continue;
@@ -533,8 +543,8 @@ async function main() {
             subjectId: teacherAssignment.subjectId,
             assignmentId: teacherAssignment.id,
             dayOfWeek: day,
-            startTime: slot.start,
-            endTime: slot.end,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
             room: randomItem(roomNames),
             status: 'Active',
           });
@@ -1137,7 +1147,7 @@ async function main() {
       let totalMarks = 0;
       let subjectCount = 0;
       for (const subjectName of subjectsForGrade) {
-        const examSlot = examSlotRows.find((slot) => slot.examId === exam.id && slot.classId === enrollment.sectionId && slot.subjectId === subjectMap[subjectName]);
+        const examSlot = examSlotRows.find((slot) => slot.examId === exam.id && slot.classId === sectionToClassMap[enrollment.sectionId]?.classId && slot.subjectId === subjectMap[subjectName]);
         const isAbsent = faker.number.int({ min: 1, max: 100 }) <= 4;
         const marksObtained = isAbsent ? null : faker.number.int({ min: 28, max: 98 });
         marksRows.push({
