@@ -25,6 +25,15 @@ export class AttendanceRepository {
     });
   }
 
+  /** Class/Section 360 Attendance Summary tab (IA §4) — count by status for one section. */
+  summaryBySection(sectionId: string) {
+    return this.prisma.attendanceRecord.groupBy({
+      by: ["status"],
+      where: { enrollment: { sectionId } },
+      _count: { _all: true },
+    });
+  }
+
   delete(id: string) {
     return this.prisma.attendanceRecord.delete({ where: { id } });
   }

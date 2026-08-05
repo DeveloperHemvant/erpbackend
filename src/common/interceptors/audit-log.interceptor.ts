@@ -26,13 +26,10 @@ export class AuditLogInterceptor implements NestInterceptor {
     }
 
     // Resolve table names & records
-    let tableName = "unknown";
+    const pathParts = url.split("?")[0].split("/");
+    const resource = pathParts.find(p => p && p !== "erp-core" && p !== "api" && p !== "v1");
+    let tableName = resource || "unknown";
     let recordId = "n/a";
-    if (url.includes("/roles")) {
-      tableName = "roles";
-    } else if (url.includes("/staff")) {
-      tableName = "staff";
-    }
 
     // Attempt to extract record ID from request parameters (e.g., /roles/:id)
     const urlParts = url.split("/");
@@ -46,10 +43,16 @@ export class AuditLogInterceptor implements NestInterceptor {
     let oldValue: any = null;
     if (recordId !== "n/a" && (method === "PATCH" || method === "PUT" || method === "DELETE")) {
       try {
-        if (tableName === "roles") {
-          oldValue = await this.prisma.role.findUnique({ where: { id: recordId } });
-        } else if (tableName === "staff") {
-          oldValue = await this.prisma.staff.findUnique({ where: { id: recordId } });
+        let modelKey = tableName.toLowerCase();
+        if (modelKey.endsWith("s")) {
+          modelKey = modelKey.slice(0, -1);
+        }
+        if (modelKey === 'campuse') modelKey = 'campus';
+        if (modelKey === 'invoice') modelKey = 'feeInvoice';
+        if (modelKey === 'payment') modelKey = 'feePayment';
+
+        if ((this.prisma as any)[modelKey]) {
+          oldValue = await (this.prisma as any)[modelKey].findUnique({ where: { id: recordId } });
         }
       } catch (err) {
         this.logger.warn(`Could not fetch old record state for ${tableName}/${recordId}: ${err.message}`);

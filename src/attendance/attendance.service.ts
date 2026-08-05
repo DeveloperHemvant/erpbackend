@@ -60,4 +60,15 @@ export class AttendanceService {
   async deleteAttendance(id: string) {
     return this.attendanceRepository.delete(id);
   }
+
+  async getAttendanceSummary(sectionId: string) {
+    const grouped = await this.attendanceRepository.summaryBySection(sectionId);
+    const summary: Record<string, number> = { Present: 0, Absent: 0, Late: 0, Leave: 0 };
+    let total = 0;
+    for (const row of grouped) {
+      summary[row.status] = row._count._all;
+      total += row._count._all;
+    }
+    return { sectionId, total, byStatus: summary };
+  }
 }

@@ -33,8 +33,11 @@ export class AuditLogService {
     to?: string;
     page?: number;
     pageSize?: number;
+    /** Scopes results to one record's Activity Timeline (IA §16 #1) — additive, optional. */
+    entityType?: string;
+    entityId?: string;
   } = {}) {
-    const { search, module, action, performedBy, from, to } = filters;
+    const { search, module, action, performedBy, from, to, entityType, entityId } = filters;
     const page = Math.max(1, filters.page || 1);
     const pageSize = Math.min(100, Math.max(1, filters.pageSize || 25));
 
@@ -52,6 +55,8 @@ export class AuditLogService {
         module: module || undefined,
         action: action ? { contains: action, mode: 'insensitive' } : undefined,
         performedBy: performedBy ? { contains: performedBy, mode: 'insensitive' } : undefined,
+        entityType: entityType || undefined,
+        entityId: entityId || undefined,
         timestamp,
         ...(search
           ? {
@@ -70,9 +75,10 @@ export class AuditLogService {
 
     const globalLogs = await this.prisma.auditLog.findMany({
       where: {
-        tableName: module || undefined,
+        tableName: entityType || module || undefined,
         action: action ? { contains: action, mode: 'insensitive' } : undefined,
         userEmail: performedBy ? { contains: performedBy, mode: 'insensitive' } : undefined,
+        recordId: entityId || undefined,
         timestamp,
         ...(search
           ? {

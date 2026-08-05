@@ -14,15 +14,17 @@ export class StudentRepository {
     return this.prisma.student.create({ data });
   }
 
-  findAll() {
+  findAll(sectionId?: string) {
     return this.prisma.student.findMany({
+      where: sectionId ? { enrollments: { some: { sectionId } } } : undefined,
       orderBy: { fullName: "asc" },
       include: { enrollments: { include: { section: { include: { class: true } } } } },
     });
   }
 
-  findPage(skip: number, take: number) {
+  findPage(skip: number, take: number, sectionId?: string) {
     return this.prisma.student.findMany({
+      where: sectionId ? { enrollments: { some: { sectionId } } } : undefined,
       skip,
       take,
       orderBy: { fullName: "asc" },
@@ -30,8 +32,10 @@ export class StudentRepository {
     });
   }
 
-  count() {
-    return this.prisma.student.count();
+  count(sectionId?: string) {
+    return this.prisma.student.count({
+      where: sectionId ? { enrollments: { some: { sectionId } } } : undefined,
+    });
   }
 
   findById(id: string) {

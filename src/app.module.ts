@@ -31,7 +31,8 @@ import { HealthRecordsModule } from "./health-records/health-records.module";
 import { DisciplineModule } from "./discipline/discipline.module";
 import { AdmissionInquiryModule } from "./admission-inquiry/admission-inquiry.module";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
+import { AuditLogInterceptor } from "./common/interceptors/audit-log.interceptor";
 import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 import { PermissionsGuard } from "./auth/permissions.guard";
 import { SelfAccessGuard } from "./auth/self-access.guard";
@@ -44,6 +45,18 @@ import { TemplateModule } from './template/template.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PromotionsModule } from './promotions/promotions.module';
+import { CommentsModule } from './comments/comments.module';
+import { AttachmentsModule } from './attachments/attachments.module';
+import { SearchModule } from './search/search.module';
+import { WorkflowEngineModule } from './workflow-engine/workflow-engine.module';
+import { RulesEngineModule } from './rules-engine/rules-engine.module';
+import { AiModule } from './ai/ai.module';
+import { VisitorModule } from './visitor/visitor.module';
+import { ActivitiesModule } from './activities/activities.module';
+import { MedicalModule } from './medical/medical.module';
+import { SubstitutionModule } from './substitution/substitution.module';
+import { DiaryModule } from './diary/diary.module';
+import { SimulatorModule } from './testing/simulator/simulator.module';
 
 @Module({
   imports: [
@@ -94,6 +107,18 @@ import { PromotionsModule } from './promotions/promotions.module';
     HealthRecordsModule,
     DisciplineModule,
     AdmissionInquiryModule,
+    CommentsModule,
+    AttachmentsModule,
+    SearchModule,
+    WorkflowEngineModule,
+    RulesEngineModule,
+    AiModule,
+    VisitorModule,
+    ActivitiesModule,
+    MedicalModule,
+    SubstitutionModule,
+    DiaryModule,
+    SimulatorModule,
   ],
   controllers: [AppController],
   providers: [
@@ -113,6 +138,10 @@ import { PromotionsModule } from './promotions/promotions.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
     },
   ],
 })

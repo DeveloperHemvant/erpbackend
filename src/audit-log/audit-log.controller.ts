@@ -15,6 +15,8 @@ export class AuditLogController {
     @Query('to') to?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @Query('entityType') entityType?: string,
+    @Query('entityId') entityId?: string,
   ) {
     return this.auditLogService.getLogs({
       search,
@@ -25,6 +27,8 @@ export class AuditLogController {
       to,
       page: page ? parseInt(page, 10) : undefined,
       pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      entityType,
+      entityId,
     });
   }
 }

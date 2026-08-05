@@ -53,6 +53,7 @@ model Campus {
   attendanceRecords AttendanceRecord[]
   feeInvoices       FeeInvoice[]
   acmsHolidays      ACMSHolidayMaster[]
+  morningAssemblies MorningAssembly[]
 
   @@map("campuses")
 }
@@ -121,6 +122,20 @@ model Staff {
   assignedInquiries         AdmissionInquiry[]
   inquiryFollowUps          AdmissionInquiryFollowUp[]
 
+  comments    Comment[]
+  attachments Attachment[]
+
+  visitorRecords            VisitorRecord[]
+  approvedGatePasses        StudentGatePass[]
+  housesManaged             SchoolHouse[]
+  duties                    StaffDutyAllocation[]
+  primarySubstitutions      TeacherSubstitution[]      @relation("PrimaryTeacher")
+  substituteAssignments     TeacherSubstitution[]      @relation("SubstituteTeacher")
+  writtenDiaryEntries       SchoolDiaryEntry[]
+  assignedGrievances        GrievanceRecord[]
+  lostFoundItems            LostFoundItem[]
+  supervisedAssemblies      MorningAssembly[]
+
   @@map("staff")
 }
 
@@ -163,6 +178,11 @@ model Student {
   vaccinations        Vaccination[]
   disciplineIncidents DisciplineIncident[]
   admissionInquiry    AdmissionInquiry?
+
+  gatePasses          StudentGatePass[]
+  housesCaptained     SchoolHouse[]             @relation("HouseCaptain")
+  housesViceCaptained SchoolHouse[]             @relation("HouseViceCaptain")
+  diaryEntries        SchoolDiaryEntry[]
 
   @@map("students")
 }
@@ -231,6 +251,7 @@ model Section {
   assignments      TeacherAssignment[]
   timetable        TimetablePeriod[]
   LMSCourseSection LMSCourseSection[]
+  morningAssemblies MorningAssembly[]
 
   @@map("sections")
 }
@@ -599,6 +620,7 @@ model TimetablePeriod {
   updatedAt    DateTime          @updatedAt
   createdBy    String?
   updatedBy    String?
+  substitutions TeacherSubstitution[]
 
   @@map("timetable_periods")
 }
@@ -2441,4 +2463,251 @@ model AdmissionInquiryFollowUp {
   createdAt        DateTime         @default(now())
 
   @@map("admission_inquiry_followups")
+}
+
+// ==========================================
+// SHARED CROSS-CUTTING SERVICES (IA §16 #6/#7)
+// Generic {entityType, entityId}-keyed stores, not owned by any one module —
+// every current and future entity type shares these two tables.
+// ==========================================
+
+model Comment {
+  id         String   @id @default(uuid()) @db.Uuid
+  entityType String
+  entityId   String   @db.Uuid
+  authorId   String   @db.Uuid
+  author     Staff    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@map("comments")
+}
+
+model Attachment {
+  id             String   @id @default(uuid()) @db.Uuid
+  entityType     String
+  entityId       String   @db.Uuid
+  fileName       String
+  sizeBytes      Int      @default(0)
+  uploadedById   String   @db.Uuid
+  uploadedBy     Staff    @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  url            String
+  uploadedAt     DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@map("attachments")
+}
+
+// ==========================================
+// WORKFLOW ENGINE + RULES ENGINE (IA §16 #4, Appendix A.2)
+// Stage/transition and eligibility logic as data, evaluated by one engine —
+// additive services; existing modules' inline transition/calculation logic
+// is not migrated onto these in this pass (see docs/PHASE8_WORKFLOW_RULES_ENGINE.md).
+// ==========================================
+
+model WorkflowDefinition {
+  id          String   @id @default(uuid()) @db.Uuid
+  entityType  String
+  name        String
+  stages      Json     @db.JsonB
+  transitions Json     @db.JsonB
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([entityType, name])
+  @@map("workflow_definitions")
+}
+
+model Rule {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  entityType  String
+  description String
+  definition  Json     @db.JsonB
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("rules")
+}
+
+model VisitorRecord {
+  id               String    @id @default(uuid()) @db.Uuid
+  fullName         String
+  phone            String
+  purpose          String
+  hostId           String?   @db.Uuid
+  host             Staff?    @relation(fields: [hostId], references: [id])
+  govIdType        String?
+  govIdNumber      String?
+  photoUrl         String?
+  vehicleNumber    String?
+  hostConfirmation String    @default("PENDING")
+  blacklisted      Boolean   @default(false)
+  entryTime        DateTime  @default(now())
+  exitTime         DateTime?
+  status           String    @default("CheckedIn")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("visitor_records")
+}
+
+model StudentGatePass {
+  id           String    @id @default(uuid()) @db.Uuid
+  studentId    String    @db.Uuid
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  reason       String
+  leaveType    String
+  approvedById String    @db.Uuid
+  approvedBy   Staff     @relation(fields: [approvedById], references: [id])
+  exitTime     DateTime  @default(now())
+  returnTime   DateTime?
+  status       String    @default("Approved")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("student_gate_passes")
+}
+
+model SchoolHouse {
+  id                String   @id @default(uuid()) @db.Uuid
+  name              String   @unique
+  captainId         String?  @db.Uuid
+  captain           Student? @relation("HouseCaptain", fields: [captainId], references: [id])
+  viceCaptainId     String?  @db.Uuid
+  viceCaptain       Student? @relation("HouseViceCaptain", fields: [viceCaptainId], references: [id])
+  teacherInchargeId String?  @db.Uuid
+  teacherIncharge   Staff?   @relation(fields: [teacherInchargeId], references: [id])
+  points            Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("school_houses")
+}
+
+model StaffDutyAllocation {
+  id        String   @id @default(uuid()) @db.Uuid
+  staffId   String   @db.Uuid
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  dutyType  String
+  date      DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("staff_duty_allocations")
+}
+
+model TeacherSubstitution {
+  id                  String          @id @default(uuid()) @db.Uuid
+  leaveApplicationId  String          @db.Uuid
+  primaryTeacherId    String          @db.Uuid
+  primaryTeacher      Staff           @relation("PrimaryTeacher", fields: [primaryTeacherId], references: [id])
+  substituteTeacherId String          @db.Uuid
+  substituteTeacher   Staff           @relation("SubstituteTeacher", fields: [substituteTeacherId], references: [id])
+  date                DateTime
+  timetablePeriodId   String          @db.Uuid
+  timetablePeriod     TimetablePeriod @relation(fields: [timetablePeriodId], references: [id])
+  status              String          @default("ASSIGNED")
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@map("teacher_substitutions")
+}
+
+model SchoolDiaryEntry {
+  id             String    @id @default(uuid()) @db.Uuid
+  studentId      String    @db.Uuid
+  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId      String    @db.Uuid
+  teacher        Staff     @relation(fields: [teacherId], references: [id])
+  type           String
+  content        String
+  parentSigned   Boolean   @default(false)
+  parentSignedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("school_diary_entries")
+}
+
+model DailyNewsItem {
+  id            String   @id @default(uuid()) @db.Uuid
+  date          DateTime @default(now())
+  national      String
+  international String
+  sports        String
+  weather       String
+  importantDay  String?
+  festival      String?
+  createdAt     DateTime @default(now())
+
+  @@map("daily_news_items")
+}
+
+model GrievanceRecord {
+  id              String   @id @default(uuid()) @db.Uuid
+  userType        String
+  reporterId      String   @db.Uuid
+  title           String
+  description     String
+  assignedToId    String?  @db.Uuid
+  assignedTo      Staff?   @relation(fields: [assignedToId], references: [id])
+  escalationLevel Int      @default(0)
+  status          String   @default("Open")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("grievances")
+}
+
+model LostFoundItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  status      String
+  itemName    String
+  description String
+  reporterId  String    @db.Uuid
+  reporter    Staff     @relation(fields: [reporterId], references: [id])
+  photoUrl    String?
+  claimantId  String?   @db.Uuid
+  claimedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("lost_found_items")
+}
+
+model DocumentLifecycle {
+  id         String   @id @default(uuid()) @db.Uuid
+  entityType String
+  entityId   String   @db.Uuid
+  docType    String
+  docNumber  String?
+  expiryDate DateTime
+  alertDays  Int      @default(30)
+  status     String   @default("Active")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("document_lifecycles")
+}
+
+model MorningAssembly {
+  id                  String   @id @default(uuid()) @db.Uuid
+  date                DateTime
+  campusId            String   @db.Uuid
+  campus              Campus   @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  theme               String
+  performingSectionId String   @db.Uuid
+  performingSection   Section  @relation(fields: [performingSectionId], references: [id], onDelete: Cascade)
+  supervisingStaffId  String   @db.Uuid
+  supervisingStaff    Staff    @relation(fields: [supervisingStaffId], references: [id], onDelete: Restrict)
+  venue               String
+  activities          Json
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("morning_assemblies")
 }

@@ -32,6 +32,13 @@ export class AttendanceController {
     return this.attendanceService.getAttendance(date, month);
   }
 
+  @Get("attendance/summary")
+  @ApiOperation({ summary: "Attendance count-by-status summary for one class section (Class/Section 360)" })
+  @ApiQuery({ name: "sectionId", required: true })
+  getAttendanceSummary(@Query("sectionId") sectionId: string) {
+    return this.attendanceService.getAttendanceSummary(sectionId);
+  }
+
   @Post("attendance/biometric-webhook")
   @ApiOperation({ summary: "Accepts hardware camera payload to mark attendance automatically" })
   handleBiometricWebhook(@Body() payload: any) {

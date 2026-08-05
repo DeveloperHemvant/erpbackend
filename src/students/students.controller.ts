@@ -36,10 +36,11 @@ export class StudentsController {
   @ApiOperation({ summary: "List all students" })
   @ApiQuery({ name: "page", required: false })
   @ApiQuery({ name: "limit", required: false })
-  getStudents(@Query("page") page?: string, @Query("limit") limit?: string) {
+  @ApiQuery({ name: "sectionId", required: false, description: "Filter to students enrolled in this section (Class/Section 360 roster)" })
+  getStudents(@Query("page") page?: string, @Query("limit") limit?: string, @Query("sectionId") sectionId?: string) {
     const pageNum = page ? parseInt(page, 10) : undefined;
     const limitNum = limit ? parseInt(limit, 10) : undefined;
-    return this.studentsService.getStudents(pageNum, limitNum);
+    return this.studentsService.getStudents(pageNum, limitNum, sectionId);
   }
 
   @Patch("students/:id")

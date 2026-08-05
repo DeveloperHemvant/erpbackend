@@ -80,17 +80,17 @@ export class StudentsService {
     };
   }
 
-  async getStudents(page?: number, limit?: number) {
+  async getStudents(page?: number, limit?: number, sectionId?: string) {
     if (page && limit) {
       const skip = (page - 1) * limit;
       const [data, totalCount] = await Promise.all([
-        this.studentRepository.findPage(skip, limit),
-        this.studentRepository.count(),
+        this.studentRepository.findPage(skip, limit, sectionId),
+        this.studentRepository.count(sectionId),
       ]);
       return { data, totalCount, page, limit };
     }
 
-    const data = await this.studentRepository.findAll();
+    const data = await this.studentRepository.findAll(sectionId);
     return { data, totalCount: data.length, page: 1, limit: data.length };
   }
 
