@@ -18,16 +18,23 @@ export class ActivitiesRepository {
     });
   }
 
-  createSchoolEvent(data: Prisma.SchoolEventUncheckedCreateInput) {
-    return this.prisma.schoolEvent.create({ data });
+  createHouse(data: Prisma.SchoolHouseUncheckedCreateInput) {
+    return this.prisma.schoolHouse.create({
+      data,
+      include: { captain: true, viceCaptain: true, teacherIncharge: true },
+    });
   }
 
-  findSchoolEvents(where?: Prisma.SchoolEventWhereInput) {
-    return this.prisma.schoolEvent.findMany({
-      where,
-      include: { campus: true },
-      orderBy: { date: "desc" },
+  updateHouse(houseId: string, data: Prisma.SchoolHouseUncheckedUpdateInput) {
+    return this.prisma.schoolHouse.update({
+      where: { id: houseId },
+      data,
+      include: { captain: true, viceCaptain: true, teacherIncharge: true },
     });
+  }
+
+  findHouseById(houseId: string) {
+    return this.prisma.schoolHouse.findUnique({ where: { id: houseId } });
   }
 
   updateHousePoints(houseId: string, points: number) {
@@ -39,8 +46,15 @@ export class ActivitiesRepository {
 
   findHouses() {
     return this.prisma.schoolHouse.findMany({
-      include: { captain: true, viceCaptain: true, teacherIncharge: true },
+      include: { captain: true, viceCaptain: true, teacherIncharge: true, _count: { select: { members: true } } },
       orderBy: { points: "desc" },
+    });
+  }
+
+  findHouseMembers(houseId: string) {
+    return this.prisma.student.findMany({
+      where: { houseId },
+      orderBy: { fullName: "asc" },
     });
   }
 

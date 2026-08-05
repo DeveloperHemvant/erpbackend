@@ -1,10 +1,13 @@
-import { Controller, Get, Post, Body } from "@nestjs/common";
+import { Controller, Get, Post, Put, Delete, Body, Param, UseInterceptors, UploadedFile, ParseUUIDPipe } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { AcmsService } from "./acms.service";
+import { imageUploadOptions, imageUrlFor } from "../common/image-upload";
 import {
   CreateAcademicTermDto,
   CreateHolidayDto,
   CreateWorkingDayDto,
   CreateAcmsEventDto,
+  UpdateAcmsEventDto,
   CreateResourceBookingDto,
 } from "./dto/acms.dto";
 
@@ -54,6 +57,11 @@ export class AcmsController {
     return this.acmsService.getEvents();
   }
 
+  @Get("events/:id")
+  getEvent(@Param("id", ParseUUIDPipe) id: string) {
+    return this.acmsService.getEvent(id);
+  }
+
   @Post("events")
   createEvent(@Body() data: CreateAcmsEventDto) {
     return this.acmsService.createEvent({
@@ -61,6 +69,27 @@ export class AcmsController {
       startDate: new Date(data.startDate),
       endDate: new Date(data.endDate)
     });
+  }
+
+  @Put("events/:id")
+  updateEvent(@Param("id", ParseUUIDPipe) id: string, @Body() data: UpdateAcmsEventDto) {
+    return this.acmsService.updateEvent(id, {
+      ...data,
+      startDate: data.startDate ? new Date(data.startDate) : undefined,
+      endDate: data.endDate ? new Date(data.endDate) : undefined
+    });
+  }
+
+  @Delete("events/:id")
+  deleteEvent(@Param("id", ParseUUIDPipe) id: string) {
+    return this.acmsService.deleteEvent(id);
+  }
+
+  @Post("events/:id/image")
+  @UseInterceptors(FileInterceptor("file", imageUploadOptions("events")))
+  uploadEventImage(@Param("id", ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File) {
+    const imageUrl = imageUrlFor("events", file.filename);
+    return this.acmsService.setEventImage(id, imageUrl);
   }
 
   @Get("bookings")

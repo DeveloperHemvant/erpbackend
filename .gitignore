@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+# locally uploaded files (disk-backed image uploads — not committed)
+/uploads
+
 # Logs
 logs
 *.log

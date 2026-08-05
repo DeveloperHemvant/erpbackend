@@ -12,7 +12,7 @@ export class AdmissionInquiryRepository {
 
   findAll() {
     return this.prisma.admissionInquiry.findMany({
-      include: { assignedToStaff: true, followUps: true },
+      include: { assignedToStaff: true, followUps: true, convertedStudent: true },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -20,12 +20,12 @@ export class AdmissionInquiryRepository {
   findById(id: string) {
     return this.prisma.admissionInquiry.findUnique({
       where: { id },
-      include: { assignedToStaff: true, followUps: { include: { createdByStaff: true }, orderBy: { followUpDate: "desc" } } },
+      include: { assignedToStaff: true, followUps: { include: { createdByStaff: true }, orderBy: { followUpDate: "desc" } }, convertedStudent: true },
     });
   }
 
   update(id: string, data: Prisma.AdmissionInquiryUncheckedUpdateInput) {
-    return this.prisma.admissionInquiry.update({ where: { id }, data });
+    return this.prisma.admissionInquiry.update({ where: { id }, data, include: { convertedStudent: true } });
   }
 
   addFollowUp(data: Prisma.AdmissionInquiryFollowUpUncheckedCreateInput) {

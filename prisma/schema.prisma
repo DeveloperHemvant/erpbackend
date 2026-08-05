@@ -54,7 +54,7 @@ model Campus {
   feeInvoices       FeeInvoice[]
   acmsHolidays      ACMSHolidayMaster[]
   morningAssemblies MorningAssembly[]
-  events            SchoolEvent[]
+  acmsEvents        ACMSEvent[]
 
   @@map("campuses")
 }
@@ -104,21 +104,21 @@ model Staff {
   payrollStructure      PayrollStructure?
   transportAssignments  TransportVehicleStaff[]
   payslips              Payslip[]
-  performanceReviews   PerformanceReview[]     @relation("StaffReviews")
-  givenReviews         PerformanceReview[]     @relation("ReviewerStaff")
-  TransportTrip        TransportTrip[]
-  TransportBreakdown   TransportBreakdown[]
-  TransportAccident    TransportAccident[]
-  TransportDailyCheck  TransportDailyCheck[]
-  LMSCourseSection     LMSCourseSection[]
-  LMSLiveClass         LMSLiveClass[]
-  EMSInvigilator       EMSInvigilator[]
-  EMSEvaluationRecord  EMSEvaluationRecord[]
-  EMSModerationRecord  EMSModerationRecord[]
-  IdCards              IdCard[]
+  performanceReviews    PerformanceReview[]       @relation("StaffReviews")
+  givenReviews          PerformanceReview[]       @relation("ReviewerStaff")
+  TransportTrip         TransportTrip[]
+  TransportBreakdown    TransportBreakdown[]
+  TransportAccident     TransportAccident[]
+  TransportDailyCheck   TransportDailyCheck[]
+  LMSCourseSection      LMSCourseSection[]
+  LMSLiveClass          LMSLiveClass[]
+  EMSInvigilator        EMSInvigilator[]
+  EMSEvaluationRecord   EMSEvaluationRecord[]
+  EMSModerationRecord   EMSModerationRecord[]
+  IdCards               IdCard[]
 
   healthVisitsLogged        HealthVisit[]
-  disciplineIncidentsFiled  DisciplineIncident[]      @relation("DisciplineReportedBy")
+  disciplineIncidentsFiled  DisciplineIncident[]       @relation("DisciplineReportedBy")
   disciplineCounselingNotes DisciplineCounselingNote[]
   assignedInquiries         AdmissionInquiry[]
   inquiryFollowUps          AdmissionInquiryFollowUp[]
@@ -126,17 +126,17 @@ model Staff {
   comments    Comment[]
   attachments Attachment[]
 
-  visitorRecords            VisitorRecord[]
-  approvedGatePasses        StudentGatePass[]
-  housesManaged             SchoolHouse[]
-  duties                    StaffDutyAllocation[]
-  primarySubstitutions      TeacherSubstitution[]      @relation("PrimaryTeacher")
-  substituteAssignments     TeacherSubstitution[]      @relation("SubstituteTeacher")
-  writtenDiaryEntries       SchoolDiaryEntry[]
-  assignedGrievances        GrievanceRecord[]
-  lostFoundItems            LostFoundItem[]
-  supervisedAssemblies      MorningAssembly[]
-  issuedAchievements        StudentAchievement[]       @relation("IssuedBy")
+  visitorRecords        VisitorRecord[]
+  approvedGatePasses    StudentGatePass[]
+  housesManaged         SchoolHouse[]
+  duties                StaffDutyAllocation[]
+  primarySubstitutions  TeacherSubstitution[] @relation("PrimaryTeacher")
+  substituteAssignments TeacherSubstitution[] @relation("SubstituteTeacher")
+  writtenDiaryEntries   SchoolDiaryEntry[]
+  assignedGrievances    GrievanceRecord[]
+  lostFoundItems        LostFoundItem[]
+  supervisedAssemblies  MorningAssembly[]
+  issuedAchievements    StudentAchievement[]  @relation("IssuedBy")
 
   @@map("staff")
 }
@@ -182,10 +182,13 @@ model Student {
   admissionInquiry    AdmissionInquiry?
 
   gatePasses          StudentGatePass[]
-  housesCaptained     SchoolHouse[]             @relation("HouseCaptain")
-  housesViceCaptained SchoolHouse[]             @relation("HouseViceCaptain")
+  housesCaptained     SchoolHouse[]        @relation("HouseCaptain")
+  housesViceCaptained SchoolHouse[]        @relation("HouseViceCaptain")
   diaryEntries        SchoolDiaryEntry[]
   achievements        StudentAchievement[]
+
+  houseId String?      @db.Uuid
+  house   SchoolHouse? @relation("HouseMembers", fields: [houseId], references: [id])
 
   @@map("students")
 }
@@ -195,24 +198,24 @@ model Student {
 // ==========================================
 
 model AcademicSession {
-  id              String              @id @default(uuid()) @db.Uuid
-  name            String              @unique // e.g. "2026-2027"
-  isActive        Boolean             @default(false)
-  status          String              @default("Active")
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  createdBy       String?
-  updatedBy       String?
-  classes         Class[]
-  enrollments     StudentEnrollment[]
-  assignments     TeacherAssignment[]
-  timetables      Timetable[]
-  slots           TimetableSlot[]
-  feeStructures   FeeStructure[]
-  exams           Exam[]
-  acmsTerms       ACMSAcademicTerm[]
-  acmsWorkingDays ACMSWorkingDay[]
-  acmsEvents      ACMSEvent[]
+  id                String              @id @default(uuid()) @db.Uuid
+  name              String              @unique // e.g. "2026-2027"
+  isActive          Boolean             @default(false)
+  status            String              @default("Active")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdBy         String?
+  updatedBy         String?
+  classes           Class[]
+  enrollments       StudentEnrollment[]
+  assignments       TeacherAssignment[]
+  timetables        Timetable[]
+  slots             TimetableSlot[]
+  feeStructures     FeeStructure[]
+  exams             Exam[]
+  acmsTerms         ACMSAcademicTerm[]
+  acmsWorkingDays   ACMSWorkingDay[]
+  acmsEvents        ACMSEvent[]
   attendanceRecords AttendanceRecord[]
 
   @@map("academic_sessions")
@@ -241,19 +244,19 @@ model Class {
 }
 
 model Section {
-  id               String              @id @default(uuid()) @db.Uuid
-  name             String // e.g. "Section A"
-  classId          String              @db.Uuid
-  class            Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
-  status           String              @default("Active")
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  createdBy        String?
-  updatedBy        String?
-  enrollments      StudentEnrollment[]
-  assignments      TeacherAssignment[]
-  timetable        TimetablePeriod[]
-  LMSCourseSection LMSCourseSection[]
+  id                String              @id @default(uuid()) @db.Uuid
+  name              String // e.g. "Section A"
+  classId           String              @db.Uuid
+  class             Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  status            String              @default("Active")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdBy         String?
+  updatedBy         String?
+  enrollments       StudentEnrollment[]
+  assignments       TeacherAssignment[]
+  timetable         TimetablePeriod[]
+  LMSCourseSection  LMSCourseSection[]
   morningAssemblies MorningAssembly[]
 
   @@map("sections")
@@ -304,16 +307,16 @@ model StudentEnrollment {
   invoices    FeeInvoice[]
   examMarks   ExamMarks[]
 
-  transportAssignments  TransportStudentAssignment[]
-  hostelAllocations     HostelAllocation[]
-  hostelAttendance      HostelAttendance[]
-  hostelGrievances      HostelGrievance[]
-  bookIssues            BookIssue[]
-  libraryReservations   LibraryReservation[]
+  transportAssignments TransportStudentAssignment[]
+  hostelAllocations    HostelAllocation[]
+  hostelAttendance     HostelAttendance[]
+  hostelGrievances     HostelGrievance[]
+  bookIssues           BookIssue[]
+  libraryReservations  LibraryReservation[]
 
-  campusId            String?               @db.Uuid
-  campus              Campus?               @relation(fields: [campusId], references: [id], onDelete: Cascade)
-  TransportAttendance TransportAttendance[]
+  campusId                 String?                   @db.Uuid
+  campus                   Campus?                   @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  TransportAttendance      TransportAttendance[]
   studentLeaveApplications StudentLeaveApplication[]
 
   @@index([sectionId, sessionId])
@@ -322,15 +325,15 @@ model StudentEnrollment {
 }
 
 model TeacherAssignment {
-  id           String            @id @default(uuid()) @db.Uuid
-  staffId      String            @db.Uuid
-  staff        Staff             @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  sessionId    String            @db.Uuid
-  session      AcademicSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  subjectId    String?           @db.Uuid
-  subject      Subject?          @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  sectionId    String?           @db.Uuid
-  section      Section?          @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  id             String            @id @default(uuid()) @db.Uuid
+  staffId        String            @db.Uuid
+  staff          Staff             @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  sessionId      String            @db.Uuid
+  session        AcademicSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  subjectId      String?           @db.Uuid
+  subject        Subject?          @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  sectionId      String?           @db.Uuid
+  section        Section?          @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   roomId         String?           @db.Uuid
   room           Room?             @relation(fields: [roomId], references: [id], onDelete: SetNull)
   isClassTeacher Boolean           @default(false)
@@ -338,9 +341,9 @@ model TeacherAssignment {
   status         String            @default("Active")
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
-  createdBy    String?
-  updatedBy    String?
-  timetable    TimetablePeriod[]
+  createdBy      String?
+  updatedBy      String?
+  timetable      TimetablePeriod[]
 
   @@index([staffId, sessionId])
   @@map("teacher_assignments")
@@ -369,8 +372,8 @@ model AttendanceRecord {
 
   campusId String? @db.Uuid
   campus   Campus? @relation(fields: [campusId], references: [id], onDelete: Cascade)
-  
-  sessionId String? @db.Uuid
+
+  sessionId String?          @db.Uuid
   session   AcademicSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([enrollmentId, date])
@@ -543,6 +546,7 @@ model Announcement {
   body           String
   targetAudience String    @default("ALL") // "ALL" | "PARENTS" | "STUDENTS" | "STAFF"
   eventDate      DateTime?
+  imageUrl       String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   createdBy      String?
@@ -605,24 +609,24 @@ model TimetableSlot {
 }
 
 model TimetablePeriod {
-  id           String            @id @default(uuid()) @db.Uuid
-  timetableId  String            @db.Uuid
-  timetable    Timetable         @relation(fields: [timetableId], references: [id], onDelete: Cascade)
-  sectionId    String            @db.Uuid
-  section      Section           @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  subjectId    String?           @db.Uuid
-  subject      Subject?          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  assignmentId String            @db.Uuid
-  assignment   TeacherAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  dayOfWeek    String // Monday, Tuesday, etc.
-  startTime    String // HH:MM
-  endTime      String // HH:MM
-  room         String
-  status       String            @default("Active")
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  createdBy    String?
-  updatedBy    String?
+  id            String                @id @default(uuid()) @db.Uuid
+  timetableId   String                @db.Uuid
+  timetable     Timetable             @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  sectionId     String                @db.Uuid
+  section       Section               @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  subjectId     String?               @db.Uuid
+  subject       Subject?              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  assignmentId  String                @db.Uuid
+  assignment    TeacherAssignment     @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  dayOfWeek     String // Monday, Tuesday, etc.
+  startTime     String // HH:MM
+  endTime       String // HH:MM
+  room          String
+  status        String                @default("Active")
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  createdBy     String?
+  updatedBy     String?
   substitutions TeacherSubstitution[]
 
   @@map("timetable_periods")
@@ -711,16 +715,16 @@ model MessMenu {
 
 // --- LIBRARY ---
 model LibraryBook {
-  id          String      @id @default(uuid()) @db.Uuid
-  title       String
-  author      String?
-  isbn        String?
-  category    String?
-  totalCopies Int         @default(1)
-  available   Int         @default(1)
-  status      String      @default("Active")
-  createdAt   DateTime    @default(now())
-  issues      BookIssue[]
+  id           String               @id @default(uuid()) @db.Uuid
+  title        String
+  author       String?
+  isbn         String?
+  category     String?
+  totalCopies  Int                  @default(1)
+  available    Int                  @default(1)
+  status       String               @default("Active")
+  createdAt    DateTime             @default(now())
+  issues       BookIssue[]
   reservations LibraryReservation[]
 
   @@map("library_books")
@@ -754,17 +758,17 @@ model LibraryFine {
 
 // --- LIBRARY RESERVATIONS ---
 model LibraryReservation {
-  id            String            @id @default(uuid()) @db.Uuid
-  bookId        String            @db.Uuid
-  book          LibraryBook      @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  enrollmentId  String            @db.Uuid
-  enrollment    StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  status        String            @default("Reserved") // Reserved, Fulfilled, Cancelled, Expired
-  reservedAt    DateTime          @default(now())
-  expiresAt     DateTime
-  fulfilledAt   DateTime?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id           String            @id @default(uuid()) @db.Uuid
+  bookId       String            @db.Uuid
+  book         LibraryBook       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  status       String            @default("Reserved") // Reserved, Fulfilled, Cancelled, Expired
+  reservedAt   DateTime          @default(now())
+  expiresAt    DateTime
+  fulfilledAt  DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   @@index([bookId, status])
   @@map("library_reservations")
@@ -947,18 +951,18 @@ model FeeInvoice {
 }
 
 model FeePayment {
-  id               String     @id @default(uuid()) @db.Uuid
-  invoiceId        String     @db.Uuid
-  invoice          FeeInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id               String      @id @default(uuid()) @db.Uuid
+  invoiceId        String      @db.Uuid
+  invoice          FeeInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   amountPaid       Decimal
   paymentMode      String // Cash, UPI, NetBanking, Cheque, Stripe, Razorpay
   referenceNo      String?
   paymentDate      String // YYYY-MM-DD
   transactionRef   String?
   gatewayPaymentId String?
-  gatewayResponse  Json?      @db.JsonB
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  gatewayResponse  Json?       @db.JsonB
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
   createdBy        String?
   updatedBy        String?
   refunds          FeeRefund[]
@@ -1114,38 +1118,39 @@ model TransportVehicle {
 }
 
 model IdCardTemplate {
-  id              String   @id @default(uuid()) @db.Uuid
-  templateName    String
-  targetRole      String // Student, Staff
-  schoolName      String   @default("Aetheria Academy")
-  logoUrl         String?
-  signatureUrl    String?
-  primaryColor    String   @default("#3b82f6")
-  secondaryColor  String   @default("#1e40af")
-  backgroundUrl   String?
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid()) @db.Uuid
+  templateName   String
+  targetRole     String // Student, Staff
+  schoolName     String   @default("Aetheria Academy")
+  logoUrl        String?
+  signatureUrl   String?
+  primaryColor   String   @default("#3b82f6")
+  secondaryColor String   @default("#1e40af")
+  backgroundUrl  String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   cards IdCard[]
+
   @@map("id_card_templates")
 }
 
 model IdCard {
-  id              String   @id @default(uuid()) @db.Uuid
-  idNumber        String   @unique
-  templateId      String   @db.Uuid
-  template        IdCardTemplate @relation(fields: [templateId], references: [id])
-  studentId       String?  @db.Uuid
-  student         Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  staffId         String?  @db.Uuid
-  staff           Staff?   @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  barcodeData     String?
-  issueDate       DateTime @default(now())
-  expiryDate      DateTime?
-  status          String   @default("Active") // Active, Revoked, Expired
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String         @id @default(uuid()) @db.Uuid
+  idNumber    String         @unique
+  templateId  String         @db.Uuid
+  template    IdCardTemplate @relation(fields: [templateId], references: [id])
+  studentId   String?        @db.Uuid
+  student     Student?       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  staffId     String?        @db.Uuid
+  staff       Staff?         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  barcodeData String?
+  issueDate   DateTime       @default(now())
+  expiryDate  DateTime?
+  status      String         @default("Active") // Active, Revoked, Expired
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@map("id_cards")
 }
@@ -1180,7 +1185,7 @@ model TransportVehicleStaff {
 }
 
 model TransportRoute {
-  id                 String   @id @default(uuid()) @db.Uuid
+  id                 String            @id @default(uuid()) @db.Uuid
   routeName          String
   distance           Float?
   estimatedTime      String? // e.g., "55 Minutes"
@@ -1190,10 +1195,10 @@ model TransportRoute {
   vehicleId          String?           @db.Uuid
   vehicle            TransportVehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   createdAt          DateTime          @default(now())
-  updatedAt          DateTime @updatedAt
+  updatedAt          DateTime          @updatedAt
 
-  stops         TransportRouteStop[]
-  TransportTrip TransportTrip[]
+  stops              TransportRouteStop[]
+  TransportTrip      TransportTrip[]
   studentAssignments TransportStudentAssignment[]
 
   @@map("transport_routes")
@@ -1220,23 +1225,23 @@ model TransportRouteStop {
 }
 
 model TransportStudentAssignment {
-  id            String             @id @default(uuid()) @db.Uuid
-  enrollmentId  String             @db.Uuid
-  enrollment    StudentEnrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  
-  routeId       String?            @db.Uuid
-  route         TransportRoute?    @relation(fields: [routeId], references: [id], onDelete: Restrict)
+  id           String            @id @default(uuid()) @db.Uuid
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
 
-  stopId        String?            @db.Uuid
+  routeId String?         @db.Uuid
+  route   TransportRoute? @relation(fields: [routeId], references: [id], onDelete: Restrict)
+
+  stopId        String?             @db.Uuid
   stop          TransportRouteStop? @relation(fields: [stopId], references: [id], onDelete: Restrict)
-  morningPickup Boolean            @default(true)
-  afternoonDrop Boolean            @default(true)
+  morningPickup Boolean             @default(true)
+  afternoonDrop Boolean             @default(true)
   seatNumber    String?
   feePeriod     String? // Monthly, Quarterly, Yearly
   guardianAuth  String? // Authorized Person Info
-  status        String             @default("Active")
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  status        String              @default("Active")
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
 
   @@map("transport_student_assignments")
 }
@@ -1261,8 +1266,8 @@ model TransportTrip {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  logs       TransportTripLog[]
-  attendance TransportAttendance[]
+  logs        TransportTripLog[]
+  attendance  TransportAttendance[]
   dailyChecks TransportDailyCheck[]
 
   @@map("transport_trips")
@@ -1926,10 +1931,10 @@ model EMSExamSchedule {
   endTime    DateTime
   createdAt  DateTime        @default(now())
 
-  mode              String            @default("OFFLINE") // OFFLINE | ONLINE
+  mode              String                @default("OFFLINE") // OFFLINE | ONLINE
   durationMin       Int?
-  questionPaperId   String?           @db.Uuid
-  questionPaper     EMSQuestionPaper? @relation(fields: [questionPaperId], references: [id], onDelete: SetNull)
+  questionPaperId   String?               @db.Uuid
+  questionPaper     EMSQuestionPaper?     @relation(fields: [questionPaperId], references: [id], onDelete: SetNull)
   onlineSubmissions EMSOnlineSubmission[]
 
   rooms               EMSExamRoom[]
@@ -2243,13 +2248,17 @@ model ACMSEvent {
   id          String          @id @default(uuid()) @db.Uuid
   sessionId   String          @db.Uuid
   session     AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  campusId    String?         @db.Uuid
+  campus      Campus?         @relation(fields: [campusId], references: [id], onDelete: Cascade)
   title       String
   description String?
   startDate   DateTime
   endDate     DateTime
-  type        String // ACADEMIC, SPORTS, CULTURAL, TRIP
+  type        String // ACADEMIC, SPORTS, CULTURAL, TRIP, COMPETITION, EXHIBITION, OLYMPIAD, SEMINAR, TOUR
   organizer   String?
+  imageUrl    String?
   createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@map("acms_events")
 }
@@ -2301,12 +2310,12 @@ model ACMSAuditLog {
 
 model SystemAuditLog {
   id          String   @id @default(uuid()) @db.Uuid
-  action      String   // e.g. "MOBILE_LOGIN", "ATTENDANCE_MARKED"
-  module      String   // e.g. "AUTH", "TRANSPORT", "ATTENDANCE"
+  action      String // e.g. "MOBILE_LOGIN", "ATTENDANCE_MARKED"
+  module      String // e.g. "AUTH", "TRANSPORT", "ATTENDANCE"
   entityType  String?
   entityId    String?
-  performedBy String   // user ID
-  role        String   // TEACHER, PARENT, DRIVER, CONDUCTOR
+  performedBy String // user ID
+  role        String // TEACHER, PARENT, DRIVER, CONDUCTOR
   details     Json?    @db.JsonB
   ipAddress   String?
   deviceInfo  String?
@@ -2332,22 +2341,22 @@ model PushToken {
 // ==========================================
 
 model HealthProfile {
-  id                     String    @id @default(uuid()) @db.Uuid
-  studentId              String    @unique @db.Uuid
-  student                Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  bloodGroup             String?
-  allergies              String?
-  chronicConditions      String?
-  currentMedications     String?
-  emergencyContactName   String?
-  emergencyContactPhone  String?
-  familyDoctorName       String?
-  familyDoctorPhone      String?
-  insuranceProvider      String?
-  insurancePolicyNo      String?
-  notes                  String?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  id                    String   @id @default(uuid()) @db.Uuid
+  studentId             String   @unique @db.Uuid
+  student               Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  bloodGroup            String?
+  allergies             String?
+  chronicConditions     String?
+  currentMedications    String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  familyDoctorName      String?
+  familyDoctorPhone     String?
+  insuranceProvider     String?
+  insurancePolicyNo     String?
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   visits       HealthVisit[]
   vaccinations Vaccination[]
@@ -2397,20 +2406,20 @@ model Vaccination {
 // ==========================================
 
 model DisciplineIncident {
-  id                 String   @id @default(uuid()) @db.Uuid
-  studentId          String   @db.Uuid
-  student            Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  incidentDate       DateTime @default(now())
-  category           String   // Bullying, Disruption, Academic Dishonesty, Property Damage, Attendance, Other
-  severity           String   @default("Minor") // Minor, Moderate, Major
-  description        String
-  actionTaken        String?  // Verbal Warning, Written Warning, Detention, Suspension, Parent Meeting, Counseling Referral
-  status             String   @default("Open") // Open, Resolved, Escalated
-  reportedByStaffId  String   @db.Uuid
-  reportedByStaff    Staff    @relation("DisciplineReportedBy", fields: [reportedByStaffId], references: [id], onDelete: Restrict)
-  parentNotified     Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default(uuid()) @db.Uuid
+  studentId         String   @db.Uuid
+  student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  incidentDate      DateTime @default(now())
+  category          String // Bullying, Disruption, Academic Dishonesty, Property Damage, Attendance, Other
+  severity          String   @default("Minor") // Minor, Moderate, Major
+  description       String
+  actionTaken       String? // Verbal Warning, Written Warning, Detention, Suspension, Parent Meeting, Counseling Referral
+  status            String   @default("Open") // Open, Resolved, Escalated
+  reportedByStaffId String   @db.Uuid
+  reportedByStaff   Staff    @relation("DisciplineReportedBy", fields: [reportedByStaffId], references: [id], onDelete: Restrict)
+  parentNotified    Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   counselingNotes DisciplineCounselingNote[]
 
@@ -2434,21 +2443,21 @@ model DisciplineCounselingNote {
 // ==========================================
 
 model AdmissionInquiry {
-  id                  String    @id @default(uuid()) @db.Uuid
-  childName           String
-  gradeInterested     String
-  parentName          String
-  phone               String
-  email               String?
-  source              String    @default("Walk-in") // Walk-in, Website, Referral, Phone, Social Media, Other
-  status              String    @default("New") // New, Contacted, Campus Visit Scheduled, Application Sent, Converted, Lost
-  notes               String?
-  assignedToStaffId   String?   @db.Uuid
-  assignedToStaff     Staff?    @relation(fields: [assignedToStaffId], references: [id], onDelete: SetNull)
-  convertedStudentId  String?   @unique @db.Uuid
-  convertedStudent    Student?  @relation(fields: [convertedStudentId], references: [id], onDelete: SetNull)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                 String   @id @default(uuid()) @db.Uuid
+  childName          String
+  gradeInterested    String
+  parentName         String
+  phone              String
+  email              String?
+  source             String   @default("Walk-in") // Walk-in, Website, Referral, Phone, Social Media, Other
+  status             String   @default("New") // New, Contacted, Campus Visit Scheduled, Application Sent, Converted, Lost
+  notes              String?
+  assignedToStaffId  String?  @db.Uuid
+  assignedToStaff    Staff?   @relation(fields: [assignedToStaffId], references: [id], onDelete: SetNull)
+  convertedStudentId String?  @unique @db.Uuid
+  convertedStudent   Student? @relation(fields: [convertedStudentId], references: [id], onDelete: SetNull)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   followUps AdmissionInquiryFollowUp[]
 
@@ -2488,15 +2497,15 @@ model Comment {
 }
 
 model Attachment {
-  id             String   @id @default(uuid()) @db.Uuid
-  entityType     String
-  entityId       String   @db.Uuid
-  fileName       String
-  sizeBytes      Int      @default(0)
-  uploadedById   String   @db.Uuid
-  uploadedBy     Staff    @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
-  url            String
-  uploadedAt     DateTime @default(now())
+  id           String   @id @default(uuid()) @db.Uuid
+  entityType   String
+  entityId     String   @db.Uuid
+  fileName     String
+  sizeBytes    Int      @default(0)
+  uploadedById String   @db.Uuid
+  uploadedBy   Staff    @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  url          String
+  uploadedAt   DateTime @default(now())
 
   @@index([entityType, entityId])
   @@map("attachments")
@@ -2586,6 +2595,8 @@ model SchoolHouse {
   points            Int      @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  members Student[] @relation("HouseMembers")
 
   @@map("school_houses")
 }
@@ -2713,20 +2724,6 @@ model MorningAssembly {
   updatedAt           DateTime @updatedAt
 
   @@map("morning_assemblies")
-}
-
-model SchoolEvent {
-  id          String   @id @default(uuid()) @db.Uuid
-  title       String
-  type        String
-  date        DateTime
-  campusId    String   @db.Uuid
-  campus      Campus   @relation(fields: [campusId], references: [id], onDelete: Cascade)
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("school_events")
 }
 
 model StudentAchievement {

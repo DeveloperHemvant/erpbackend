@@ -16,6 +16,32 @@ export class CreateAnnouncementDto {
   @IsString()
   @IsOptional()
   eventDate?: string;
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
+}
+
+export class UpdateAnnouncementDto {
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  body?: string;
+
+  @IsIn(["ALL", "PARENTS", "STUDENTS", "STAFF"])
+  @IsOptional()
+  targetAudience?: string;
+
+  @IsString()
+  @IsOptional()
+  eventDate?: string;
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
 }
 
 export class SendMessageDto {

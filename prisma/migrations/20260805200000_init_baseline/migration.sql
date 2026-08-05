@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE "school_profile" (
     "id" UUID NOT NULL,
     "name" TEXT NOT NULL,

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import twilio from "twilio";
 import sgMail from "@sendgrid/mail";
@@ -225,15 +225,46 @@ export class CommunicationService {
     });
   }
 
+  async getAnnouncement(id: string) {
+    const announcement = await this.prisma.announcement.findUnique({ where: { id } });
+    if (!announcement) throw new NotFoundException("Announcement not found");
+    return announcement;
+  }
+
   async createAnnouncement(data: any) {
     return this.prisma.announcement.create({
       data: {
         title: data.title,
         body: data.body,
         targetAudience: data.targetAudience,
-        eventDate: data.eventDate ? new Date(data.eventDate) : null
+        eventDate: data.eventDate ? new Date(data.eventDate) : null,
+        imageUrl: data.imageUrl
       }
     });
+  }
+
+  async updateAnnouncement(id: string, data: any) {
+    await this.getAnnouncement(id);
+    return this.prisma.announcement.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.body !== undefined && { body: data.body }),
+        ...(data.targetAudience !== undefined && { targetAudience: data.targetAudience }),
+        ...(data.eventDate !== undefined && { eventDate: data.eventDate ? new Date(data.eventDate) : null }),
+        ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl })
+      }
+    });
+  }
+
+  async setAnnouncementImage(id: string, imageUrl: string) {
+    await this.getAnnouncement(id);
+    return this.prisma.announcement.update({ where: { id }, data: { imageUrl } });
+  }
+
+  async deleteAnnouncement(id: string) {
+    await this.getAnnouncement(id);
+    return this.prisma.announcement.delete({ where: { id } });
   }
 
   // Chat/Messaging MVP logic

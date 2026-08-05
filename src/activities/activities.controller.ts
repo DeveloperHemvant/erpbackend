@@ -1,12 +1,15 @@
-import { Controller, Get, Post, Body, Param, Query } from "@nestjs/common";
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from "@nestjs/swagger";
 import { ActivitiesService } from "./activities.service";
 import { RequirePermissions } from "../auth/permissions.decorator";
+import { RequireStudentAccessOrPermission } from "../auth/student-access-or-permission.decorator";
+import { StudentAccessOrPermissionGuard } from "../auth/student-access-or-permission.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/current-user.decorator";
 import {
   CreateAssemblyDto,
-  CreateSchoolEventDto,
+  CreateSchoolHouseDto,
+  UpdateSchoolHouseDto,
   AwardHousePointsDto,
   CreateStudentAchievementDto,
   CreateStaffDutyDto,
@@ -34,21 +37,35 @@ export class ActivitiesController {
     return this.activitiesService.getAllAssemblies(campusId);
   }
 
+  // School events/competitions live in the ACMS module now (POST/GET /acms/events,
+  // PUT/DELETE /acms/events/:id) — this used to duplicate that as a separate
+  // SchoolEvent model; consolidated so there's one event system feeding the
+  // unified calendar instead of two out-of-sync ones.
+
   @RequirePermissions("MANAGE_ACTIVITIES")
-  @Post("events")
-  @ApiOperation({ summary: "Schedule a school event/competition" })
-  @ApiResponse({ status: 201, description: "Event scheduled successfully" })
-  createSchoolEvent(@Body() dto: CreateSchoolEventDto) {
-    return this.activitiesService.createSchoolEvent(dto);
+  @Post("houses")
+  @ApiOperation({ summary: "Create a school house" })
+  @ApiResponse({ status: 201, description: "House created successfully" })
+  createHouse(@Body() dto: CreateSchoolHouseDto) {
+    return this.activitiesService.createHouse(dto);
   }
 
   @RequirePermissions("MANAGE_ACTIVITIES")
-  @Get("events")
-  @ApiOperation({ summary: "List school calendar events" })
-  @ApiQuery({ name: "campusId", required: false, type: String })
-  @ApiResponse({ status: 200, description: "List of events" })
-  getAllSchoolEvents(@Query("campusId") campusId?: string) {
-    return this.activitiesService.getAllSchoolEvents(campusId);
+  @Put("houses/:houseId")
+  @ApiOperation({ summary: "Update a school house (name, captain, vice-captain, teacher-in-charge)" })
+  @ApiParam({ name: "houseId", format: "uuid" })
+  @ApiResponse({ status: 200, description: "House updated successfully" })
+  updateHouse(@Param("houseId") houseId: string, @Body() dto: UpdateSchoolHouseDto) {
+    return this.activitiesService.updateHouse(houseId, dto);
+  }
+
+  @RequirePermissions("MANAGE_ACTIVITIES")
+  @Get("houses/:houseId/members")
+  @ApiOperation({ summary: "List students belonging to a house" })
+  @ApiParam({ name: "houseId", format: "uuid" })
+  @ApiResponse({ status: 200, description: "List of house members" })
+  getHouseMembers(@Param("houseId") houseId: string) {
+    return this.activitiesService.getHouseMembers(houseId);
   }
 
   @RequirePermissions("MANAGE_ACTIVITIES")
@@ -76,7 +93,13 @@ export class ActivitiesController {
     return this.activitiesService.createAchievement(user.userId, dto);
   }
 
-  @RequirePermissions("MANAGE_ACTIVITIES")
+  // Staff with MANAGE_ACTIVITIES see any student's achievements; a parent or
+  // the student themself can see their own — same self-or-permission pattern
+  // as discipline/health-records, so this is viewable from the student's own
+  // dashboard, not just the admin desk.
+  @UseGuards(StudentAccessOrPermissionGuard)
+  @RequireStudentAccessOrPermission("studentId", "MANAGE_ACTIVITIES")
+  @RequirePermissions()
   @Get("students/:studentId/achievements")
   @ApiOperation({ summary: "Get achievements for a student" })
   @ApiParam({ name: "studentId", format: "uuid" })

@@ -42,6 +42,11 @@ export class CreateStudentDto {
   @IsOptional()
   sectionId?: string;
 
+  @ApiProperty({ example: "some-house-uuid", required: false })
+  @IsUUID()
+  @IsOptional()
+  houseId?: string;
+
   @ApiProperty({ example: false, required: false })
   @IsBoolean()
   @IsOptional()
@@ -87,6 +92,11 @@ export class UpdateStudentDto {
   @IsUUID()
   @IsOptional()
   sectionId?: string;
+
+  @ApiProperty({ example: "some-house-uuid", required: false })
+  @IsUUID()
+  @IsOptional()
+  houseId?: string;
 
   @ApiProperty({ example: true, required: false })
   @IsBoolean()

@@ -8,8 +8,6 @@ describe("ActivitiesService", () => {
   const mockRepository = {
     createAssembly: jest.fn(),
     findAssemblies: jest.fn(),
-    createSchoolEvent: jest.fn(),
-    findSchoolEvents: jest.fn(),
     updateHousePoints: jest.fn(),
     findHouses: jest.fn(),
     createAchievement: jest.fn(),

@@ -25,24 +25,40 @@ export class CreateAssemblyDto {
   activities: any[]; // [{ type: 'PRAYER'|'SPEECH'|'INSTRUMENT'|'SINGING', studentId: string, details?: string }]
 }
 
-export class CreateSchoolEventDto {
+export class CreateSchoolHouseDto {
   @IsString()
   @IsNotEmpty()
-  title: string;
-
-  @IsString()
-  @IsNotEmpty()
-  type: string; // COMPETITION, EXHIBITION, OLYMPIAD, SEMINAR, TOUR
-
-  @IsDateString()
-  date: string;
+  name: string;
 
   @IsUUID()
-  campusId: string;
+  @IsOptional()
+  captainId?: string;
 
+  @IsUUID()
+  @IsOptional()
+  viceCaptainId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  teacherInchargeId?: string;
+}
+
+export class UpdateSchoolHouseDto {
   @IsString()
   @IsOptional()
-  description?: string;
+  name?: string;
+
+  @IsUUID()
+  @IsOptional()
+  captainId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  viceCaptainId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  teacherInchargeId?: string;
 }
 
 export class AwardHousePointsDto {

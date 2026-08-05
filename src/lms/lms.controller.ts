@@ -1,5 +1,8 @@
 import { Controller, Get, Post, Body, Param, Patch, Query, UseGuards } from "@nestjs/common";
 import { LmsService } from "./lms.service";
+import { RequirePermissions } from "../auth/permissions.decorator";
+import { RequireAnyPermission } from "../auth/any-permission.decorator";
+import { AnyPermissionGuard } from "../auth/any-permission.guard";
 import {
   CreateCourseDto,
   UpdateCourseDto,
@@ -21,6 +24,15 @@ import {
   AwardBadgeDto,
 } from "./dto/lms.dto";
 
+// Class-level MANAGE_LMS is the default for every route (content authoring is
+// staff-only); routes a student legitimately needs — viewing content, submitting
+// work, participating in discussions — are individually reopened to VIEW_LMS
+// below via the same self-or-any-permission override pattern used elsewhere
+// (e.g. discipline.controller.ts). Previously this controller had NO decorators
+// at all, which under the global PermissionsGuard's fallback (no requirement ->
+// implicit literal "read"/"write" permission) meant every route was unreachable
+// by any non-wildcard role, staff included — not just a naming mismatch.
+@RequirePermissions("MANAGE_LMS")
 @Controller("lms")
 export class LmsController {
   constructor(private readonly lmsService: LmsService) {}
@@ -30,11 +42,17 @@ export class LmsController {
     return this.lmsService.createCourse(data);
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Get("courses")
   getCourses() {
     return this.lmsService.getCourses();
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Get("courses/:id")
   getCourse(@Param("id") id: string) {
     return this.lmsService.getCourse(id);
@@ -75,6 +93,9 @@ export class LmsController {
     return this.lmsService.uploadResource(data);
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Get("resources")
   getResources(@Query("classId") classId?: string) {
     return this.lmsService.getResources(classId);
@@ -86,11 +107,17 @@ export class LmsController {
     return this.lmsService.createAssignment(data);
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Get("assignments")
   getAssignments(@Query("courseId") courseId?: string, @Query("classId") classId?: string) {
     return this.lmsService.getAssignments(courseId, classId);
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Post("assignments/:id/submit")
   submitAssignment(@Param("id") id: string, @Body() data: SubmitAssignmentDto) {
     return this.lmsService.submitAssignment({ ...data, assignmentId: id });
@@ -106,6 +133,9 @@ export class LmsController {
     return this.lmsService.gradeSubmission(id, data);
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Get("gradebook/:courseId")
   getGradebook(@Param("courseId") courseId: string) {
     return this.lmsService.getGradebook(courseId);
@@ -116,16 +146,25 @@ export class LmsController {
     return this.lmsService.upsertGrade(courseId, data);
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Get("discussions")
   getDiscussionThreads(@Query("courseId") courseId: string) {
     return this.lmsService.getDiscussionThreads(courseId);
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Post("discussions")
   createDiscussionThread(@Body() data: CreateDiscussionThreadDto) {
     return this.lmsService.createDiscussionThread(data);
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Post("discussions/:threadId/posts")
   createDiscussionPost(@Param("threadId") threadId: string, @Body() data: CreateDiscussionPostDto) {
     return this.lmsService.createDiscussionPost(threadId, data);
@@ -141,6 +180,9 @@ export class LmsController {
     return this.lmsService.createQuiz(data);
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Get("quizzes")
   getQuizzes() {
     return this.lmsService.getQuizzes();
@@ -152,6 +194,9 @@ export class LmsController {
     return this.lmsService.createLiveClass(data);
   }
 
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission("VIEW_LMS", "MANAGE_LMS")
+  @RequirePermissions()
   @Get("live-classes")
   getLiveClasses() {
     return this.lmsService.getLiveClasses();

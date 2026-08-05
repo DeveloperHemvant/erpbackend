@@ -10,6 +10,7 @@ export class PortalService {
     const student = await this.prisma.student.findUnique({
       where: { id: studentId },
       include: {
+        house: true,
         enrollments: {
           include: {
             section: { include: { class: true } },
@@ -112,7 +113,8 @@ export class PortalService {
         photoUrl: student.photoUrl,
         dateOfBirth: student.dateOfBirth,
         documentsVerified: student.documentsVerified,
-        documentDetails: student.documentDetails
+        documentDetails: student.documentDetails,
+        house: student.house
       },
       enrollment: activeEnr,
       attendanceRate: attendanceRate.toFixed(1),

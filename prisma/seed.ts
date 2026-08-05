@@ -253,8 +253,8 @@ async function main() {
     { name: 'Super Admin', permissions: ['*'] },
     { name: 'Principal', permissions: ['*'] },
     { name: 'Vice Principal', permissions: ['VIEW_STUDENTS', 'MANAGE_USERS', 'MANAGE_ACADEMICS', 'MARK_ATTENDANCE', 'MANAGE_EXAMS', 'MANAGE_FEES', 'VIEW_REPORTS', 'MANAGE_TRANSPORT', 'MANAGE_TRANSPORT_FLEET', 'MANAGE_LMS'] },
-    { name: 'Academic Coordinator', permissions: ['VIEW_STUDENTS', 'MANAGE_ACADEMICS', 'MANAGE_EXAMS', 'VIEW_REPORTS'] },
-    { name: 'Teacher', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'VIEW_STUDENTS', 'MARK_ATTENDANCE', 'MANAGE_GRADES', 'MANAGE_LMS', 'VIEW_REPORTS'] },
+    { name: 'Academic Coordinator', permissions: ['VIEW_STUDENTS', 'MANAGE_ACADEMICS', 'MANAGE_EXAMS', 'VIEW_REPORTS', 'MANAGE_ACTIVITIES'] },
+    { name: 'Teacher', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'VIEW_STUDENTS', 'MARK_ATTENDANCE', 'MANAGE_GRADES', 'MANAGE_LMS', 'VIEW_REPORTS', 'MANAGE_ACTIVITIES'] },
     { name: 'Accountant', permissions: ['MANAGE_FEES', 'VIEW_REPORTS'] },
     { name: 'Librarian', permissions: ['MANAGE_ACADEMICS', 'VIEW_REPORTS'] },
     { name: 'Warden', permissions: ['MANAGE_HOSTEL', 'VIEW_REPORTS'] },
@@ -556,6 +556,12 @@ async function main() {
   await batchInsert('timetable_periods', prisma.timetablePeriod, timetablePeriods, 4000);
 
   console.log('\n6) Creating 4,400+ students, families, and portal accounts...');
+  const SCHOOL_HOUSES = [
+    { id: randomUUID(), name: 'Aravalli' },
+    { id: randomUUID(), name: 'Nilgiri' },
+    { id: randomUUID(), name: 'Vindhya' },
+    { id: randomUUID(), name: 'Satpura' },
+  ];
   const studentRows: any[] = [];
   const enrollments: any[] = [];
   const parentRows: any[] = [];
@@ -743,11 +749,28 @@ async function main() {
     portalRows.push({ username: student.admissionNumber, passwordHash: parentHash, userType: 'STUDENT', referenceId: student.id, status: 'Active' });
   }
 
+  // Houses (§ Co-Curricular & Activities) — every student belongs to one,
+  // assigned round-robin so House Points has real membership to work with.
+  await batchInsert('school_houses', prisma.schoolHouse, SCHOOL_HOUSES.map((h) => ({ id: h.id, name: h.name })), 10);
+  studentRows.forEach((student, idx) => {
+    student.houseId = SCHOOL_HOUSES[idx % SCHOOL_HOUSES.length].id;
+  });
+
   await batchInsert('students', prisma.student, studentRows, 2000);
   await batchInsert('student_enrollments', prisma.studentEnrollment, [...enrollments, ...enrollments2], 2000);
   await batchInsert('parents', prisma.parent, parentRows, 1000);
   await batchInsert('parent_students', prisma.parentStudent, parentStudentRows, 2000);
   await batchInsert('portal_accounts', prisma.portalAccount, portalRows, 2000);
+
+  for (const house of SCHOOL_HOUSES) {
+    const members = studentRows.filter((s) => s.houseId === house.id);
+    if (members.length >= 2) {
+      await prisma.schoolHouse.update({
+        where: { id: house.id },
+        data: { captainId: members[0].id, viceCaptainId: members[1].id },
+      });
+    }
+  }
 
   console.log('\n7) Creating ID cards and certificates...');
   const studentTemplate = await prisma.idCardTemplate.create({

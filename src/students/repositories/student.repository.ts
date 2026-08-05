@@ -18,7 +18,7 @@ export class StudentRepository {
     return this.prisma.student.findMany({
       where: sectionId ? { enrollments: { some: { sectionId } } } : undefined,
       orderBy: { fullName: "asc" },
-      include: { enrollments: { include: { section: { include: { class: true } } } } },
+      include: { enrollments: { include: { section: { include: { class: true } } } }, house: true },
     });
   }
 
@@ -28,7 +28,7 @@ export class StudentRepository {
       skip,
       take,
       orderBy: { fullName: "asc" },
-      include: { enrollments: { include: { section: { include: { class: true } } } } },
+      include: { enrollments: { include: { section: { include: { class: true } } } }, house: true },
     });
   }
 
@@ -55,6 +55,8 @@ export class StudentRepository {
       where: { id },
       include: {
         documents: true,
+        house: true,
+        admissionInquiry: true,
         parents: {
           include: {
             parent: true,

@@ -1,8 +1,9 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { ActivitiesRepository } from "./repositories/activities.repository";
 import {
   CreateAssemblyDto,
-  CreateSchoolEventDto,
+  CreateSchoolHouseDto,
+  UpdateSchoolHouseDto,
   CreateStudentAchievementDto,
   CreateStaffDutyDto,
 } from "./dto/activities.dto";
@@ -28,19 +29,24 @@ export class ActivitiesService {
     return this.repository.findAssemblies(where);
   }
 
-  async createSchoolEvent(dto: CreateSchoolEventDto) {
-    return this.repository.createSchoolEvent({
-      title: dto.title,
-      type: dto.type,
-      date: new Date(dto.date),
-      campusId: dto.campusId,
-      description: dto.description,
+  async createHouse(dto: CreateSchoolHouseDto) {
+    return this.repository.createHouse({
+      name: dto.name,
+      captainId: dto.captainId,
+      viceCaptainId: dto.viceCaptainId,
+      teacherInchargeId: dto.teacherInchargeId,
     });
   }
 
-  async getAllSchoolEvents(campusId?: string) {
-    const where = campusId ? { campusId } : undefined;
-    return this.repository.findSchoolEvents(where);
+  async updateHouse(houseId: string, dto: UpdateSchoolHouseDto) {
+    const existing = await this.repository.findHouseById(houseId);
+    if (!existing) throw new NotFoundException("House not found");
+    return this.repository.updateHouse(houseId, {
+      name: dto.name,
+      captainId: dto.captainId,
+      viceCaptainId: dto.viceCaptainId,
+      teacherInchargeId: dto.teacherInchargeId,
+    });
   }
 
   async awardHousePoints(houseId: string, points: number) {
@@ -49,6 +55,10 @@ export class ActivitiesService {
 
   async getHouseStandings() {
     return this.repository.findHouses();
+  }
+
+  async getHouseMembers(houseId: string) {
+    return this.repository.findHouseMembers(houseId);
   }
 
   async createAchievement(staffId: string, dto: CreateStudentAchievementDto) {

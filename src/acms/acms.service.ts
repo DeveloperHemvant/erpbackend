@@ -52,13 +52,37 @@ export class AcmsService {
   // ==========================================
   async getEvents() {
     return this.prisma.aCMSEvent.findMany({
-      include: { session: true },
+      include: { session: true, campus: true },
       orderBy: { startDate: "asc" }
     });
   }
 
-  async createEvent(data: { sessionId: string; title: string; description?: string; startDate: Date; endDate: Date; type: string; organizer?: string }) {
+  async getEvent(id: string) {
+    const event = await this.prisma.aCMSEvent.findUnique({
+      where: { id },
+      include: { session: true, campus: true }
+    });
+    if (!event) throw new NotFoundException("Event not found");
+    return event;
+  }
+
+  async createEvent(data: { sessionId: string; campusId?: string; title: string; description?: string; startDate: Date; endDate: Date; type: string; organizer?: string; imageUrl?: string }) {
     return this.prisma.aCMSEvent.create({ data });
+  }
+
+  async updateEvent(id: string, data: Partial<{ sessionId: string; campusId: string; title: string; description: string; startDate: Date; endDate: Date; type: string; organizer: string; imageUrl: string }>) {
+    await this.getEvent(id);
+    return this.prisma.aCMSEvent.update({ where: { id }, data });
+  }
+
+  async deleteEvent(id: string) {
+    await this.getEvent(id);
+    return this.prisma.aCMSEvent.delete({ where: { id } });
+  }
+
+  async setEventImage(id: string, imageUrl: string) {
+    await this.getEvent(id);
+    return this.prisma.aCMSEvent.update({ where: { id }, data: { imageUrl } });
   }
 
   // ==========================================
@@ -101,7 +125,7 @@ export class AcmsService {
 
     const calendar = [
       ...holidays.map(h => ({ type: "HOLIDAY", title: h.name, date: h.date, details: h.type })),
-      ...events.map(e => ({ type: "EVENT", title: e.title, date: e.startDate, details: e.type })),
+      ...events.map(e => ({ type: "EVENT", title: e.title, date: e.startDate, details: e.type, imageUrl: e.imageUrl })),
       ...exams.map(e => ({ type: "EXAM", title: `${e.subject?.name || "Exam"}`, date: e.date, details: "Academic Exam" }))
     ];
 

@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Patch, Body, Param, ParseUUIDPipe, ForbiddenException } from "@nestjs/common";
+import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, ForbiddenException, UseInterceptors, UploadedFile } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiTags, ApiOperation } from "@nestjs/swagger";
 import { CommunicationService } from "./communication.service";
-import { CreateAnnouncementDto, SendMessageDto, InitConversationDto } from "./dto/communication.dto";
+import { CreateAnnouncementDto, UpdateAnnouncementDto, SendMessageDto, InitConversationDto } from "./dto/communication.dto";
 import { RequirePermissions } from "../auth/permissions.decorator";
 import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/current-user.decorator";
+import { imageUploadOptions, imageUrlFor } from "../common/image-upload";
 
 @ApiTags("Communication")
 @Controller("communication")
@@ -39,6 +41,26 @@ export class CommunicationController {
   @ApiOperation({ summary: "Create Announcement" })
   async createAnnouncement(@Body() data: CreateAnnouncementDto) {
     return this.commService.createAnnouncement(data);
+  }
+
+  @Patch("announcements/:id")
+  @ApiOperation({ summary: "Update Announcement" })
+  async updateAnnouncement(@Param("id", ParseUUIDPipe) id: string, @Body() data: UpdateAnnouncementDto) {
+    return this.commService.updateAnnouncement(id, data);
+  }
+
+  @Delete("announcements/:id")
+  @ApiOperation({ summary: "Delete Announcement" })
+  async deleteAnnouncement(@Param("id", ParseUUIDPipe) id: string) {
+    return this.commService.deleteAnnouncement(id);
+  }
+
+  @Post("announcements/:id/image")
+  @ApiOperation({ summary: "Upload/replace an Announcement's banner image" })
+  @UseInterceptors(FileInterceptor("file", imageUploadOptions("announcements")))
+  async uploadAnnouncementImage(@Param("id", ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File) {
+    const imageUrl = imageUrlFor("announcements", file.filename);
+    return this.commService.setAnnouncementImage(id, imageUrl);
   }
 
   @Get("chat/conversations/:userId")
