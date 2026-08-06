@@ -17,7 +17,12 @@ import {
   UpdateAssetDto,
   UpdatePurchaseRequisitionStatusDto,
 } from './dto/inventory.dto';
+import { RequirePermissions } from '../auth/permissions.decorator';
 
+// Class-level MANAGE_ACADEMICS default -- matches the mobile Inventory tile
+// (modules.tsx id 'a5-inv'), which already expects MANAGE_ACADEMICS and was
+// silently failing every call since this controller had zero decorators.
+@RequirePermissions('MANAGE_ACADEMICS')
 @ApiTags('Inventory')
 @Controller('inventory')
 export class InventoryController {

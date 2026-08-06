@@ -9,7 +9,12 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ImportService } from './import.service';
 import * as multer from 'multer';
+import { RequirePermissions } from '../auth/permissions.decorator';
 
+// Class-level MANAGE_ACADEMICS default (matches web-app's "reqModule:
+// masterdata" grouping for Bulk Data Import). Was undecorated, therefore
+// blocked for every non-'*' role before this fix.
+@RequirePermissions('MANAGE_ACADEMICS')
 @Controller('import')
 export class ImportController {
   constructor(private readonly importService: ImportService) {}

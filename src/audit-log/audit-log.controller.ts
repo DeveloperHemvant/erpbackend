@@ -1,6 +1,13 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { AuditLogService } from './audit-log.service';
+import { RequirePermissions } from '../auth/permissions.decorator';
 
+// MANAGE_ROLES reuses the same permission roles.controller.ts already gates
+// itself with (matching web-app's own "reqModule: roles" grouping for Audit
+// Logs/Monitoring/Background Tasks) -- deliberately Super Admin/Principal-only
+// today since no seeded role holds MANAGE_ROLES yet. This controller had zero
+// decorators before this fix, so it was previously blocked for everyone.
+@RequirePermissions('MANAGE_ROLES')
 @Controller('audit-logs')
 export class AuditLogController {
   constructor(private readonly auditLogService: AuditLogService) {}

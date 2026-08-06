@@ -13,6 +13,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AcmsService } from './acms.service';
 import { imageUploadOptions, imageUrlFor } from '../common/image-upload';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import {
   CreateAcademicTermDto,
   CreateHolidayDto,
@@ -22,6 +23,13 @@ import {
   CreateResourceBookingDto,
 } from './dto/acms.dto';
 
+// Class-level MANAGE_ACADEMICS default. This controller had NO permission
+// decorators at all (15 routes), which under the global PermissionsGuard's
+// fallback (no requirement -> implicit literal "read"/"write") meant every
+// route -- including calendar admin CRUD -- was unreachable by any non-'*'
+// role. my-calendar (a personal read view, see web-app's own "reqModule:
+// attendance" grouping for it) is deliberately overridden open below.
+@RequirePermissions('MANAGE_ACADEMICS')
 @Controller('acms')
 export class AcmsController {
   constructor(private readonly acmsService: AcmsService) {}
@@ -124,6 +132,7 @@ export class AcmsController {
   }
 
   @Get('my-calendar')
+  @RequirePermissions()
   getUnifiedCalendar() {
     return this.acmsService.getUnifiedCalendar();
   }

@@ -16,7 +16,12 @@ import {
   CreateTimetablePeriodDto,
 } from './dto/timetable.dto';
 import { CreateTimetableSlotDto } from './dto/create-timetable-slot.dto';
+import { RequirePermissions } from '../auth/permissions.decorator';
 
+// Class-level MANAGE_ACADEMICS default (matches web-app's "reqModule:
+// masterdata" grouping for Timetable Desk). Was undecorated (12 routes),
+// therefore blocked for every non-'*' role before this fix.
+@RequirePermissions('MANAGE_ACADEMICS')
 @ApiTags('ERP Core Features')
 @Controller('erp-core')
 export class TimetableController {

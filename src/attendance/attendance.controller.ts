@@ -12,7 +12,13 @@ import {
 import { ApiTags, ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { AttendanceService } from './attendance.service';
 import { CreateAttendanceDto, UpdateAttendanceDto } from './dto/attendance.dto';
+import { RequirePermissions } from '../auth/permissions.decorator';
 
+// Class-level MARK_ATTENDANCE default -- see hostel.controller.ts's comment
+// for the full explanation of why an undecorated route is blocked, not open,
+// under this app's global PermissionsGuard. This controller had zero
+// decorators across all 6 routes before this fix.
+@RequirePermissions('MARK_ATTENDANCE')
 @ApiTags('ERP Core Features')
 @Controller('erp-core')
 export class AttendanceController {

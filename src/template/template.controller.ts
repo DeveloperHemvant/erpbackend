@@ -13,7 +13,13 @@ import {
   CreateDocumentTemplateDto,
   UpdateDocumentTemplateDto,
 } from './dto/template.dto';
+import { RequirePermissions } from '../auth/permissions.decorator';
 
+// Class-level MANAGE_ACADEMICS default (this is the backend for the
+// Certificate Designer / ID Card Templates screens, matching web-app's own
+// "reqModule: masterdata" grouping for both). Was undecorated (6 routes),
+// therefore blocked for every non-'*' role before this fix.
+@RequirePermissions('MANAGE_ACADEMICS')
 @Controller('templates')
 export class TemplateController {
   constructor(private readonly templateService: TemplateService) {}

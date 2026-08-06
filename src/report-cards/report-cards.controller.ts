@@ -14,7 +14,12 @@ import {
   CreateReportCardDto,
   GenerateReportCardDto,
 } from './dto/report-card.dto';
+import { RequirePermissions } from '../auth/permissions.decorator';
 
+// Class-level MANAGE_EXAMS default (report cards are generated from exam
+// marks; matches exams.controller.ts/ems.controller.ts's permission tier).
+// Was undecorated (5 routes), therefore blocked for every non-'*' role.
+@RequirePermissions('MANAGE_EXAMS')
 @ApiTags('ERP Core Features')
 @Controller('erp-core')
 export class ReportCardsController {

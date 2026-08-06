@@ -13,7 +13,12 @@ import {
   CreateExamSlotDto,
   SubmitExamMarksDto,
 } from './dto/exam.dto';
+import { RequirePermissions } from '../auth/permissions.decorator';
 
+// Class-level MANAGE_EXAMS default (matches ems.controller.ts's already-correct
+// pattern for the parallel EMS exam system). All 6 routes were undecorated
+// and therefore blocked for every non-'*' role before this fix.
+@RequirePermissions('MANAGE_EXAMS')
 @ApiTags('ERP Core Features')
 @Controller('erp-core')
 export class ExamsController {
