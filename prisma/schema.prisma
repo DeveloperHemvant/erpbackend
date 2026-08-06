@@ -122,6 +122,7 @@ model Staff {
   studentGateLogsLogged   StudentGateLog[]
   courierLogsLogged       CourierLog[]
   appointmentsHosted      Appointment[]
+  meetingsOrganized       Meeting[]
 
   healthVisitsLogged        HealthVisit[]
   disciplineIncidentsFiled  DisciplineIncident[]       @relation("DisciplineReportedBy")
@@ -2679,6 +2680,23 @@ model Appointment {
   createdAt    DateTime @default(now())
 
   @@map("appointments")
+}
+
+// Added Phase 2 — internal meetings scheduling (SOR item 2.8). "Meetings"
+// had zero implementation anywhere per the operational readiness audit.
+model Meeting {
+  id           String   @id @default(uuid()) @db.Uuid
+  title        String
+  agenda       String?
+  scheduledFor DateTime
+  location     String?
+  status       String   @default("Scheduled") // Scheduled, Completed, Cancelled
+  organizerId  String?  @db.Uuid
+  organizer    Staff?   @relation(fields: [organizerId], references: [id], onDelete: SetNull)
+  attendeeIds  Json?    @db.JsonB // array of Staff ids
+  createdAt    DateTime @default(now())
+
+  @@map("meetings")
 }
 
 model SchoolHouse {
