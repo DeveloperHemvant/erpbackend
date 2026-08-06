@@ -20,6 +20,8 @@ import {
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireSelfOrPermission } from '../auth/self-or-permission.decorator';
 import { SelfOrPermissionGuard } from '../auth/self-or-permission.guard';
+import { RequireAnyPermission } from '../auth/any-permission.decorator';
+import { AnyPermissionGuard } from '../auth/any-permission.guard';
 
 @ApiTags('HR')
 @Controller('hr')
@@ -42,18 +44,21 @@ export class HrController {
   }
 
   @Post('leave-applications')
+  @RequirePermissions()
   @ApiOperation({ summary: 'Apply for Leave' })
   async applyLeave(@Body() data: ApplyLeaveDto) {
     return this.hrService.applyLeave(data);
   }
 
   @Get('leave-applications')
+  @RequirePermissions()
   @ApiOperation({ summary: 'List leave applications' })
   async getLeaveApplications(@Query('status') status?: string) {
     return this.hrService.getLeaveApplications(status);
   }
 
   @Patch('leave-applications/:id/process')
+  @RequirePermissions('MANAGE_HR')
   @ApiOperation({ summary: 'Approve or Reject Leave' })
   async processLeave(
     @Param('id', ParseUUIDPipe) id: string,
@@ -63,12 +68,14 @@ export class HrController {
   }
 
   @Post('payroll/run')
+  @RequirePermissions('MANAGE_HR')
   @ApiOperation({ summary: 'Run Payroll' })
   async runPayroll(@Body() data: RunPayrollDto) {
     return this.hrService.runPayroll(data.month, data.year);
   }
 
   @Get('payslips')
+  @RequirePermissions('MANAGE_HR')
   @ApiOperation({ summary: 'List generated payslips (admin/HR — all staff)' })
   async getPayslips(
     @Query('month') month?: string,
@@ -104,18 +111,23 @@ export class HrController {
   }
 
   @Get('staff/:staffId/workload')
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission('MANAGE_HR', 'VIEW_REPORTS')
+  @RequirePermissions()
   @ApiOperation({ summary: 'Get Staff Workload' })
   async getStaffWorkload(@Param('staffId', ParseUUIDPipe) staffId: string) {
     return this.hrService.getStaffWorkload(staffId);
   }
 
   @Post('performance-reviews')
+  @RequirePermissions('MANAGE_HR')
   @ApiOperation({ summary: 'Log Performance Review' })
   async logPerformanceReview(@Body() data: LogPerformanceReviewDto) {
     return this.hrService.logPerformanceReview(data);
   }
 
   @Get('performance-reviews')
+  @RequirePermissions('MANAGE_HR')
   @ApiOperation({ summary: 'List performance reviews (admin/HR — all staff)' })
   async getPerformanceReviews() {
     return this.hrService.getPerformanceReviews();
