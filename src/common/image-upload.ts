@@ -1,7 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
-import { extname } from 'path';
+import { extname, join } from 'path';
 import { diskStorage } from 'multer';
 import type { Request } from 'express';
+import * as fs from 'fs';
 
 const UPLOAD_ROOT = 'uploads';
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -14,9 +15,15 @@ const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
  * bytes-on-disk store, served back via app.useStaticAssets() in main.ts.
  */
 export function imageUploadOptions(subfolder: string) {
+  const uploadDir = join(process.cwd(), UPLOAD_ROOT, subfolder);
+
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
   return {
     storage: diskStorage({
-      destination: `./${UPLOAD_ROOT}/${subfolder}`,
+      destination: uploadDir,
       filename: (
         _req: Request,
         file: Express.Multer.File,

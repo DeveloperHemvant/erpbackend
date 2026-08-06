@@ -1,31 +1,67 @@
-# Multi-stage build for NestJS Backend
-FROM node:20-alpine AS builder
+# syntax=docker/dockerfile:1
 
-WORKDIR /usr/src/app
+# -----------------------------
+# Dependencies
+# -----------------------------
+FROM node:20-alpine AS deps
+
+WORKDIR /app
 
 COPY package*.json ./
-COPY prisma ./prisma/
 
 RUN npm ci
 
+# -----------------------------
+# Build
+# -----------------------------
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 RUN npx prisma generate
+
 RUN npm run build
 
-# Production runtime stage
+RUN npm prune --omit=dev
+
+# -----------------------------
+# Runtime
+# -----------------------------
 FROM node:20-alpine AS runner
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-COPY --from=builder /usr/src/app/package*.json ./
-COPY --from=builder /usr/src/app/node_modules ./node_modules
-COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/prisma ./prisma
+RUN apk add --no-cache openssl
+
+ENV NODE_ENV=production
+ENV PORT=8000
+
+# Create user
+RUN addgroup -S nodejs && \
+    adduser -S nestjs -G nodejs
+
+# Copy application
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/package*.json ./
+
+# Create upload folders
+RUN mkdir -p \
+    /app/uploads/announcements \
+    /app/uploads/students \
+    /app/uploads/staff \
+    /app/uploads/temp \
+    /app/uploads/teachers \
+    /app/uploads/profile \
+ && chown -R nestjs:nodejs /app/uploads \
+ && chmod -R 775 /app/uploads
+
+USER nestjs
 
 EXPOSE 8000
 
-ENV PORT=8000
-ENV NODE_ENV=production
-
-CMD ["sh", "-c", " node dist/main.js"]
+CMD ["node", "dist/main.js"]

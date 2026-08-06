@@ -59,6 +59,7 @@ import { MedicalModule } from './medical/medical.module';
 import { SubstitutionModule } from './substitution/substitution.module';
 import { DiaryModule } from './diary/diary.module';
 import { SimulatorModule } from './testing/simulator/simulator.module';
+import { SimulationModule } from './simulation-engine/simulation.module';
 
 @Module({
   imports: [
@@ -123,6 +124,7 @@ import { SimulatorModule } from './testing/simulator/simulator.module';
     SubstitutionModule,
     DiaryModule,
     SimulatorModule,
+    SimulationModule,
   ],
   controllers: [AppController],
   providers: [

@@ -206,10 +206,11 @@ async function main() {
   console.log('Starting enterprise-grade demo seed for Aegis OS School ERP...');
   await resetDatabase();
 
-  const schoolDays = getAttendanceDays(SESSION_START, SESSION_END, 7);
-  const schoolDays2 = getAttendanceDays(SESSION_DEFS[1].start, SESSION_DEFS[1].end, 7);
-  console.log(`Academic session1 attendance days: ${schoolDays.length}`);
-  console.log(`Academic session2 attendance days: ${schoolDays2.length}`);
+  const seedDays = process.env.SEED_DAYS ? parseInt(process.env.SEED_DAYS, 10) : 30;
+  const schoolDays = getAttendanceDays(SESSION_START, SESSION_END, seedDays);
+  const schoolDays2 = getAttendanceDays(SESSION_DEFS[1].start, SESSION_DEFS[1].end, seedDays);
+  console.log(`Academic session1 attendance days: ${schoolDays.length} (configured: ${seedDays})`);
+  console.log(`Academic session2 attendance days: ${schoolDays2.length} (configured: ${seedDays})`);
 
   const sharedHash = await bcrypt.hash(STAFF_PASSWORD, 10);
   const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
