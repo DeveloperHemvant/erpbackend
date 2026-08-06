@@ -40,6 +40,18 @@ import {
   AcknowledgeIncidentDto,
 } from './dto/transport.dto';
 
+// Class-level MANAGE_TRANSPORT default. 30 of this controller's 45 routes had
+// no decorator at all, including logTripLocation (GPS tracking) and
+// getRouteRoster -- both routes the mobile Boarding/Driver screens (Phase 1)
+// depend on directly. Under the global PermissionsGuard's fallback, every one
+// of those 30 routes was blocked for Driver/Conductor/Transport Manager alike
+// -- the SOR audit's "Driver: 89%, GPS/pickup verified working" finding was
+// reading correct-looking code that was silently unreachable in practice.
+// The 13 routes already explicitly gated MANAGE_TRANSPORT_FLEET (vehicle/
+// asset CRUD, incident acknowledgement, vendor/expense resolution) keep that
+// stricter method-level requirement unchanged -- this default only fills the
+// gap for routes that had nothing at all.
+@RequirePermissions('MANAGE_TRANSPORT')
 @Controller('transport')
 export class TransportController {
   constructor(private readonly transportService: TransportService) {}
