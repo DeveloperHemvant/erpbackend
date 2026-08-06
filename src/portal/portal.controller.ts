@@ -100,6 +100,22 @@ export class PortalController {
     return this.portalService.getParentDiary(id);
   }
 
+  @Get('student/:id/homework')
+  @RequireSelfAccess('id')
+  @RequirePermissions('VIEW_OWN_PROFILE')
+  @ApiOperation({ summary: 'Get homework assignments for this student\'s current section' })
+  getStudentHomework(@Param('id', ParseUUIDPipe) id: string) {
+    return this.portalService.getStudentHomework(id);
+  }
+
+  @Get('parent/:id/homework')
+  @RequireSelfAccess('id')
+  @RequirePermissions('VIEW_CHILD_PROFILE')
+  @ApiOperation({ summary: "Get homework assignments for all of this parent's children" })
+  getParentHomework(@Param('id', ParseUUIDPipe) id: string) {
+    return this.portalService.getParentHomework(id);
+  }
+
   @Post('staff/:id/diary-entries')
   @RequireSelfAccess('id')
   @RequirePermissions('VIEW_STUDENTS')

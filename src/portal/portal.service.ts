@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DiaryService } from '../diary/diary.service';
+import { LmsService } from '../lms/lms.service';
 
 @Injectable()
 export class PortalService {
   constructor(
     private prisma: PrismaService,
     private diaryService: DiaryService,
+    private lmsService: LmsService,
   ) {}
 
   async getStudentDashboard(studentId: string) {
@@ -415,6 +417,35 @@ export class PortalService {
     dto: { studentId: string; type: string; content: string },
   ) {
     return this.diaryService.createDiaryEntry(teacherId, dto);
+  }
+
+  private async getActiveSectionId(studentId: string): Promise<string | null> {
+    const activeEnr = await this.prisma.studentEnrollment.findFirst({
+      where: { studentId, status: 'Enrolled' },
+      orderBy: { createdAt: 'desc' },
+    });
+    return activeEnr?.sectionId ?? null;
+  }
+
+  async getStudentHomework(studentId: string) {
+    const sectionId = await this.getActiveSectionId(studentId);
+    if (!sectionId) return [];
+    return this.lmsService.getAssignments(undefined, undefined, sectionId);
+  }
+
+  async getParentHomework(parentId: string) {
+    const parent = await this.prisma.parent.findUnique({
+      where: { id: parentId },
+      include: { students: { include: { student: true } } },
+    });
+    if (!parent) throw new NotFoundException('Parent not found');
+
+    return Promise.all(
+      parent.students.map(async (ps) => ({
+        student: { id: ps.student.id, name: ps.student.fullName },
+        assignments: await this.getStudentHomework(ps.student.id),
+      })),
+    );
   }
 
   async getClassTeacherDesk(staffId: string, sectionId: string) {

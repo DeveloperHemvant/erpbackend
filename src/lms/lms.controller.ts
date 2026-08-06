@@ -12,6 +12,8 @@ import { LmsService } from './lms.service';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireAnyPermission } from '../auth/any-permission.decorator';
 import { AnyPermissionGuard } from '../auth/any-permission.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import {
   CreateCourseDto,
   UpdateCourseDto,
@@ -112,8 +114,11 @@ export class LmsController {
 
   // --- PHASE 2: ASSESSMENTS ---
   @Post('assignments')
-  createAssignment(@Body() data: CreateLmsAssignmentDto) {
-    return this.lmsService.createAssignment(data);
+  createAssignment(
+    @Body() data: CreateLmsAssignmentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.lmsService.createAssignment(user.userId, data);
   }
 
   @UseGuards(AnyPermissionGuard)
@@ -123,8 +128,9 @@ export class LmsController {
   getAssignments(
     @Query('courseId') courseId?: string,
     @Query('classId') classId?: string,
+    @Query('sectionId') sectionId?: string,
   ) {
-    return this.lmsService.getAssignments(courseId, classId);
+    return this.lmsService.getAssignments(courseId, classId, sectionId);
   }
 
   @UseGuards(AnyPermissionGuard)

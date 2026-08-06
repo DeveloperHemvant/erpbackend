@@ -181,6 +181,10 @@ export class CreateLmsAssignmentDto {
   @IsOptional()
   lessonId?: string;
 
+  @IsUUID()
+  @IsOptional()
+  sectionId?: string;
+
   @IsString()
   @IsNotEmpty()
   title: string;

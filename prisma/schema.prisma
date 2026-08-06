@@ -116,6 +116,7 @@ model Staff {
   EMSEvaluationRecord   EMSEvaluationRecord[]
   EMSModerationRecord   EMSModerationRecord[]
   IdCards               IdCard[]
+  homeworkAssignments   LMSAssignment[]
 
   healthVisitsLogged        HealthVisit[]
   disciplineIncidentsFiled  DisciplineIncident[]       @relation("DisciplineReportedBy")
@@ -258,6 +259,7 @@ model Section {
   timetable         TimetablePeriod[]
   LMSCourseSection  LMSCourseSection[]
   morningAssemblies MorningAssembly[]
+  homeworkAssignments LMSAssignment[]
 
   @@map("sections")
 }
@@ -1669,6 +1671,15 @@ model LMSAssignment {
   dueDate     DateTime?
   maxScore    Float      @default(100.0)
   createdAt   DateTime   @default(now())
+
+  // Added for Phase 2 "Homework" — assignments made directly to a class
+  // section don't require first building out the Course/Curriculum/Unit/
+  // Chapter/Topic/Lesson content hierarchy lessonId depends on; both are
+  // valid, independent ways to scope an assignment (nullable, additive).
+  sectionId String?  @db.Uuid
+  section   Section? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  teacherId String?  @db.Uuid
+  teacher   Staff?   @relation(fields: [teacherId], references: [id], onDelete: SetNull)
 
   submissions LMSSubmission[]
   rubrics     LMSRubric[]

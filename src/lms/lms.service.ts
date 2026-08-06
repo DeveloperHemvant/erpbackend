@@ -99,29 +99,36 @@ export class LmsService {
   }
 
   // --- PHASE 2: ASSESSMENTS & GRADEBOOK ---
-  async createAssignment(data: any) {
-    return this.prisma.lMSAssignment.create({ data });
+  async createAssignment(teacherId: string, data: any) {
+    return this.prisma.lMSAssignment.create({ data: { ...data, teacherId } });
   }
 
-  async getAssignments(courseId?: string, classId?: string) {
-    const where = courseId
-      ? {
-          lesson: {
-            topic: { chapter: { unit: { curriculum: { courseId } } } },
-          },
-        }
-      : classId
+  async getAssignments(
+    courseId?: string,
+    classId?: string,
+    sectionId?: string,
+  ) {
+    const where = sectionId
+      ? { sectionId }
+      : courseId
         ? {
             lesson: {
-              topic: {
-                chapter: { unit: { curriculum: { course: { classId } } } },
-              },
+              topic: { chapter: { unit: { curriculum: { courseId } } } },
             },
           }
-        : undefined;
+        : classId
+          ? {
+              lesson: {
+                topic: {
+                  chapter: { unit: { curriculum: { course: { classId } } } },
+                },
+              },
+            }
+          : undefined;
     return this.prisma.lMSAssignment.findMany({
       where,
-      include: { submissions: true },
+      include: { submissions: true, teacher: { select: { id: true, fullName: true } } },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
