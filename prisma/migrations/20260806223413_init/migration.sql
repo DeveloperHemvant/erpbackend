@@ -92,6 +92,7 @@ CREATE TABLE "students" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdBy" TEXT,
     "updatedBy" TEXT,
+    "houseId" UUID,
 
     CONSTRAINT "students_pkey" PRIMARY KEY ("id")
 );
@@ -353,6 +354,7 @@ CREATE TABLE "announcements" (
     "body" TEXT NOT NULL,
     "targetAudience" TEXT NOT NULL DEFAULT 'ALL',
     "eventDate" TIMESTAMP(3),
+    "imageUrl" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdBy" TEXT,
@@ -499,6 +501,47 @@ CREATE TABLE "mess_menus" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "mess_menus_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "vehicle_gate_logs" (
+    "id" UUID NOT NULL,
+    "vehicleNumber" TEXT NOT NULL,
+    "driverName" TEXT,
+    "purpose" TEXT NOT NULL,
+    "entryTime" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "exitTime" TIMESTAMP(3),
+    "loggedById" UUID,
+
+    CONSTRAINT "vehicle_gate_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "student_gate_logs" (
+    "id" UUID NOT NULL,
+    "enrollmentId" UUID NOT NULL,
+    "type" TEXT NOT NULL,
+    "reason" TEXT,
+    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "loggedById" UUID,
+
+    CONSTRAINT "student_gate_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "hostel_outpasses" (
+    "id" UUID NOT NULL,
+    "enrollmentId" UUID NOT NULL,
+    "reason" TEXT NOT NULL,
+    "fromDate" TIMESTAMP(3) NOT NULL,
+    "toDate" TIMESTAMP(3) NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'Pending',
+    "approvedById" UUID,
+    "exitTime" TIMESTAMP(3),
+    "returnTime" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "hostel_outpasses_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -815,6 +858,21 @@ CREATE TABLE "document_templates" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "document_templates_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "certificates" (
+    "id" UUID NOT NULL,
+    "templateId" UUID,
+    "studentId" UUID,
+    "type" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "fileUrl" TEXT,
+    "issueDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "status" TEXT NOT NULL DEFAULT 'Active',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "certificates_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1348,6 +1406,8 @@ CREATE TABLE "lms_assignments" (
     "dueDate" TIMESTAMP(3),
     "maxScore" DOUBLE PRECISION NOT NULL DEFAULT 100.0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "sectionId" UUID,
+    "teacherId" UUID,
 
     CONSTRAINT "lms_assignments_pkey" PRIMARY KEY ("id")
 );
@@ -1506,17 +1566,6 @@ CREATE TABLE "lms_badges" (
     "earnedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "lms_badges_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "lms_certificates" (
-    "id" UUID NOT NULL,
-    "portfolioId" UUID NOT NULL,
-    "courseId" UUID NOT NULL,
-    "issueDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "fileUrl" TEXT,
-
-    CONSTRAINT "lms_certificates_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1790,18 +1839,6 @@ CREATE TABLE "ems_report_cards" (
 );
 
 -- CreateTable
-CREATE TABLE "ems_certificates" (
-    "id" UUID NOT NULL,
-    "studentId" UUID NOT NULL,
-    "type" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "fileUrl" TEXT,
-    "issueDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "ems_certificates_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "acms_academic_terms" (
     "id" UUID NOT NULL,
     "sessionId" UUID NOT NULL,
@@ -1842,13 +1879,16 @@ CREATE TABLE "acms_working_days" (
 CREATE TABLE "acms_events" (
     "id" UUID NOT NULL,
     "sessionId" UUID NOT NULL,
+    "campusId" UUID,
     "title" TEXT NOT NULL,
     "description" TEXT,
     "startDate" TIMESTAMP(3) NOT NULL,
     "endDate" TIMESTAMP(3) NOT NULL,
     "type" TEXT NOT NULL,
     "organizer" TEXT,
+    "imageUrl" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "acms_events_pkey" PRIMARY KEY ("id")
 );
@@ -2129,6 +2169,48 @@ CREATE TABLE "student_gate_passes" (
 );
 
 -- CreateTable
+CREATE TABLE "courier_logs" (
+    "id" UUID NOT NULL,
+    "type" TEXT NOT NULL,
+    "sender" TEXT,
+    "recipient" TEXT,
+    "description" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'Received',
+    "loggedById" UUID,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "courier_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "appointments" (
+    "id" UUID NOT NULL,
+    "visitorName" TEXT NOT NULL,
+    "purpose" TEXT NOT NULL,
+    "scheduledFor" TIMESTAMP(3) NOT NULL,
+    "hostId" UUID,
+    "status" TEXT NOT NULL DEFAULT 'Scheduled',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "appointments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "meetings" (
+    "id" UUID NOT NULL,
+    "title" TEXT NOT NULL,
+    "agenda" TEXT,
+    "scheduledFor" TIMESTAMP(3) NOT NULL,
+    "location" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'Scheduled',
+    "organizerId" UUID,
+    "attendeeIds" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "meetings_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "school_houses" (
     "id" UUID NOT NULL,
     "name" TEXT NOT NULL,
@@ -2264,6 +2346,20 @@ CREATE TABLE "morning_assemblies" (
     CONSTRAINT "morning_assemblies_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "student_achievements" (
+    "id" UUID NOT NULL,
+    "studentId" UUID NOT NULL,
+    "type" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "award" TEXT NOT NULL,
+    "issuedById" UUID NOT NULL,
+    "certificateData" JSONB,
+    "issuedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "student_achievements_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "campuses_name_key" ON "campuses"("name");
 
@@ -2394,6 +2490,9 @@ ALTER TABLE "roles" ADD CONSTRAINT "roles_schoolProfileId_fkey" FOREIGN KEY ("sc
 ALTER TABLE "staff" ADD CONSTRAINT "staff_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "roles"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "students" ADD CONSTRAINT "students_houseId_fkey" FOREIGN KEY ("houseId") REFERENCES "school_houses"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "classes" ADD CONSTRAINT "classes_campusId_fkey" FOREIGN KEY ("campusId") REFERENCES "campuses"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2514,6 +2613,21 @@ ALTER TABLE "hostel_grievances" ADD CONSTRAINT "hostel_grievances_enrollmentId_f
 ALTER TABLE "mess_menus" ADD CONSTRAINT "mess_menus_hostelId_fkey" FOREIGN KEY ("hostelId") REFERENCES "hostels"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "vehicle_gate_logs" ADD CONSTRAINT "vehicle_gate_logs_loggedById_fkey" FOREIGN KEY ("loggedById") REFERENCES "staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_gate_logs" ADD CONSTRAINT "student_gate_logs_enrollmentId_fkey" FOREIGN KEY ("enrollmentId") REFERENCES "student_enrollments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_gate_logs" ADD CONSTRAINT "student_gate_logs_loggedById_fkey" FOREIGN KEY ("loggedById") REFERENCES "staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "hostel_outpasses" ADD CONSTRAINT "hostel_outpasses_enrollmentId_fkey" FOREIGN KEY ("enrollmentId") REFERENCES "student_enrollments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "hostel_outpasses" ADD CONSTRAINT "hostel_outpasses_approvedById_fkey" FOREIGN KEY ("approvedById") REFERENCES "staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "book_issues" ADD CONSTRAINT "book_issues_bookId_fkey" FOREIGN KEY ("bookId") REFERENCES "library_books"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2593,6 +2707,12 @@ ALTER TABLE "rooms" ADD CONSTRAINT "rooms_campusId_fkey" FOREIGN KEY ("campusId"
 
 -- AddForeignKey
 ALTER TABLE "admission_documents" ADD CONSTRAINT "admission_documents_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "certificates" ADD CONSTRAINT "certificates_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "document_templates"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "certificates" ADD CONSTRAINT "certificates_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "id_cards" ADD CONSTRAINT "id_cards_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "id_card_templates"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -2733,6 +2853,12 @@ ALTER TABLE "lms_content_resources" ADD CONSTRAINT "lms_content_resources_lesson
 ALTER TABLE "lms_assignments" ADD CONSTRAINT "lms_assignments_lessonId_fkey" FOREIGN KEY ("lessonId") REFERENCES "lms_lessons"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "lms_assignments" ADD CONSTRAINT "lms_assignments_sectionId_fkey" FOREIGN KEY ("sectionId") REFERENCES "sections"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lms_assignments" ADD CONSTRAINT "lms_assignments_teacherId_fkey" FOREIGN KEY ("teacherId") REFERENCES "staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "lms_submissions" ADD CONSTRAINT "lms_submissions_assignmentId_fkey" FOREIGN KEY ("assignmentId") REFERENCES "lms_assignments"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2782,12 +2908,6 @@ ALTER TABLE "lms_student_portfolios" ADD CONSTRAINT "lms_student_portfolios_stud
 
 -- AddForeignKey
 ALTER TABLE "lms_badges" ADD CONSTRAINT "lms_badges_portfolioId_fkey" FOREIGN KEY ("portfolioId") REFERENCES "lms_student_portfolios"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "lms_certificates" ADD CONSTRAINT "lms_certificates_portfolioId_fkey" FOREIGN KEY ("portfolioId") REFERENCES "lms_student_portfolios"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "lms_certificates" ADD CONSTRAINT "lms_certificates_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "lms_courses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ems_exam_templates" ADD CONSTRAINT "ems_exam_templates_typeId_fkey" FOREIGN KEY ("typeId") REFERENCES "ems_exam_types"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -2886,9 +3006,6 @@ ALTER TABLE "ems_report_cards" ADD CONSTRAINT "ems_report_cards_studentId_fkey" 
 ALTER TABLE "ems_report_cards" ADD CONSTRAINT "ems_report_cards_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "ems_exam_sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ems_certificates" ADD CONSTRAINT "ems_certificates_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "acms_academic_terms" ADD CONSTRAINT "acms_academic_terms_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "academic_sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2899,6 +3016,9 @@ ALTER TABLE "acms_working_days" ADD CONSTRAINT "acms_working_days_sessionId_fkey
 
 -- AddForeignKey
 ALTER TABLE "acms_events" ADD CONSTRAINT "acms_events_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "academic_sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "acms_events" ADD CONSTRAINT "acms_events_campusId_fkey" FOREIGN KEY ("campusId") REFERENCES "campuses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "health_profiles" ADD CONSTRAINT "health_profiles_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -2958,6 +3078,15 @@ ALTER TABLE "student_gate_passes" ADD CONSTRAINT "student_gate_passes_studentId_
 ALTER TABLE "student_gate_passes" ADD CONSTRAINT "student_gate_passes_approvedById_fkey" FOREIGN KEY ("approvedById") REFERENCES "staff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "courier_logs" ADD CONSTRAINT "courier_logs_loggedById_fkey" FOREIGN KEY ("loggedById") REFERENCES "staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_hostId_fkey" FOREIGN KEY ("hostId") REFERENCES "staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "meetings" ADD CONSTRAINT "meetings_organizerId_fkey" FOREIGN KEY ("organizerId") REFERENCES "staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "school_houses" ADD CONSTRAINT "school_houses_captainId_fkey" FOREIGN KEY ("captainId") REFERENCES "students"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -2998,4 +3127,10 @@ ALTER TABLE "morning_assemblies" ADD CONSTRAINT "morning_assemblies_performingSe
 
 -- AddForeignKey
 ALTER TABLE "morning_assemblies" ADD CONSTRAINT "morning_assemblies_supervisingStaffId_fkey" FOREIGN KEY ("supervisingStaffId") REFERENCES "staff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_achievements" ADD CONSTRAINT "student_achievements_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "students"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "student_achievements" ADD CONSTRAINT "student_achievements_issuedById_fkey" FOREIGN KEY ("issuedById") REFERENCES "staff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
