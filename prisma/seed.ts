@@ -262,6 +262,12 @@ async function main() {
     { name: 'Driver', permissions: ['MANAGE_TRANSPORT', 'VIEW_REPORTS'] },
     { name: 'Conductor', permissions: ['MANAGE_TRANSPORT'] },
     { name: 'Admin Staff', permissions: ['MANAGE_USERS', 'MANAGE_COMMUNICATION', 'VIEW_REPORTS'] },
+    // Front-desk and gate operations share MANAGE_VISITORS — same permission
+    // already gates the one shared Visitor & Gate Pass desk screen (mobile
+    // tile a12) both roles use, so there's no separate permission to invent
+    // per feature (courier, appointments, vehicle log, late-entry log).
+    { name: 'Reception', permissions: ['MANAGE_VISITORS', 'VIEW_REPORTS'] },
+    { name: 'Security', permissions: ['MANAGE_VISITORS', 'VIEW_REPORTS'] },
     { name: 'Parent', permissions: ['VIEW_CHILD_PROFILE', 'PAY_FEES', 'VIEW_REPORTS'] },
     { name: 'Student', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_GRADES', 'VIEW_LMS'] },
   ];
@@ -385,7 +391,11 @@ async function main() {
   function makeStaff(name: string, email: string, roleName: string, gender: string, salary: number, extras: Record<string, any> = {}) {
     const id = randomUUID();
     let resolvedRoleName = roleName;
-    if (['Administrative Officer', 'Receptionist', 'HR Manager', 'Nurse', 'Mess Supervisor', 'Security Guard', 'Peon', 'Cleaner'].includes(roleName)) {
+    if (roleName === 'Receptionist') {
+      resolvedRoleName = 'Reception';
+    } else if (roleName === 'Security Guard') {
+      resolvedRoleName = 'Security';
+    } else if (['Administrative Officer', 'HR Manager', 'Nurse', 'Mess Supervisor', 'Peon', 'Cleaner'].includes(roleName)) {
       resolvedRoleName = 'Admin Staff';
     } else if (['PET Teacher', 'Music Teacher', 'Art Teacher', 'Computer Teacher', 'Lab Assistant'].includes(roleName)) {
       resolvedRoleName = 'Teacher';
