@@ -122,6 +122,54 @@ export class HostelService {
     });
   }
 
+  async createOutpass(data: {
+    enrollmentId: string;
+    reason: string;
+    fromDate: string;
+    toDate: string;
+  }) {
+    return this.prisma.hostelOutpass.create({
+      data: {
+        enrollmentId: data.enrollmentId,
+        reason: data.reason,
+        fromDate: new Date(data.fromDate),
+        toDate: new Date(data.toDate),
+      },
+    });
+  }
+
+  async getOutpasses(enrollmentId?: string) {
+    return this.prisma.hostelOutpass.findMany({
+      where: enrollmentId ? { enrollmentId } : undefined,
+      include: {
+        enrollment: { include: { student: true } },
+        approvedBy: { select: { id: true, fullName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async resolveOutpass(id: string, status: string, approvedById: string) {
+    return this.prisma.hostelOutpass.update({
+      where: { id },
+      data: { status, approvedById },
+    });
+  }
+
+  async verifyOutpassExit(id: string) {
+    return this.prisma.hostelOutpass.update({
+      where: { id },
+      data: { exitTime: new Date() },
+    });
+  }
+
+  async recordOutpassReturn(id: string) {
+    return this.prisma.hostelOutpass.update({
+      where: { id },
+      data: { returnTime: new Date(), status: 'Returned' },
+    });
+  }
+
   async markAttendance(data: MarkHostelAttendanceDto) {
     const existing = await this.prisma.hostelAttendance.findFirst({
       where: { enrollmentId: data.enrollmentId, date: data.date },

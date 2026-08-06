@@ -20,8 +20,12 @@ import {
   CreateMessMenuDto,
   UpdateHostelAllocationDto,
   UpdateHostelGrievanceDto,
+  CreateHostelOutpassDto,
+  ResolveHostelOutpassDto,
 } from './dto/hostel.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
 @ApiTags('Hostel')
 @Controller('hostel')
@@ -111,6 +115,40 @@ export class HostelController {
     @Body() data: UpdateHostelGrievanceDto,
   ) {
     return this.hostelService.resolveGrievance(id, data.status);
+  }
+
+  @Post('outpasses')
+  @ApiOperation({ summary: 'Request a hostel outpass' })
+  async createOutpass(@Body() data: CreateHostelOutpassDto) {
+    return this.hostelService.createOutpass(data);
+  }
+
+  @Get('outpasses')
+  @ApiOperation({ summary: 'List hostel outpasses (optionally by student enrollment)' })
+  async getOutpasses(@Query('enrollmentId') enrollmentId?: string) {
+    return this.hostelService.getOutpasses(enrollmentId);
+  }
+
+  @Patch('outpasses/:id/resolve')
+  @ApiOperation({ summary: 'Approve or reject an outpass request' })
+  async resolveOutpass(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() data: ResolveHostelOutpassDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.hostelService.resolveOutpass(id, data.status, user.userId);
+  }
+
+  @Patch('outpasses/:id/exit')
+  @ApiOperation({ summary: 'Verify student departure on an approved outpass' })
+  async verifyOutpassExit(@Param('id', ParseUUIDPipe) id: string) {
+    return this.hostelService.verifyOutpassExit(id);
+  }
+
+  @Patch('outpasses/:id/return')
+  @ApiOperation({ summary: 'Record student return from outpass' })
+  async recordOutpassReturn(@Param('id', ParseUUIDPipe) id: string) {
+    return this.hostelService.recordOutpassReturn(id);
   }
 
   @Post('attendance')

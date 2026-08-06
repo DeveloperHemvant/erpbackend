@@ -117,6 +117,7 @@ model Staff {
   EMSModerationRecord   EMSModerationRecord[]
   IdCards               IdCard[]
   homeworkAssignments   LMSAssignment[]
+  hostelOutpassesApproved HostelOutpass[]
 
   healthVisitsLogged        HealthVisit[]
   disciplineIncidentsFiled  DisciplineIncident[]       @relation("DisciplineReportedBy")
@@ -320,6 +321,7 @@ model StudentEnrollment {
   campus                   Campus?                   @relation(fields: [campusId], references: [id], onDelete: Cascade)
   TransportAttendance      TransportAttendance[]
   studentLeaveApplications StudentLeaveApplication[]
+  hostelOutpasses          HostelOutpass[]
 
   @@index([sectionId, sessionId])
   @@index([campusId, sectionId, sessionId])
@@ -713,6 +715,27 @@ model MessMenu {
   createdAt DateTime @default(now())
 
   @@map("mess_menus")
+}
+
+// Added Phase 2 — real outpass workflow (request -> approve/reject -> exit ->
+// return), replacing the same-day attendance-status workaround the SOR audit
+// found ("Leave" was just one of three roll-call buttons, not an approvable
+// request with dates/reason/duration).
+model HostelOutpass {
+  id           String            @id @default(uuid()) @db.Uuid
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  reason       String
+  fromDate     DateTime
+  toDate       DateTime
+  status       String            @default("Pending") // Pending, Approved, Rejected, Returned
+  approvedById String?           @db.Uuid
+  approvedBy   Staff?            @relation(fields: [approvedById], references: [id], onDelete: SetNull)
+  exitTime     DateTime?
+  returnTime   DateTime?
+  createdAt    DateTime          @default(now())
+
+  @@map("hostel_outpasses")
 }
 
 // --- LIBRARY ---

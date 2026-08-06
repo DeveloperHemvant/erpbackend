@@ -113,3 +113,27 @@ export class UpdateHostelGrievanceDto {
   @IsNotEmpty()
   status: string;
 }
+
+export class CreateHostelOutpassDto {
+  @IsUUID()
+  @IsNotEmpty()
+  enrollmentId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  reason: string;
+
+  @IsString()
+  @IsNotEmpty()
+  fromDate: string;
+
+  @IsString()
+  @IsNotEmpty()
+  toDate: string;
+}
+
+export class ResolveHostelOutpassDto {
+  @IsString()
+  @IsNotEmpty()
+  status: string; // Approved, Rejected
+}
