@@ -21,6 +21,7 @@ import {
   InitConversationDto,
 } from './dto/communication.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
+import { RequireSelfAccess } from '../auth/self-access.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { imageUploadOptions, imageUrlFor } from '../common/image-upload';
@@ -31,18 +32,23 @@ export class CommunicationController {
   constructor(private readonly commService: CommunicationService) {}
 
   @Get('notifications/:userId')
+  @RequireSelfAccess('userId')
+  @RequirePermissions()
   @ApiOperation({ summary: 'Get User Notifications' })
   async getNotifications(@Param('userId', ParseUUIDPipe) userId: string) {
     return this.commService.getNotifications(userId);
   }
 
   @Patch('notifications/:id/read')
+  @RequirePermissions()
   @ApiOperation({ summary: 'Mark a notification as read' })
   async markNotificationRead(@Param('id', ParseUUIDPipe) id: string) {
     return this.commService.markNotificationRead(id);
   }
 
   @Patch('notifications/:userId/read-all')
+  @RequireSelfAccess('userId')
+  @RequirePermissions()
   @ApiOperation({ summary: "Mark all of a user's notifications as read" })
   async markAllNotificationsRead(
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -51,18 +57,21 @@ export class CommunicationController {
   }
 
   @Get('announcements')
+  @RequirePermissions()
   @ApiOperation({ summary: 'Get Announcements' })
   async getAnnouncements() {
     return this.commService.getAnnouncements();
   }
 
   @Post('announcements')
+  @RequirePermissions('MANAGE_COMMUNICATION')
   @ApiOperation({ summary: 'Create Announcement' })
   async createAnnouncement(@Body() data: CreateAnnouncementDto) {
     return this.commService.createAnnouncement(data);
   }
 
   @Patch('announcements/:id')
+  @RequirePermissions('MANAGE_COMMUNICATION')
   @ApiOperation({ summary: 'Update Announcement' })
   async updateAnnouncement(
     @Param('id', ParseUUIDPipe) id: string,
@@ -72,12 +81,14 @@ export class CommunicationController {
   }
 
   @Delete('announcements/:id')
+  @RequirePermissions('MANAGE_COMMUNICATION')
   @ApiOperation({ summary: 'Delete Announcement' })
   async deleteAnnouncement(@Param('id', ParseUUIDPipe) id: string) {
     return this.commService.deleteAnnouncement(id);
   }
 
   @Post('announcements/:id/image')
+  @RequirePermissions('MANAGE_COMMUNICATION')
   @ApiOperation({ summary: "Upload/replace an Announcement's banner image" })
   @UseInterceptors(FileInterceptor('file', imageUploadOptions('announcements')))
   async uploadAnnouncementImage(
