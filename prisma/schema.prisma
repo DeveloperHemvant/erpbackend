@@ -118,6 +118,8 @@ model Staff {
   IdCards               IdCard[]
   homeworkAssignments   LMSAssignment[]
   hostelOutpassesApproved HostelOutpass[]
+  vehicleGateLogsLogged   VehicleGateLog[]
+  studentGateLogsLogged   StudentGateLog[]
 
   healthVisitsLogged        HealthVisit[]
   disciplineIncidentsFiled  DisciplineIncident[]       @relation("DisciplineReportedBy")
@@ -322,6 +324,7 @@ model StudentEnrollment {
   TransportAttendance      TransportAttendance[]
   studentLeaveApplications StudentLeaveApplication[]
   hostelOutpasses          HostelOutpass[]
+  gateLogs                 StudentGateLog[]
 
   @@index([sectionId, sessionId])
   @@index([campusId, sectionId, sessionId])
@@ -715,6 +718,36 @@ model MessMenu {
   createdAt DateTime @default(now())
 
   @@map("mess_menus")
+}
+
+// Added Phase 2 — campus gate vehicle log (SOR item 2.4). Separate from
+// TransportVehicle/TransportTrip, which track the school's own bus fleet —
+// this logs any vehicle (staff, delivery, visitor) entering/exiting the gate.
+model VehicleGateLog {
+  id            String    @id @default(uuid()) @db.Uuid
+  vehicleNumber String
+  driverName    String?
+  purpose       String
+  entryTime     DateTime  @default(now())
+  exitTime      DateTime?
+  loggedById    String?   @db.Uuid
+  loggedBy      Staff?    @relation(fields: [loggedById], references: [id], onDelete: SetNull)
+
+  @@map("vehicle_gate_logs")
+}
+
+// Added Phase 2 — student late-entry/early-exit gate log (SOR item 2.5).
+model StudentGateLog {
+  id           String            @id @default(uuid()) @db.Uuid
+  enrollmentId String            @db.Uuid
+  enrollment   StudentEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  type         String // LATE_ENTRY, EARLY_EXIT
+  reason       String?
+  timestamp    DateTime          @default(now())
+  loggedById   String?           @db.Uuid
+  loggedBy     Staff?            @relation(fields: [loggedById], references: [id], onDelete: SetNull)
+
+  @@map("student_gate_logs")
 }
 
 // Added Phase 2 — real outpass workflow (request -> approve/reject -> exit ->

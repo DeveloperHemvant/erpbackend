@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { VisitorService } from './visitor.service';
 import { RequirePermissions } from '../auth/permissions.decorator';
@@ -8,6 +8,8 @@ import {
   CreateVisitorDto,
   ConfirmVisitorDto,
   CreateStudentGatePassDto,
+  LogVehicleEntryDto,
+  LogStudentGateEventDto,
 } from './dto/visitor.dto';
 
 @ApiTags('Visitor Operations')
@@ -93,5 +95,47 @@ export class VisitorController {
   @ApiResponse({ status: 200, description: 'List of student gate passes' })
   getAllGatePasses() {
     return this.visitorService.getAllGatePasses();
+  }
+
+  @RequirePermissions('MANAGE_VISITORS')
+  @Post('vehicle-logs')
+  @ApiOperation({ summary: 'Log a vehicle entering campus' })
+  logVehicleEntry(
+    @Body() dto: LogVehicleEntryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.visitorService.logVehicleEntry(user.userId, dto);
+  }
+
+  @RequirePermissions('MANAGE_VISITORS')
+  @Patch('vehicle-logs/:id/exit')
+  @ApiOperation({ summary: 'Log a vehicle exiting campus' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  logVehicleExit(@Param('id') id: string) {
+    return this.visitorService.logVehicleExit(id);
+  }
+
+  @RequirePermissions('MANAGE_VISITORS')
+  @Get('vehicle-logs')
+  @ApiOperation({ summary: 'List vehicle gate logs' })
+  getVehicleLogs() {
+    return this.visitorService.getVehicleLogs();
+  }
+
+  @RequirePermissions('MANAGE_VISITORS')
+  @Post('student-gate-logs')
+  @ApiOperation({ summary: 'Log a student late-entry or early-exit at the gate' })
+  logStudentGateEvent(
+    @Body() dto: LogStudentGateEventDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.visitorService.logStudentGateEvent(user.userId, dto);
+  }
+
+  @RequirePermissions('MANAGE_VISITORS')
+  @Get('student-gate-logs')
+  @ApiOperation({ summary: 'List student gate logs' })
+  getStudentGateLogs(@Query('enrollmentId') enrollmentId?: string) {
+    return this.visitorService.getStudentGateLogs(enrollmentId);
   }
 }

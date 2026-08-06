@@ -53,3 +53,31 @@ export class CreateStudentGatePassDto {
   @IsNotEmpty()
   leaveType: string; // EARLY, MEDICAL, PARENT_PICKUP, COMPETITION
 }
+
+export class LogVehicleEntryDto {
+  @IsString()
+  @IsNotEmpty()
+  vehicleNumber: string;
+
+  @IsString()
+  @IsOptional()
+  driverName?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  purpose: string;
+}
+
+export class LogStudentGateEventDto {
+  @IsUUID()
+  @IsNotEmpty()
+  enrollmentId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  type: string; // LATE_ENTRY, EARLY_EXIT
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
+}

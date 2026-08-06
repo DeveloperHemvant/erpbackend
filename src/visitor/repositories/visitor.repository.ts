@@ -54,4 +54,34 @@ export class VisitorRepository {
   updateGatePass(id: string, data: Prisma.StudentGatePassUncheckedUpdateInput) {
     return this.prisma.studentGatePass.update({ where: { id }, data });
   }
+
+  createVehicleLog(data: Prisma.VehicleGateLogUncheckedCreateInput) {
+    return this.prisma.vehicleGateLog.create({ data });
+  }
+
+  updateVehicleLog(id: string, data: Prisma.VehicleGateLogUncheckedUpdateInput) {
+    return this.prisma.vehicleGateLog.update({ where: { id }, data });
+  }
+
+  findVehicleLogs() {
+    return this.prisma.vehicleGateLog.findMany({
+      include: { loggedBy: { select: { id: true, fullName: true } } },
+      orderBy: { entryTime: 'desc' },
+    });
+  }
+
+  createStudentGateLog(data: Prisma.StudentGateLogUncheckedCreateInput) {
+    return this.prisma.studentGateLog.create({ data });
+  }
+
+  findStudentGateLogs(enrollmentId?: string) {
+    return this.prisma.studentGateLog.findMany({
+      where: enrollmentId ? { enrollmentId } : undefined,
+      include: {
+        enrollment: { include: { student: true } },
+        loggedBy: { select: { id: true, fullName: true } },
+      },
+      orderBy: { timestamp: 'desc' },
+    });
+  }
 }

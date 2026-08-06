@@ -73,4 +73,30 @@ export class VisitorService {
   async getAllGatePasses() {
     return this.repository.findGatePasses();
   }
+
+  async logVehicleEntry(
+    loggedById: string,
+    dto: { vehicleNumber: string; driverName?: string; purpose: string },
+  ) {
+    return this.repository.createVehicleLog({ ...dto, loggedById });
+  }
+
+  async logVehicleExit(id: string) {
+    return this.repository.updateVehicleLog(id, { exitTime: new Date() });
+  }
+
+  async getVehicleLogs() {
+    return this.repository.findVehicleLogs();
+  }
+
+  async logStudentGateEvent(
+    loggedById: string,
+    dto: { enrollmentId: string; type: string; reason?: string },
+  ) {
+    return this.repository.createStudentGateLog({ ...dto, loggedById });
+  }
+
+  async getStudentGateLogs(enrollmentId?: string) {
+    return this.repository.findStudentGateLogs(enrollmentId);
+  }
 }
