@@ -45,7 +45,10 @@ describe('FeesService', () => {
         { provide: CommunicationService, useValue: mockCommService },
         { provide: StudentRepository, useValue: mockStudentRepository },
         { provide: FeeRepository, useValue: mockFeeRepository },
-        { provide: ErpCoreAuditLogRepository, useValue: mockAuditLogRepository },
+        {
+          provide: ErpCoreAuditLogRepository,
+          useValue: mockAuditLogRepository,
+        },
       ],
     }).compile();
 
@@ -74,16 +77,22 @@ describe('FeesService', () => {
         status: 'Unpaid',
         payments: [{ amountPaid: '500' }],
       });
-      mockFeeRepository.createPayment.mockResolvedValue({ id: 'pay-1', amountPaid: '500' });
+      mockFeeRepository.createPayment.mockResolvedValue({
+        id: 'pay-1',
+        amountPaid: '500',
+      });
 
       await service.recordFeePayment('inv-1', {
         amountPaid: '500',
         paymentMode: 'UPI',
         referenceNo: 'ref-1',
         paymentDate: '2026-08-01',
-      } as any);
+      });
 
-      expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith('inv-1', 'Paid');
+      expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith(
+        'inv-1',
+        'Paid',
+      );
     });
 
     it('leaves the invoice Unpaid when the payment only partially covers the balance', async () => {
@@ -94,16 +103,22 @@ describe('FeesService', () => {
         status: 'Unpaid',
         payments: [],
       });
-      mockFeeRepository.createPayment.mockResolvedValue({ id: 'pay-1', amountPaid: '300' });
+      mockFeeRepository.createPayment.mockResolvedValue({
+        id: 'pay-1',
+        amountPaid: '300',
+      });
 
       await service.recordFeePayment('inv-1', {
         amountPaid: '300',
         paymentMode: 'Cheque',
         referenceNo: 'ref-2',
         paymentDate: '2026-08-01',
-      } as any);
+      });
 
-      expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith('inv-1', 'Unpaid');
+      expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith(
+        'inv-1',
+        'Unpaid',
+      );
     });
 
     it('records the payment against the given payment mode and reference, not a fabricated gateway response', async () => {
@@ -121,7 +136,7 @@ describe('FeesService', () => {
         paymentMode: 'NetBanking',
         referenceNo: 'NB-REF-99',
         paymentDate: '2026-08-01',
-      } as any);
+      });
 
       expect(mockFeeRepository.createPayment).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -138,25 +153,51 @@ describe('FeesService', () => {
       mockStudentRepository.findActiveAcademicSession.mockResolvedValue(null);
 
       await expect(
-        service.createFeeInvoice({ studentId: 's1', amount: '1000', dueDate: '2026-09-01', status: 'Unpaid' } as any),
+        service.createFeeInvoice({
+          studentId: 's1',
+          amount: '1000',
+          dueDate: '2026-09-01',
+          status: 'Unpaid',
+        } as any),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('throws BadRequestException when the student has no enrollment in the active session', async () => {
-      mockStudentRepository.findActiveAcademicSession.mockResolvedValue({ id: 'sess-1' });
-      mockStudentRepository.findEnrollmentByStudentAndSession.mockResolvedValue(null);
+      mockStudentRepository.findActiveAcademicSession.mockResolvedValue({
+        id: 'sess-1',
+      });
+      mockStudentRepository.findEnrollmentByStudentAndSession.mockResolvedValue(
+        null,
+      );
 
       await expect(
-        service.createFeeInvoice({ studentId: 's1', amount: '1000', dueDate: '2026-09-01', status: 'Unpaid' } as any),
+        service.createFeeInvoice({
+          studentId: 's1',
+          amount: '1000',
+          dueDate: '2026-09-01',
+          status: 'Unpaid',
+        } as any),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('creates the invoice against the resolved enrollment', async () => {
-      mockStudentRepository.findActiveAcademicSession.mockResolvedValue({ id: 'sess-1' });
-      mockStudentRepository.findEnrollmentByStudentAndSession.mockResolvedValue({ id: 'enr-1', studentId: 's1' });
-      mockFeeRepository.createInvoiceFromDto.mockResolvedValue({ id: 'inv-1', enrollment: null });
+      mockStudentRepository.findActiveAcademicSession.mockResolvedValue({
+        id: 'sess-1',
+      });
+      mockStudentRepository.findEnrollmentByStudentAndSession.mockResolvedValue(
+        { id: 'enr-1', studentId: 's1' },
+      );
+      mockFeeRepository.createInvoiceFromDto.mockResolvedValue({
+        id: 'inv-1',
+        enrollment: null,
+      });
 
-      await service.createFeeInvoice({ studentId: 's1', amount: '1000', dueDate: '2026-09-01', status: 'Unpaid' } as any);
+      await service.createFeeInvoice({
+        studentId: 's1',
+        amount: '1000',
+        dueDate: '2026-09-01',
+        status: 'Unpaid',
+      });
 
       expect(mockFeeRepository.createInvoiceFromDto).toHaveBeenCalledWith(
         expect.objectContaining({ enrollmentId: 'enr-1', amount: '1000' }),
@@ -168,7 +209,9 @@ describe('FeesService', () => {
     it('throws NotFoundException when the invoice does not exist', async () => {
       mockFeeRepository.findInvoiceById.mockResolvedValue(null);
 
-      await expect(service.updateFeeInvoiceStatus('missing', 'Paid')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.updateFeeInvoiceStatus('missing', 'Paid'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -179,13 +222,19 @@ describe('FeesService', () => {
           totalAmount: '1000',
           status: 'Paid',
           dueDate: '2026-01-01',
-          enrollment: { student: { fullName: 'A' }, section: { class: { grade: '10' } } },
+          enrollment: {
+            student: { fullName: 'A' },
+            section: { class: { grade: '10' } },
+          },
         },
         {
           totalAmount: '500',
           status: 'Overdue',
           dueDate: '2020-01-01',
-          enrollment: { student: { fullName: 'B' }, section: { class: { grade: '9' } } },
+          enrollment: {
+            student: { fullName: 'B' },
+            section: { class: { grade: '9' } },
+          },
         },
       ]);
 
@@ -204,7 +253,10 @@ describe('FeesService', () => {
       mockFeeRepository.findPaymentWithRefunds.mockResolvedValue(null);
 
       await expect(
-        service.requestRefund('missing-payment', { amount: '100', reason: 'test' } as any),
+        service.requestRefund('missing-payment', {
+          amount: '100',
+          reason: 'test',
+        } as any),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -230,7 +282,10 @@ describe('FeesService', () => {
       });
 
       await expect(
-        service.requestRefund('pay-1', { amount: '500', reason: 'test' } as any),
+        service.requestRefund('pay-1', {
+          amount: '500',
+          reason: 'test',
+        } as any),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -243,7 +298,10 @@ describe('FeesService', () => {
       });
       mockFeeRepository.createRefund.mockResolvedValue({ id: 'ref-1' });
 
-      await service.requestRefund('pay-1', { amount: '900', reason: 'test' } as any);
+      await service.requestRefund('pay-1', {
+        amount: '900',
+        reason: 'test',
+      });
 
       expect(mockFeeRepository.createRefund).toHaveBeenCalledWith(
         expect.objectContaining({ paymentId: 'pay-1', amount: '900' }),
@@ -259,7 +317,10 @@ describe('FeesService', () => {
       });
       mockFeeRepository.createRefund.mockResolvedValue({ id: 'ref-1' });
 
-      await service.requestRefund('pay-1', { amount: '100', reason: 'test' } as any);
+      await service.requestRefund('pay-1', {
+        amount: '100',
+        reason: 'test',
+      });
 
       expect(mockFeeRepository.createRefund).toHaveBeenCalledWith(
         expect.objectContaining({ refundMode: 'Cheque' }),
@@ -271,17 +332,21 @@ describe('FeesService', () => {
     it('throws NotFoundException when the refund request does not exist', async () => {
       mockFeeRepository.findRefundById.mockResolvedValue(null);
 
-      await expect(service.resolveRefund('missing', { status: 'Approved' } as any)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.resolveRefund('missing', { status: 'Approved' } as any),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('refuses to re-resolve a refund that is no longer Requested', async () => {
-      mockFeeRepository.findRefundById.mockResolvedValue({ id: 'ref-1', status: 'Approved', payment: { invoiceId: 'inv-1' } });
+      mockFeeRepository.findRefundById.mockResolvedValue({
+        id: 'ref-1',
+        status: 'Approved',
+        payment: { invoiceId: 'inv-1' },
+      });
 
-      await expect(service.resolveRefund('ref-1', { status: 'Rejected' } as any)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.resolveRefund('ref-1', { status: 'Rejected' } as any),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('rejecting a refund does not touch the invoice status', async () => {
@@ -290,12 +355,19 @@ describe('FeesService', () => {
         status: 'Requested',
         payment: { invoiceId: 'inv-1' },
       });
-      mockFeeRepository.updateRefundStatus.mockResolvedValue({ id: 'ref-1', status: 'Rejected' });
+      mockFeeRepository.updateRefundStatus.mockResolvedValue({
+        id: 'ref-1',
+        status: 'Rejected',
+      });
 
-      await service.resolveRefund('ref-1', { status: 'Rejected' } as any);
+      await service.resolveRefund('ref-1', { status: 'Rejected' });
 
-      expect(mockFeeRepository.findInvoiceWithPaymentsAndRefunds).not.toHaveBeenCalled();
-      expect(mockFeeRepository.updateInvoiceStatusSimple).not.toHaveBeenCalled();
+      expect(
+        mockFeeRepository.findInvoiceWithPaymentsAndRefunds,
+      ).not.toHaveBeenCalled();
+      expect(
+        mockFeeRepository.updateInvoiceStatusSimple,
+      ).not.toHaveBeenCalled();
     });
 
     it('approving a full refund moves a Paid invoice back to Unpaid', async () => {
@@ -304,17 +376,28 @@ describe('FeesService', () => {
         status: 'Requested',
         payment: { invoiceId: 'inv-1' },
       });
-      mockFeeRepository.updateRefundStatus.mockResolvedValue({ id: 'ref-1', status: 'Approved' });
+      mockFeeRepository.updateRefundStatus.mockResolvedValue({
+        id: 'ref-1',
+        status: 'Approved',
+      });
       mockFeeRepository.findInvoiceWithPaymentsAndRefunds.mockResolvedValue({
         id: 'inv-1',
         totalAmount: '1000',
         amount: '1000',
-        payments: [{ amountPaid: '1000', refunds: [{ amount: '1000', status: 'Approved' }] }],
+        payments: [
+          {
+            amountPaid: '1000',
+            refunds: [{ amount: '1000', status: 'Approved' }],
+          },
+        ],
       });
 
-      await service.resolveRefund('ref-1', { status: 'Approved' } as any);
+      await service.resolveRefund('ref-1', { status: 'Approved' });
 
-      expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith('inv-1', 'Unpaid');
+      expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith(
+        'inv-1',
+        'Unpaid',
+      );
     });
 
     it('approving a partial refund that still covers the invoice keeps it Paid', async () => {
@@ -323,21 +406,30 @@ describe('FeesService', () => {
         status: 'Requested',
         payment: { invoiceId: 'inv-1' },
       });
-      mockFeeRepository.updateRefundStatus.mockResolvedValue({ id: 'ref-1', status: 'Approved' });
+      mockFeeRepository.updateRefundStatus.mockResolvedValue({
+        id: 'ref-1',
+        status: 'Approved',
+      });
       mockFeeRepository.findInvoiceWithPaymentsAndRefunds.mockResolvedValue({
         id: 'inv-1',
         totalAmount: '1000',
         amount: '1000',
         payments: [
-          { amountPaid: '1000', refunds: [{ amount: '100', status: 'Approved' }] },
+          {
+            amountPaid: '1000',
+            refunds: [{ amount: '100', status: 'Approved' }],
+          },
           { amountPaid: '200', refunds: [] },
         ],
       });
 
-      await service.resolveRefund('ref-1', { status: 'Approved' } as any);
+      await service.resolveRefund('ref-1', { status: 'Approved' });
 
       // net paid = (1000 - 100) + 200 = 1100 >= 1000
-      expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith('inv-1', 'Paid');
+      expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith(
+        'inv-1',
+        'Paid',
+      );
     });
   });
 });

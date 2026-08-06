@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class AttachmentRepository {
@@ -10,7 +10,7 @@ export class AttachmentRepository {
     return this.prisma.attachment.findMany({
       where: { entityType, entityId },
       include: { uploadedBy: true },
-      orderBy: { uploadedAt: "desc" },
+      orderBy: { uploadedAt: 'desc' },
     });
   }
 

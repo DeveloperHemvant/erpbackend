@@ -1,8 +1,7 @@
-// @ts-nocheck
-import { Injectable, UnauthorizedException } from "@nestjs/common";
-import { CommunicationService } from "../communication/communication.service";
-import { AttendanceRepository } from "./repositories/attendance.repository";
-import { CreateAttendanceDto } from "./dto/attendance.dto";
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { CommunicationService } from '../communication/communication.service';
+import { AttendanceRepository } from './repositories/attendance.repository';
+import { CreateAttendanceDto } from './dto/attendance.dto';
 
 @Injectable()
 export class AttendanceService {
@@ -11,7 +10,9 @@ export class AttendanceService {
     private readonly attendanceRepository: AttendanceRepository,
   ) {}
 
-  async logAttendance(dto: CreateAttendanceDto & { latitude?: number, longitude?: number }) {
+  async logAttendance(
+    dto: CreateAttendanceDto & { latitude?: number; longitude?: number },
+  ) {
     if (dto.latitude && dto.longitude) {
       const campus = await this.attendanceRepository.findCampus();
       if (campus && campus.latitude && campus.longitude) {
@@ -20,11 +21,19 @@ export class AttendanceService {
         const R = 6371; // Earth radius in km
         const dLat = deg2rad(campus.latitude - dto.latitude);
         const dLon = deg2rad(campus.longitude - dto.longitude);
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(deg2rad(dto.latitude)) * Math.cos(deg2rad(campus.latitude)) * Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(deg2rad(dto.latitude)) *
+            Math.cos(deg2rad(campus.latitude)) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         const distanceKm = R * c;
-        if (distanceKm > 0.1) { // 100 meters
-          throw new UnauthorizedException("GPS verification failed: You are not within the 100m radius of the campus.");
+        if (distanceKm > 0.1) {
+          // 100 meters
+          throw new UnauthorizedException(
+            'GPS verification failed: You are not within the 100m radius of the campus.',
+          );
         }
       }
     }
@@ -36,11 +45,13 @@ export class AttendanceService {
       status: dto.status,
       faceVerified: dto.faceVerified || false,
       location: dto.location || null,
-      createdBy: "SYSTEM",
+      createdBy: 'SYSTEM',
     });
 
-    if (record.status === "Absent" && record.enrollment?.studentId) {
-      this.commService.sendAbsenceAlert(record.enrollment.studentId, record.date).catch(console.error);
+    if (record.status === 'Absent' && record.enrollment?.studentId) {
+      this.commService
+        .sendAbsenceAlert(record.enrollment.studentId, record.date)
+        .catch(console.error);
     }
 
     return record;
@@ -63,7 +74,12 @@ export class AttendanceService {
 
   async getAttendanceSummary(sectionId: string) {
     const grouped = await this.attendanceRepository.summaryBySection(sectionId);
-    const summary: Record<string, number> = { Present: 0, Absent: 0, Late: 0, Leave: 0 };
+    const summary: Record<string, number> = {
+      Present: 0,
+      Absent: 0,
+      Late: 0,
+      Leave: 0,
+    };
     let total = 0;
     for (const row of grouped) {
       summary[row.status] = row._count._all;

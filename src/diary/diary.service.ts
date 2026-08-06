@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { DiaryRepository } from "./repositories/diary.repository";
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { DiaryRepository } from './repositories/diary.repository';
 import {
   CreateDiaryEntryDto,
   CreateNewsItemDto,
   CreateLostFoundDto,
   CreateDocumentLifecycleDto,
-} from "./dto/diary.dto";
+} from './dto/diary.dto';
 
 @Injectable()
 export class DiaryService {
@@ -30,7 +30,7 @@ export class DiaryService {
       parentSigned: true,
       parentSignedAt: new Date(),
     });
-    if (!entry) throw new NotFoundException("Diary entry not found");
+    if (!entry) throw new NotFoundException('Diary entry not found');
     return entry;
   }
 
@@ -68,7 +68,7 @@ export class DiaryService {
       claimantId,
       claimedAt: new Date(),
     });
-    if (!item) throw new NotFoundException("Item not found");
+    if (!item) throw new NotFoundException('Item not found');
     return item;
   }
 
@@ -80,7 +80,7 @@ export class DiaryService {
       docNumber: dto.docNumber,
       expiryDate: new Date(dto.expiryDate),
       alertDays: dto.alertDays || 30,
-      status: "Active",
+      status: 'Active',
     });
   }
 
@@ -92,7 +92,7 @@ export class DiaryService {
       const expiry = new Date(doc.expiryDate);
       const diffTime = expiry.getTime() - now.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays <= doc.alertDays && doc.status === "Active";
+      return diffDays <= doc.alertDays && doc.status === 'Active';
     });
   }
 }

@@ -1,7 +1,11 @@
-import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
-import { CreateRoleDto } from "./dto/create-role.dto";
-import { UpdateRoleDto } from "./dto/update-role.dto";
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateRoleDto } from './dto/create-role.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 
 @Injectable()
 export class RolesService {
@@ -12,7 +16,9 @@ export class RolesService {
       where: { name: createRoleDto.name },
     });
     if (existing) {
-      throw new ConflictException(`Role with name "${createRoleDto.name}" already exists.`);
+      throw new ConflictException(
+        `Role with name "${createRoleDto.name}" already exists.`,
+      );
     }
 
     return this.prisma.role.create({
@@ -20,22 +26,26 @@ export class RolesService {
         name: createRoleDto.name,
         description: createRoleDto.description,
         permissions: createRoleDto.permissions,
-        status: createRoleDto.status || "Active",
-        createdBy: createRoleDto.createdBy || "SYSTEM",
+        status: createRoleDto.status || 'Active',
+        createdBy: createRoleDto.createdBy || 'SYSTEM',
       },
     });
   }
 
   async findAll() {
     return this.prisma.role.findMany({
-      orderBy: { name: "asc" },
+      orderBy: { name: 'asc' },
     });
   }
 
   async findOne(id: string) {
     const role = await this.prisma.role.findUnique({
       where: { id },
-      include: { staff: { select: { id: true, email: true, fullName: true, status: true } } },
+      include: {
+        staff: {
+          select: { id: true, email: true, fullName: true, status: true },
+        },
+      },
     });
     if (!role) {
       throw new NotFoundException(`Role with ID "${id}" not found.`);
@@ -54,7 +64,9 @@ export class RolesService {
         },
       });
       if (existing) {
-        throw new ConflictException(`Another role with name "${updateRoleDto.name}" already exists.`);
+        throw new ConflictException(
+          `Another role with name "${updateRoleDto.name}" already exists.`,
+        );
       }
     }
 
@@ -65,7 +77,7 @@ export class RolesService {
         description: updateRoleDto.description,
         permissions: updateRoleDto.permissions,
         status: updateRoleDto.status,
-        updatedBy: updateRoleDto.updatedBy || "SYSTEM",
+        updatedBy: updateRoleDto.updatedBy || 'SYSTEM',
       },
     });
   }
@@ -73,7 +85,9 @@ export class RolesService {
   async remove(id: string) {
     const role = await this.findOne(id);
     if (role.staff.length > 0) {
-      throw new ConflictException(`Cannot delete role with assigned staff members. Relocate staff first.`);
+      throw new ConflictException(
+        `Cannot delete role with assigned staff members. Relocate staff first.`,
+      );
     }
 
     return this.prisma.role.delete({

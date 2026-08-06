@@ -1,8 +1,12 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { AttachmentRepository } from "./repositories/attachment.repository";
-import { UploadAttachmentDto } from "./dto/attachment.dto";
-import { canAccessEntityType } from "../common/entity-permissions";
-import type { AuthenticatedUser } from "../auth/current-user.decorator";
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { AttachmentRepository } from './repositories/attachment.repository';
+import { UploadAttachmentDto } from './dto/attachment.dto';
+import { canAccessEntityType } from '../common/entity-permissions';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
 /**
  * Generic {entityType, entityId}-keyed attachment store (IA §16 #7). Mock
@@ -14,16 +18,28 @@ import type { AuthenticatedUser } from "../auth/current-user.decorator";
 export class AttachmentsService {
   constructor(private readonly repository: AttachmentRepository) {}
 
-  async getAttachments(entityType: string, entityId: string, user: AuthenticatedUser) {
+  async getAttachments(
+    entityType: string,
+    entityId: string,
+    user: AuthenticatedUser,
+  ) {
     if (!canAccessEntityType(user.permissions, entityType)) {
-      throw new ForbiddenException("You do not have permission to view this record's attachments.");
+      throw new ForbiddenException(
+        "You do not have permission to view this record's attachments.",
+      );
     }
     return this.repository.findByEntity(entityType, entityId);
   }
 
-  async uploadAttachment(dto: UploadAttachmentDto, file: { originalname: string; size: number }, user: AuthenticatedUser) {
+  async uploadAttachment(
+    dto: UploadAttachmentDto,
+    file: { originalname: string; size: number },
+    user: AuthenticatedUser,
+  ) {
     if (!canAccessEntityType(user.permissions, dto.entityType)) {
-      throw new ForbiddenException("You do not have permission to attach files to this record.");
+      throw new ForbiddenException(
+        'You do not have permission to attach files to this record.',
+      );
     }
     const mockUrl = `/uploads/${dto.entityType}/${dto.entityId}/${file.originalname}`;
     return this.repository.create({
@@ -38,9 +54,11 @@ export class AttachmentsService {
 
   async deleteAttachment(id: string, user: AuthenticatedUser) {
     const existing = await this.repository.findById(id);
-    if (!existing) throw new NotFoundException("Attachment not found");
+    if (!existing) throw new NotFoundException('Attachment not found');
     if (!canAccessEntityType(user.permissions, existing.entityType)) {
-      throw new ForbiddenException("You do not have permission to delete this attachment.");
+      throw new ForbiddenException(
+        'You do not have permission to delete this attachment.',
+      );
     }
     return this.repository.delete(id);
   }

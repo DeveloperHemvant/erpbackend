@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsUUID, IsDateString } from "class-validator";
+import { IsUUID, IsDateString } from 'class-validator';
 
 export class CreateSubstitutionDto {
   @IsUUID()

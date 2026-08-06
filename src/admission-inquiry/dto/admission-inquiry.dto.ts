@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsOptional, IsIn, IsUUID, IsEmail } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsIn,
+  IsUUID,
+  IsEmail,
+} from 'class-validator';
 
 export class CreateInquiryDto {
   @IsString() @IsNotEmpty() childName: string;
@@ -8,7 +15,7 @@ export class CreateInquiryDto {
 
   @IsEmail() @IsOptional() email?: string;
 
-  @IsIn(["Walk-in", "Website", "Referral", "Phone", "Social Media", "Other"])
+  @IsIn(['Walk-in', 'Website', 'Referral', 'Phone', 'Social Media', 'Other'])
   @IsOptional()
   source?: string;
 
@@ -18,7 +25,14 @@ export class CreateInquiryDto {
 }
 
 export class UpdateInquiryDto {
-  @IsIn(["New", "Contacted", "Campus Visit Scheduled", "Application Sent", "Converted", "Lost"])
+  @IsIn([
+    'New',
+    'Contacted',
+    'Campus Visit Scheduled',
+    'Application Sent',
+    'Converted',
+    'Lost',
+  ])
   @IsOptional()
   status?: string;
 

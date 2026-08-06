@@ -1,7 +1,11 @@
-import { Injectable, BadRequestException, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
-import { CreateLibraryBookDto } from "./dto/library.dto";
-import { randomUUID } from "crypto";
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateLibraryBookDto } from './dto/library.dto';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class LibraryService {
@@ -20,26 +24,31 @@ export class LibraryService {
   }
 
   async issueBook(bookId: string, enrollmentId: string, dueDate: string) {
-    const book = await this.prisma.libraryBook.findUnique({ where: { id: bookId } });
-    if (!book || book.available <= 0) throw new BadRequestException("Book not available");
+    const book = await this.prisma.libraryBook.findUnique({
+      where: { id: bookId },
+    });
+    if (!book || book.available <= 0)
+      throw new BadRequestException('Book not available');
 
     await this.prisma.libraryBook.update({
       where: { id: bookId },
-      data: { available: book.available - 1 }
+      data: { available: book.available - 1 },
     });
 
     return this.prisma.bookIssue.create({
       data: {
         bookId,
         enrollmentId,
-        dueDate: new Date(dueDate)
-      }
+        dueDate: new Date(dueDate),
+      },
     });
   }
 
   async returnBook(issueId: string) {
-    const issue = await this.prisma.bookIssue.findUnique({ where: { id: issueId } });
-    if (!issue) throw new BadRequestException("Issue record not found");
+    const issue = await this.prisma.bookIssue.findUnique({
+      where: { id: issueId },
+    });
+    if (!issue) throw new BadRequestException('Issue record not found');
 
     const now = new Date();
     const due = issue.dueDate ? new Date(issue.dueDate) : null;
@@ -49,7 +58,7 @@ export class LibraryService {
       where: { id: issueId },
       data: {
         returnDate: now,
-        status: "Returned",
+        status: 'Returned',
       },
     });
 
@@ -70,7 +79,7 @@ export class LibraryService {
         if (!existingFine) {
           const amount = diffDays * this.DEFAULT_FINE_RATE_PER_DAY;
           fine = await this.prisma.libraryFine.create({
-            data: { issueId, amount, status: "Unpaid" },
+            data: { issueId, amount, status: 'Unpaid' },
           });
         } else {
           fine = existingFine;
@@ -96,7 +105,9 @@ export class LibraryService {
     let fulfilledReservationId: string | null = null;
 
     if (reservation) {
-      const book = await this.prisma.libraryBook.findUnique({ where: { id: issue.bookId } });
+      const book = await this.prisma.libraryBook.findUnique({
+        where: { id: issue.bookId },
+      });
       if (book && book.available > 0) {
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + this.DEFAULT_BORROW_DAYS);
@@ -107,7 +118,7 @@ export class LibraryService {
             enrollmentId: reservation.enrollmentId,
             issueDate: now,
             dueDate,
-            status: "Issued",
+            status: 'Issued',
           },
         });
 
@@ -136,13 +147,19 @@ export class LibraryService {
     return this.prisma.bookIssue.findMany({
       where: { enrollmentId },
       include: { book: true, fines: true },
-      orderBy: { issueDate: "desc" }
+      orderBy: { issueDate: 'desc' },
     });
   }
 
-  async createReservation(bookId: string, enrollmentId: string, expiresAt?: string) {
-    const book = await this.prisma.libraryBook.findUnique({ where: { id: bookId } });
-    if (!book) throw new NotFoundException("Book not found");
+  async createReservation(
+    bookId: string,
+    enrollmentId: string,
+    expiresAt?: string,
+  ) {
+    const book = await this.prisma.libraryBook.findUnique({
+      where: { id: bookId },
+    });
+    if (!book) throw new NotFoundException('Book not found');
 
     // Allow reservation even if available; admin may choose to fulfill later.
     // We still store it so the next return can auto-fulfill.
@@ -186,7 +203,11 @@ export class LibraryService {
     return reservationRows?.[0];
   }
 
-  async listReservations(bookId?: string, enrollmentId?: string, status?: string) {
+  async listReservations(
+    bookId?: string,
+    enrollmentId?: string,
+    status?: string,
+  ) {
     // Raw SQL to avoid requiring a regenerated Prisma client for LibraryReservation
     // (useful when Prisma generation isn't available yet).
     const rows = await this.prisma.$queryRaw<any[]>`
@@ -240,7 +261,7 @@ export class LibraryService {
     `;
 
     const updated = rows?.[0];
-    if (!updated) throw new NotFoundException("Reservation not found");
+    if (!updated) throw new NotFoundException('Reservation not found');
     return updated;
   }
 
@@ -265,7 +286,7 @@ export class LibraryService {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
   }
 }

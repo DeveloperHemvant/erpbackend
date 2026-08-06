@@ -1,11 +1,11 @@
-import { BadRequestException } from "@nestjs/common";
-import { extname } from "path";
-import { diskStorage } from "multer";
-import type { Request } from "express";
+import { BadRequestException } from '@nestjs/common';
+import { extname } from 'path';
+import { diskStorage } from 'multer';
+import type { Request } from 'express';
 
-const UPLOAD_ROOT = "uploads";
+const UPLOAD_ROOT = 'uploads';
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 
 /**
  * Real disk-backed multer config for a given subfolder (e.g. "events",
@@ -17,16 +17,29 @@ export function imageUploadOptions(subfolder: string) {
   return {
     storage: diskStorage({
       destination: `./${UPLOAD_ROOT}/${subfolder}`,
-      filename: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
+      filename: (
+        _req: Request,
+        file: Express.Multer.File,
+        cb: (error: Error | null, filename: string) => void,
+      ) => {
         const ext = extname(file.originalname).toLowerCase();
         const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
         cb(null, unique);
       },
     }),
-    fileFilter: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, accept: boolean) => void) => {
+    fileFilter: (
+      _req: Request,
+      file: Express.Multer.File,
+      cb: (error: Error | null, accept: boolean) => void,
+    ) => {
       const ext = extname(file.originalname).toLowerCase();
       if (!ALLOWED_EXTENSIONS.includes(ext)) {
-        cb(new BadRequestException(`Unsupported image type "${ext}". Allowed: ${ALLOWED_EXTENSIONS.join(", ")}`), false);
+        cb(
+          new BadRequestException(
+            `Unsupported image type "${ext}". Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`,
+          ),
+          false,
+        );
         return;
       }
       cb(null, true);

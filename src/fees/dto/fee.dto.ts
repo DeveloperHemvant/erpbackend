@@ -1,72 +1,85 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsNumber, IsIn } from "class-validator";
+import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsNumber,
+  IsIn,
+} from 'class-validator';
 
 export class CreateFeeStructureDto {
-  @ApiProperty({ example: "Grade 10 General" })
+  @ApiProperty({ example: 'Grade 10 General' })
   @IsString()
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: "15000" })
+  @ApiProperty({ example: '15000' })
   @IsString()
   @IsNotEmpty()
   amount: string;
 
-  @ApiProperty({ example: "Monthly", enum: ["Monthly", "Quarterly", "Annual"] })
+  @ApiProperty({ example: 'Monthly', enum: ['Monthly', 'Quarterly', 'Annual'] })
   @IsString()
   @IsNotEmpty()
   cycle: string;
 
-  @ApiProperty({ example: "e936551b-4d43-4011-8fe6-b3334863adfb" })
+  @ApiProperty({ example: 'e936551b-4d43-4011-8fe6-b3334863adfb' })
   @IsUUID()
   @IsNotEmpty()
   sessionId: string;
 
-  @ApiProperty({ example: "e936551b-4d43-4011-8fe6-b3334863adfb", required: false })
+  @ApiProperty({
+    example: 'e936551b-4d43-4011-8fe6-b3334863adfb',
+    required: false,
+  })
   @IsUUID()
   @IsOptional()
   classId?: string;
 }
 
 export class CreateFeeInvoiceDto {
-  @ApiProperty({ example: "e936551b-4d43-4011-8fe6-b3334863adfb" })
+  @ApiProperty({ example: 'e936551b-4d43-4011-8fe6-b3334863adfb' })
   @IsUUID()
   @IsNotEmpty()
   studentId: string;
 
-  @ApiProperty({ example: "1500" })
+  @ApiProperty({ example: '1500' })
   @IsString()
   @IsNotEmpty()
   amount: string;
 
-  @ApiProperty({ example: "2026-08-01" })
+  @ApiProperty({ example: '2026-08-01' })
   @IsString()
   @IsNotEmpty()
   dueDate: string;
 
-  @ApiProperty({ example: "Unpaid", enum: ["Paid", "Unpaid", "Overdue"] })
+  @ApiProperty({ example: 'Unpaid', enum: ['Paid', 'Unpaid', 'Overdue'] })
   @IsString()
   @IsNotEmpty()
   status: string;
 }
 
 export class CreateFeePaymentDto {
-  @ApiProperty({ example: "1500" })
+  @ApiProperty({ example: '1500' })
   @IsString()
   @IsNotEmpty()
   amountPaid: string;
 
-  @ApiProperty({ example: "UPI", enum: ["Cash", "UPI", "NetBanking", "Cheque", "Stripe", "Razorpay"] })
+  @ApiProperty({
+    example: 'UPI',
+    enum: ['Cash', 'UPI', 'NetBanking', 'Cheque', 'Stripe', 'Razorpay'],
+  })
   @IsString()
   @IsNotEmpty()
   paymentMode: string;
 
-  @ApiProperty({ example: "UPI-Ref-12345", required: false })
+  @ApiProperty({ example: 'UPI-Ref-12345', required: false })
   @IsString()
   @IsOptional()
   referenceNo?: string;
 
-  @ApiProperty({ example: "2026-07-19" })
+  @ApiProperty({ example: '2026-07-19' })
   @IsString()
   @IsNotEmpty()
   paymentDate: string;
@@ -77,17 +90,21 @@ export class CreateFeePaymentDto {
 }
 
 export class RequestRefundDto {
-  @ApiProperty({ example: "500" })
+  @ApiProperty({ example: '500' })
   @IsString()
   @IsNotEmpty()
   amount: string;
 
-  @ApiProperty({ example: "Duplicate payment recorded by front desk" })
+  @ApiProperty({ example: 'Duplicate payment recorded by front desk' })
   @IsString()
   @IsNotEmpty()
   reason: string;
 
-  @ApiProperty({ example: "UPI", enum: ["Cash", "UPI", "NetBanking", "Cheque", "Original"], required: false })
+  @ApiProperty({
+    example: 'UPI',
+    enum: ['Cash', 'UPI', 'NetBanking', 'Cheque', 'Original'],
+    required: false,
+  })
   @IsString()
   @IsOptional()
   refundMode?: string;
@@ -99,12 +116,12 @@ export class RequestRefundDto {
 }
 
 export class ResolveRefundDto {
-  @ApiProperty({ example: "Approved", enum: ["Approved", "Rejected"] })
-  @IsIn(["Approved", "Rejected"])
+  @ApiProperty({ example: 'Approved', enum: ['Approved', 'Rejected'] })
+  @IsIn(['Approved', 'Rejected'])
   @IsNotEmpty()
   status: string;
 
-  @ApiProperty({ example: "REFUND-UPI-REF-1", required: false })
+  @ApiProperty({ example: 'REFUND-UPI-REF-1', required: false })
   @IsString()
   @IsOptional()
   referenceNo?: string;
@@ -121,7 +138,7 @@ export class ResolveRefundDto {
 }
 
 export class WebhookPaymentDto {
-  @ApiProperty({ example: "e936551b-4d43-4011-8fe6-b3334863adfb" })
+  @ApiProperty({ example: 'e936551b-4d43-4011-8fe6-b3334863adfb' })
   @IsUUID()
   @IsNotEmpty()
   invoiceId: string;
@@ -131,12 +148,16 @@ export class WebhookPaymentDto {
   @IsNotEmpty()
   amountPaid: number;
 
-  @ApiProperty({ example: "Stripe", enum: ["Stripe", "Razorpay"], required: false })
+  @ApiProperty({
+    example: 'Stripe',
+    enum: ['Stripe', 'Razorpay'],
+    required: false,
+  })
   @IsString()
   @IsOptional()
   paymentMode?: string;
 
-  @ApiProperty({ example: "pay_ABC123", required: false })
+  @ApiProperty({ example: 'pay_ABC123', required: false })
   @IsString()
   @IsOptional()
   referenceNo?: string;

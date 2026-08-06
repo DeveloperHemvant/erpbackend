@@ -1,17 +1,17 @@
-import { Controller, Post, Body } from "@nestjs/common";
-import { PromotionsService } from "./promotions.service";
-import { PreviewPromotionDto, CommitPromotionDto } from "./dto/promotion.dto";
+import { Controller, Post, Body } from '@nestjs/common';
+import { PromotionsService } from './promotions.service';
+import { PreviewPromotionDto, CommitPromotionDto } from './dto/promotion.dto';
 
-@Controller("promotions")
+@Controller('promotions')
 export class PromotionsController {
   constructor(private readonly promotionsService: PromotionsService) {}
 
-  @Post("preview")
+  @Post('preview')
   preview(@Body() dto: PreviewPromotionDto) {
     return this.promotionsService.preview(dto);
   }
 
-  @Post("commit")
+  @Post('commit')
   commit(@Body() dto: CommitPromotionDto) {
     return this.promotionsService.commit(dto);
   }

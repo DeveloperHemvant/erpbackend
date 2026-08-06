@@ -1,5 +1,14 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsInt, IsNumber, IsBoolean, IsIn } from "class-validator";
-import { PartialType } from "@nestjs/swagger";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsInt,
+  IsNumber,
+  IsBoolean,
+  IsIn,
+} from 'class-validator';
+import { PartialType } from '@nestjs/swagger';
 
 export class CreateVehicleDto {
   @IsString()
@@ -763,7 +772,7 @@ export class CreateDailyCheckDto {
 
 // --- Fuel / expense approval ---
 export class ResolveFuelLogDto {
-  @IsIn(["Approved", "Rejected"])
+  @IsIn(['Approved', 'Rejected'])
   @IsNotEmpty()
   status: string;
 
@@ -773,7 +782,7 @@ export class ResolveFuelLogDto {
 }
 
 export class ResolveTransportExpenseDto {
-  @IsIn(["Approved", "Rejected"])
+  @IsIn(['Approved', 'Rejected'])
   @IsNotEmpty()
   status: string;
 

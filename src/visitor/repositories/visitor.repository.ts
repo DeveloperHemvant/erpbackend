@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class VisitorRepository {
@@ -21,7 +21,7 @@ export class VisitorRepository {
     return this.prisma.visitorRecord.findMany({
       where,
       include: { host: true },
-      orderBy: { entryTime: "desc" },
+      orderBy: { entryTime: 'desc' },
     });
   }
 
@@ -47,7 +47,7 @@ export class VisitorRepository {
     return this.prisma.studentGatePass.findMany({
       where,
       include: { student: true, approvedBy: true },
-      orderBy: { exitTime: "desc" },
+      orderBy: { exitTime: 'desc' },
     });
   }
 

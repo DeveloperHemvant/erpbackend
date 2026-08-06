@@ -17,9 +17,33 @@ describe('RulesEngineService', () => {
     active: true,
     definition: {
       conditions: [
-        { field: 'isStaffChild', op: '==', value: true, then: { discountPercent: 100, reason: 'Staff Child Concession (100% Free)' } },
-        { field: 'siblingCount', op: '>=', value: 3, then: { discountPercent: 100, reason: 'Sibling Concession (3+ children: 100% Free)' } },
-        { field: 'siblingCount', op: '==', value: 2, then: { discountPercent: 20, reason: 'Sibling Concession (2 children: 20% Discount)' } },
+        {
+          field: 'isStaffChild',
+          op: '==',
+          value: true,
+          then: {
+            discountPercent: 100,
+            reason: 'Staff Child Concession (100% Free)',
+          },
+        },
+        {
+          field: 'siblingCount',
+          op: '>=',
+          value: 3,
+          then: {
+            discountPercent: 100,
+            reason: 'Sibling Concession (3+ children: 100% Free)',
+          },
+        },
+        {
+          field: 'siblingCount',
+          op: '==',
+          value: 2,
+          then: {
+            discountPercent: 20,
+            reason: 'Sibling Concession (2 children: 20% Discount)',
+          },
+        },
       ],
       default: { discountPercent: 0, reason: 'None' },
     },
@@ -45,44 +69,72 @@ describe('RulesEngineService', () => {
     it('throws NotFoundException for an unknown rule key', async () => {
       mockRepository.findByKey.mockResolvedValue(null);
 
-      await expect(service.evaluate('does-not-exist', {})).rejects.toThrow(NotFoundException);
+      await expect(service.evaluate('does-not-exist', {})).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws NotFoundException for an inactive rule', async () => {
-      mockRepository.findByKey.mockResolvedValue({ ...siblingDiscountRule, active: false });
+      mockRepository.findByKey.mockResolvedValue({
+        ...siblingDiscountRule,
+        active: false,
+      });
 
-      await expect(service.evaluate('sibling-discount', {})).rejects.toThrow(NotFoundException);
+      await expect(service.evaluate('sibling-discount', {})).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('matches the staff-child condition before sibling-count conditions', async () => {
       mockRepository.findByKey.mockResolvedValue(siblingDiscountRule);
 
-      const result = await service.evaluate('sibling-discount', { isStaffChild: true, siblingCount: 0 });
+      const result = await service.evaluate('sibling-discount', {
+        isStaffChild: true,
+        siblingCount: 0,
+      });
 
       expect(result.matched).toBe(true);
-      expect(result.result).toEqual({ discountPercent: 100, reason: 'Staff Child Concession (100% Free)' });
+      expect(result.result).toEqual({
+        discountPercent: 100,
+        reason: 'Staff Child Concession (100% Free)',
+      });
     });
 
     it('matches the 3+ siblings condition when staff-child is false', async () => {
       mockRepository.findByKey.mockResolvedValue(siblingDiscountRule);
 
-      const result = await service.evaluate('sibling-discount', { isStaffChild: false, siblingCount: 3 });
+      const result = await service.evaluate('sibling-discount', {
+        isStaffChild: false,
+        siblingCount: 3,
+      });
 
-      expect(result.result).toEqual({ discountPercent: 100, reason: 'Sibling Concession (3+ children: 100% Free)' });
+      expect(result.result).toEqual({
+        discountPercent: 100,
+        reason: 'Sibling Concession (3+ children: 100% Free)',
+      });
     });
 
     it('matches the exactly-2-siblings condition', async () => {
       mockRepository.findByKey.mockResolvedValue(siblingDiscountRule);
 
-      const result = await service.evaluate('sibling-discount', { isStaffChild: false, siblingCount: 2 });
+      const result = await service.evaluate('sibling-discount', {
+        isStaffChild: false,
+        siblingCount: 2,
+      });
 
-      expect(result.result).toEqual({ discountPercent: 20, reason: 'Sibling Concession (2 children: 20% Discount)' });
+      expect(result.result).toEqual({
+        discountPercent: 20,
+        reason: 'Sibling Concession (2 children: 20% Discount)',
+      });
     });
 
     it('falls back to the default when no condition matches', async () => {
       mockRepository.findByKey.mockResolvedValue(siblingDiscountRule);
 
-      const result = await service.evaluate('sibling-discount', { isStaffChild: false, siblingCount: 1 });
+      const result = await service.evaluate('sibling-discount', {
+        isStaffChild: false,
+        siblingCount: 1,
+      });
 
       expect(result.matched).toBe(false);
       expect(result.result).toEqual({ discountPercent: 0, reason: 'None' });

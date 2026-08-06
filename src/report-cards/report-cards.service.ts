@@ -1,8 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { CommunicationService } from "../communication/communication.service";
-import { ExamRepository } from "../exams/repositories/exam.repository";
-import { ReportCardRepository } from "./repositories/report-card.repository";
-import { CreateReportCardDto } from "./dto/report-card.dto";
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { CommunicationService } from '../communication/communication.service';
+import { ExamRepository } from '../exams/repositories/exam.repository';
+import { ReportCardRepository } from './repositories/report-card.repository';
+import { CreateReportCardDto } from './dto/report-card.dto';
 
 @Injectable()
 export class ReportCardsService {
@@ -19,7 +23,7 @@ export class ReportCardsService {
       gpa: dto.gpa,
       remarks: dto.remarks || null,
       isApproved: dto.isApproved || false,
-      createdBy: "SYSTEM",
+      createdBy: 'SYSTEM',
     });
   }
 
@@ -29,7 +33,7 @@ export class ReportCardsService {
 
   async updateReportCardApproval(id: string, isApproved: boolean) {
     const card = await this.reportCardRepository.findById(id);
-    if (!card) throw new NotFoundException("Report card not found.");
+    if (!card) throw new NotFoundException('Report card not found.');
 
     return this.reportCardRepository.updateApproval(id, isApproved);
   }
@@ -39,52 +43,78 @@ export class ReportCardsService {
   }
 
   async generateReportCard(enrollmentId: string, examId: string) {
-    const marks = await this.examRepository.findMarksForReportCard(enrollmentId, examId);
+    const marks = await this.examRepository.findMarksForReportCard(
+      enrollmentId,
+      examId,
+    );
 
     if (marks.length === 0) {
-      throw new BadRequestException("No marks found for this student in this exam.");
+      throw new BadRequestException(
+        'No marks found for this student in this exam.',
+      );
     }
 
     let totalMarks = 0;
-    let maxMarks = marks.length * 100; // assuming each subject is out of 100
+    const maxMarks = marks.length * 100; // assuming each subject is out of 100
     const computedData: any = { subjects: [] };
 
-    marks.forEach(m => {
-      totalMarks += m.isAbsent ? 0 : (m.marksObtained || 0);
+    marks.forEach((m) => {
+      totalMarks += m.isAbsent ? 0 : m.marksObtained || 0;
       computedData.subjects.push({
         subject: m.examSlot.subject.name,
         marksObtained: m.marksObtained,
-        isAbsent: m.isAbsent
+        isAbsent: m.isAbsent,
       });
     });
 
     const percentage = (totalMarks / maxMarks) * 100;
-    let gpa = "F";
-    if (percentage >= 90) gpa = "A+";
-    else if (percentage >= 80) gpa = "A";
-    else if (percentage >= 70) gpa = "B+";
-    else if (percentage >= 60) gpa = "B";
-    else if (percentage >= 50) gpa = "C";
-    else if (percentage >= 40) gpa = "D";
+    let gpa = 'F';
+    if (percentage >= 90) gpa = 'A+';
+    else if (percentage >= 80) gpa = 'A';
+    else if (percentage >= 70) gpa = 'B+';
+    else if (percentage >= 60) gpa = 'B';
+    else if (percentage >= 50) gpa = 'C';
+    else if (percentage >= 40) gpa = 'D';
 
     computedData.percentage = percentage.toFixed(2);
     computedData.totalMarks = totalMarks;
 
-    const existingCard = await this.reportCardRepository.findByEnrollmentAndExam(enrollmentId, examId);
+    const existingCard =
+      await this.reportCardRepository.findByEnrollmentAndExam(
+        enrollmentId,
+        examId,
+      );
 
     if (existingCard) {
-      const updatedCard = await this.reportCardRepository.updateComputed(existingCard.id, gpa, computedData);
+      const updatedCard = await this.reportCardRepository.updateComputed(
+        existingCard.id,
+        gpa,
+        computedData,
+      );
 
       if (updatedCard.enrollment?.studentId && updatedCard.exam?.name) {
-        this.commService.sendGradeAlert(updatedCard.enrollment.studentId, updatedCard.exam.name).catch(console.error);
+        this.commService
+          .sendGradeAlert(
+            updatedCard.enrollment.studentId,
+            updatedCard.exam.name,
+          )
+          .catch(console.error);
       }
       return updatedCard;
     }
 
-    const newCard = await this.reportCardRepository.createComputed(enrollmentId, examId, "95%", gpa, computedData);
+    const newCard = await this.reportCardRepository.createComputed(
+      enrollmentId,
+      examId,
+      '95%',
+      gpa,
+      computedData,
+    );
 
     if (newCard.enrollment?.studentId && newCard.exam?.name) {
-      this.commService.sendGradeAlert(newCard.enrollment.studentId, newCard.exam.name).catch(console.error);
+      this.commService
+        .sendGradeAlert(newCard.enrollment.studentId, newCard.exam.name)
+        .catch(console.error);
     }
     return newCard;
   }

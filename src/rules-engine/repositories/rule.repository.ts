@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class RuleRepository {
@@ -18,7 +18,11 @@ export class RuleRepository {
     return this.prisma.rule.upsert({
       where: { key },
       create: data,
-      update: { description: data.description, definition: data.definition, active: data.active },
+      update: {
+        description: data.description,
+        definition: data.definition,
+        active: data.active,
+      },
     });
   }
 }

@@ -1,7 +1,11 @@
-import { Injectable } from "@nestjs/common";
-import { HealthRecordsRepository } from "./repositories/health-records.repository";
-import { CommunicationService } from "../communication/communication.service";
-import { UpsertHealthProfileDto, CreateHealthVisitDto, CreateVaccinationDto } from "./dto/health-records.dto";
+import { Injectable } from '@nestjs/common';
+import { HealthRecordsRepository } from './repositories/health-records.repository';
+import { CommunicationService } from '../communication/communication.service';
+import {
+  UpsertHealthProfileDto,
+  CreateHealthVisitDto,
+  CreateVaccinationDto,
+} from './dto/health-records.dto';
 
 @Injectable()
 export class HealthRecordsService {
@@ -18,7 +22,11 @@ export class HealthRecordsService {
     return this.repository.upsertProfile(studentId, dto);
   }
 
-  async logVisit(studentId: string, staffId: string, dto: CreateHealthVisitDto) {
+  async logVisit(
+    studentId: string,
+    staffId: string,
+    dto: CreateHealthVisitDto,
+  ) {
     const { notifyParent, ...rest } = dto;
     const visit = await this.repository.createVisit({
       studentId,
@@ -28,9 +36,13 @@ export class HealthRecordsService {
     });
 
     if (notifyParent) {
-      const title = "Health Centre Visit";
+      const title = 'Health Centre Visit';
       const body = `${visit.student.fullName} visited the health centre today: ${dto.reason}. Action taken: ${visit.actionTaken}.`;
-      this.communicationService.sendCustomAlert(studentId, title, body).catch((err) => console.error("Failed to notify parent of health visit", err));
+      this.communicationService
+        .sendCustomAlert(studentId, title, body)
+        .catch((err) =>
+          console.error('Failed to notify parent of health visit', err),
+        );
     }
 
     return visit;

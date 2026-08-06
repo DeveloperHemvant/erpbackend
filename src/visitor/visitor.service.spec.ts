@@ -1,8 +1,8 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { VisitorService } from "./visitor.service";
-import { VisitorRepository } from "./repositories/visitor.repository";
+import { Test, TestingModule } from '@nestjs/testing';
+import { VisitorService } from './visitor.service';
+import { VisitorRepository } from './repositories/visitor.repository';
 
-describe("VisitorService", () => {
+describe('VisitorService', () => {
   let service: VisitorService;
 
   const mockRepository = {
@@ -27,29 +27,39 @@ describe("VisitorService", () => {
     service = module.get<VisitorService>(VisitorService);
   });
 
-  it("should be defined", () => {
+  it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it("creates a visitor record with status CheckedIn", async () => {
+  it('creates a visitor record with status CheckedIn', async () => {
     const dto = {
-      fullName: "Alice Smith",
-      phone: "1234567890",
-      purpose: "Meeting",
-      hostId: "staff-uuid",
+      fullName: 'Alice Smith',
+      phone: '1234567890',
+      purpose: 'Meeting',
+      hostId: 'staff-uuid',
     };
-    mockRepository.createVisitor.mockResolvedValue({ id: "visitor-uuid", ...dto, status: "CheckedIn" });
+    mockRepository.createVisitor.mockResolvedValue({
+      id: 'visitor-uuid',
+      ...dto,
+      status: 'CheckedIn',
+    });
 
     const result = await service.createVisitor(dto);
-    expect(result.status).toBe("CheckedIn");
+    expect(result.status).toBe('CheckedIn');
     expect(mockRepository.createVisitor).toHaveBeenCalled();
   });
 
-  it("checks out a visitor record", async () => {
-    mockRepository.findVisitorById.mockResolvedValue({ id: "visitor-uuid", status: "CheckedIn" });
-    mockRepository.updateVisitor.mockResolvedValue({ id: "visitor-uuid", status: "CheckedOut" });
+  it('checks out a visitor record', async () => {
+    mockRepository.findVisitorById.mockResolvedValue({
+      id: 'visitor-uuid',
+      status: 'CheckedIn',
+    });
+    mockRepository.updateVisitor.mockResolvedValue({
+      id: 'visitor-uuid',
+      status: 'CheckedOut',
+    });
 
-    const result = await service.checkOutVisitor("visitor-uuid");
-    expect(result.status).toBe("CheckedOut");
+    const result = await service.checkOutVisitor('visitor-uuid');
+    expect(result.status).toBe('CheckedOut');
   });
 });

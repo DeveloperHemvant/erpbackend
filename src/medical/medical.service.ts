@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { MedicalRepository } from "./repositories/medical.repository";
-import { CreateMedicalVisitDto } from "./dto/medical.dto";
+import { Injectable } from '@nestjs/common';
+import { MedicalRepository } from './repositories/medical.repository';
+import { CreateMedicalVisitDto } from './dto/medical.dto';
 
 @Injectable()
 export class MedicalService {
@@ -9,10 +9,12 @@ export class MedicalService {
   async createVisit(staffId: string, dto: CreateMedicalVisitDto) {
     return this.repository.createVisit({
       studentId: dto.studentId,
-      reason: dto.symptoms || "Medical Room Visit",
+      reason: dto.symptoms || 'Medical Room Visit',
       symptoms: dto.symptoms,
-      treatmentGiven: dto.treatment || dto.medicineIssued || "First Aid",
-      actionTaken: dto.referredToDoctor ? "Referred to Doctor" : "Observed and Released",
+      treatmentGiven: dto.treatment || dto.medicineIssued || 'First Aid',
+      actionTaken: dto.referredToDoctor
+        ? 'Referred to Doctor'
+        : 'Observed and Released',
       loggedByStaffId: staffId,
       visitDate: new Date(),
     });

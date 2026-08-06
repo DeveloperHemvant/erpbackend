@@ -1,8 +1,8 @@
-import { ForbiddenException, Injectable } from "@nestjs/common";
-import { CommentRepository } from "./repositories/comment.repository";
-import { CreateCommentDto } from "./dto/comment.dto";
-import { canAccessEntityType } from "../common/entity-permissions";
-import type { AuthenticatedUser } from "../auth/current-user.decorator";
+import { ForbiddenException, Injectable } from '@nestjs/common';
+import { CommentRepository } from './repositories/comment.repository';
+import { CreateCommentDto } from './dto/comment.dto';
+import { canAccessEntityType } from '../common/entity-permissions';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
 /**
  * Generic {entityType, entityId}-keyed comment thread (IA §16 #6) — one
@@ -13,16 +13,24 @@ import type { AuthenticatedUser } from "../auth/current-user.decorator";
 export class CommentsService {
   constructor(private readonly repository: CommentRepository) {}
 
-  async getComments(entityType: string, entityId: string, user: AuthenticatedUser) {
+  async getComments(
+    entityType: string,
+    entityId: string,
+    user: AuthenticatedUser,
+  ) {
     if (!canAccessEntityType(user.permissions, entityType)) {
-      throw new ForbiddenException("You do not have permission to view this record's comments.");
+      throw new ForbiddenException(
+        "You do not have permission to view this record's comments.",
+      );
     }
     return this.repository.findByEntity(entityType, entityId);
   }
 
   async createComment(dto: CreateCommentDto, user: AuthenticatedUser) {
     if (!canAccessEntityType(user.permissions, dto.entityType)) {
-      throw new ForbiddenException("You do not have permission to comment on this record.");
+      throw new ForbiddenException(
+        'You do not have permission to comment on this record.',
+      );
     }
     return this.repository.create({
       entityType: dto.entityType,

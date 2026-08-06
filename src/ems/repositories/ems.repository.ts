@@ -1,10 +1,10 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import * as bcrypt from "bcrypt";
-import { randomUUID } from "crypto";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
+import { PrismaService } from '../../prisma/prisma.service';
 
-const SYSTEM_GRADER_EMAIL = "system.grader@internal.ems";
+const SYSTEM_GRADER_EMAIL = 'system.grader@internal.ems';
 
 @Injectable()
 export class EmsRepository {
@@ -16,7 +16,9 @@ export class EmsRepository {
   }
 
   findAllSessions() {
-    return this.prisma.eMSExamSession.findMany({ include: { schedules: true } });
+    return this.prisma.eMSExamSession.findMany({
+      include: { schedules: true },
+    });
   }
 
   deleteSession(id: string) {
@@ -42,7 +44,9 @@ export class EmsRepository {
   }
 
   findAllTemplates() {
-    return this.prisma.eMSExamTemplate.findMany({ include: { type: true, schedules: true } });
+    return this.prisma.eMSExamTemplate.findMany({
+      include: { type: true, schedules: true },
+    });
   }
 
   deleteTemplate(id: string) {
@@ -59,8 +63,12 @@ export class EmsRepository {
 
   findAllSchedules() {
     return this.prisma.eMSExamSchedule.findMany({
-      include: { subject: true, template: { include: { type: true } }, rooms: true },
-      orderBy: { date: "asc" },
+      include: {
+        subject: true,
+        template: { include: { type: true } },
+        rooms: true,
+      },
+      orderBy: { date: 'asc' },
     });
   }
 
@@ -71,15 +79,32 @@ export class EmsRepository {
   findScheduleWithQuestionPaper(id: string) {
     return this.prisma.eMSExamSchedule.findUnique({
       where: { id },
-      include: { questionPaper: { include: { items: { include: { question: true }, orderBy: { sequence: "asc" } } } } },
+      include: {
+        questionPaper: {
+          include: {
+            items: {
+              include: { question: true },
+              orderBy: { sequence: 'asc' },
+            },
+          },
+        },
+      },
     });
   }
 
   findSchedulesBySession(sessionId: string) {
-    return this.prisma.eMSExamSchedule.findMany({ where: { sessionId }, include: { template: true } });
+    return this.prisma.eMSExamSchedule.findMany({
+      where: { sessionId },
+      include: { template: true },
+    });
   }
 
-  updateScheduleQuestionPaper(id: string, questionPaperId: string, mode: string, durationMin: number) {
+  updateScheduleQuestionPaper(
+    id: string,
+    questionPaperId: string,
+    mode: string,
+    durationMin: number,
+  ) {
     return this.prisma.eMSExamSchedule.update({
       where: { id },
       data: { questionPaperId, mode, durationMin },
@@ -109,7 +134,10 @@ export class EmsRepository {
   findRoomsForSchedule(scheduleId: string) {
     return this.prisma.eMSExamRoom.findMany({
       where: { scheduleId },
-      include: { seatings: { include: { student: true } }, invigilators: { include: { staff: true } } },
+      include: {
+        seatings: { include: { student: true } },
+        invigilators: { include: { staff: true } },
+      },
     });
   }
 
@@ -120,9 +148,9 @@ export class EmsRepository {
   // --- Enrolled students helper ---
   findEnrolledStudentsForClass(classId: string) {
     return this.prisma.studentEnrollment.findMany({
-      where: { section: { classId }, status: "Enrolled" },
+      where: { section: { classId }, status: 'Enrolled' },
       include: { student: true },
-      orderBy: { rollNumber: "asc" },
+      orderBy: { rollNumber: 'asc' },
     });
   }
 
@@ -136,19 +164,27 @@ export class EmsRepository {
   }
 
   findSeatingsForRoom(roomId: string) {
-    return this.prisma.eMSExamSeating.findMany({ where: { roomId }, include: { student: true } });
+    return this.prisma.eMSExamSeating.findMany({
+      where: { roomId },
+      include: { student: true },
+    });
   }
 
   findSeatingsForStudentSchedules(studentId: string, scheduleIds: string[]) {
     return this.prisma.eMSExamSeating.findMany({
       where: { studentId, room: { scheduleId: { in: scheduleIds } } },
-      include: { room: { include: { invigilators: { include: { staff: true } } } } },
+      include: {
+        room: { include: { invigilators: { include: { staff: true } } } },
+      },
     });
   }
 
   // --- Invigilators ---
   createInvigilator(data: Prisma.EMSInvigilatorUncheckedCreateInput) {
-    return this.prisma.eMSInvigilator.create({ data, include: { staff: true } });
+    return this.prisma.eMSInvigilator.create({
+      data,
+      include: { staff: true },
+    });
   }
 
   deleteInvigilator(id: string) {
@@ -166,7 +202,7 @@ export class EmsRepository {
           },
         },
       },
-      orderBy: { room: { schedule: { date: "asc" } } },
+      orderBy: { room: { schedule: { date: 'asc' } } },
     });
   }
 
@@ -176,7 +212,9 @@ export class EmsRepository {
   }
 
   findAllQuestionBanks() {
-    return this.prisma.eMSQuestionBank.findMany({ include: { questions: true, subject: true } });
+    return this.prisma.eMSQuestionBank.findMany({
+      include: { questions: true, subject: true },
+    });
   }
 
   deleteQuestionBank(id: string) {
@@ -189,7 +227,10 @@ export class EmsRepository {
   }
 
   findQuestionsByBank(questionBankId: string) {
-    return this.prisma.eMSQuestion.findMany({ where: { questionBankId }, orderBy: { createdAt: "desc" } });
+    return this.prisma.eMSQuestion.findMany({
+      where: { questionBankId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   findQuestionsByIds(ids: string[]) {
@@ -207,20 +248,28 @@ export class EmsRepository {
 
   findAllQuestionPapers() {
     return this.prisma.eMSQuestionPaper.findMany({
-      include: { subject: true, items: { include: { question: true }, orderBy: { sequence: "asc" } } },
-      orderBy: { createdAt: "desc" },
+      include: {
+        subject: true,
+        items: { include: { question: true }, orderBy: { sequence: 'asc' } },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   findQuestionPaperById(id: string) {
     return this.prisma.eMSQuestionPaper.findUnique({
       where: { id },
-      include: { items: { include: { question: true }, orderBy: { sequence: "asc" } } },
+      include: {
+        items: { include: { question: true }, orderBy: { sequence: 'asc' } },
+      },
     });
   }
 
   approveQuestionPaper(id: string) {
-    return this.prisma.eMSQuestionPaper.update({ where: { id }, data: { isApproved: true } });
+    return this.prisma.eMSQuestionPaper.update({
+      where: { id },
+      data: { isApproved: true },
+    });
   }
 
   addQuestionPaperItem(data: Prisma.EMSQuestionPaperItemUncheckedCreateInput) {
@@ -228,7 +277,9 @@ export class EmsRepository {
   }
 
   countQuestionPaperItems(questionPaperId: string) {
-    return this.prisma.eMSQuestionPaperItem.count({ where: { questionPaperId } });
+    return this.prisma.eMSQuestionPaperItem.count({
+      where: { questionPaperId },
+    });
   }
 
   // --- Exam Attempts ---
@@ -244,53 +295,77 @@ export class EmsRepository {
   }
 
   findAttemptsForSchedule(scheduleId: string) {
-    return this.prisma.eMSExamAttempt.findMany({ where: { scheduleId }, include: { student: true } });
+    return this.prisma.eMSExamAttempt.findMany({
+      where: { scheduleId },
+      include: { student: true },
+    });
   }
 
   findAttemptsForScheduleWithEvaluations(scheduleId: string) {
-    return this.prisma.eMSExamAttempt.findMany({ where: { scheduleId }, include: { student: true, evaluations: true } });
+    return this.prisma.eMSExamAttempt.findMany({
+      where: { scheduleId },
+      include: { student: true, evaluations: true },
+    });
   }
 
   findAttemptById(id: string) {
-    return this.prisma.eMSExamAttempt.findUnique({ where: { id }, include: { schedule: true, student: true } });
+    return this.prisma.eMSExamAttempt.findUnique({
+      where: { id },
+      include: { schedule: true, student: true },
+    });
   }
 
   findAttemptForStudentSchedule(scheduleId: string, studentId: string) {
-    return this.prisma.eMSExamAttempt.findFirst({ where: { scheduleId, studentId } });
+    return this.prisma.eMSExamAttempt.findFirst({
+      where: { scheduleId, studentId },
+    });
   }
 
   updateAttemptStatus(id: string, status: string) {
-    return this.prisma.eMSExamAttempt.update({ where: { id }, data: { status } });
+    return this.prisma.eMSExamAttempt.update({
+      where: { id },
+      data: { status },
+    });
   }
 
   updateAttemptTiming(id: string, startedAt?: Date, endedAt?: Date) {
-    return this.prisma.eMSExamAttempt.update({ where: { id }, data: { startedAt, endedAt } });
+    return this.prisma.eMSExamAttempt.update({
+      where: { id },
+      data: { startedAt, endedAt },
+    });
   }
 
   findAttemptsByStudent(studentId: string) {
     return this.prisma.eMSExamAttempt.findMany({
       where: { studentId },
       include: {
-        schedule: { include: { subject: true, template: { include: { type: true } } } },
+        schedule: {
+          include: { subject: true, template: { include: { type: true } } },
+        },
         evaluations: true,
       },
-      orderBy: { schedule: { date: "asc" } },
+      orderBy: { schedule: { date: 'asc' } },
     });
   }
 
   findAttemptsByScheduleAndStudents(scheduleId: string, studentIds: string[]) {
-    return this.prisma.eMSExamAttempt.findMany({ where: { scheduleId, studentId: { in: studentIds } } });
+    return this.prisma.eMSExamAttempt.findMany({
+      where: { scheduleId, studentId: { in: studentIds } },
+    });
   }
 
   findAttemptsForSubjects(subjectIds: string[]) {
     return this.prisma.eMSExamAttempt.findMany({
-      where: { schedule: { subjectId: { in: subjectIds } }, status: { not: "ABSENT" } },
+      where: {
+        schedule: { subjectId: { in: subjectIds } },
+        status: { not: 'ABSENT' },
+      },
       include: {
         student: true,
         schedule: { include: { subject: true, template: true } },
         evaluations: true,
       },
-      orderBy: { schedule: { date: "desc" } },
+      orderBy: { schedule: { date: 'desc' } },
     });
   }
 
@@ -309,17 +384,24 @@ export class EmsRepository {
   findOnlineSubmissionById(id: string) {
     return this.prisma.eMSOnlineSubmission.findUnique({
       where: { id },
-      include: { answers: true, attempt: { include: { student: true } }, schedule: true },
+      include: {
+        answers: true,
+        attempt: { include: { student: true } },
+        schedule: true,
+      },
     });
   }
 
-  updateOnlineSubmissionStatus(id: string, data: Prisma.EMSOnlineSubmissionUncheckedUpdateInput) {
+  updateOnlineSubmissionStatus(
+    id: string,
+    data: Prisma.EMSOnlineSubmissionUncheckedUpdateInput,
+  ) {
     return this.prisma.eMSOnlineSubmission.update({ where: { id }, data });
   }
 
   findInProgressSubmissions() {
     return this.prisma.eMSOnlineSubmission.findMany({
-      where: { status: "IN_PROGRESS" },
+      where: { status: 'IN_PROGRESS' },
       include: { schedule: true, answers: true },
     });
   }
@@ -329,10 +411,16 @@ export class EmsRepository {
   }
 
   findSubmissionsForAttempts(attemptIds: string[]) {
-    return this.prisma.eMSOnlineSubmission.findMany({ where: { attemptId: { in: attemptIds } } });
+    return this.prisma.eMSOnlineSubmission.findMany({
+      where: { attemptId: { in: attemptIds } },
+    });
   }
 
-  upsertAnswer(submissionId: string, questionId: string, data: Prisma.EMSAnswerUncheckedCreateInput) {
+  upsertAnswer(
+    submissionId: string,
+    questionId: string,
+    data: Prisma.EMSAnswerUncheckedCreateInput,
+  ) {
     return this.prisma.eMSAnswer.upsert({
       where: { submissionId_questionId: { submissionId, questionId } },
       update: data,
@@ -341,17 +429,26 @@ export class EmsRepository {
   }
 
   findAnswersForSubmission(submissionId: string) {
-    return this.prisma.eMSAnswer.findMany({ where: { submissionId }, include: { question: true } });
+    return this.prisma.eMSAnswer.findMany({
+      where: { submissionId },
+      include: { question: true },
+    });
   }
 
   // --- Evaluation ---
   createEvaluation(data: Prisma.EMSEvaluationRecordUncheckedCreateInput) {
-    return this.prisma.eMSEvaluationRecord.create({ data, include: { attempt: { include: { student: true } } } });
+    return this.prisma.eMSEvaluationRecord.create({
+      data,
+      include: { attempt: { include: { student: true } } },
+    });
   }
 
   findAllEvaluations() {
     return this.prisma.eMSEvaluationRecord.findMany({
-      include: { attempt: { include: { student: true, schedule: true } }, evaluator: true },
+      include: {
+        attempt: { include: { student: true, schedule: true } },
+        evaluator: true,
+      },
     });
   }
 
@@ -359,7 +456,10 @@ export class EmsRepository {
     return this.prisma.eMSEvaluationRecord.findMany({ where: { attemptId } });
   }
 
-  updateEvaluation(id: string, data: Prisma.EMSEvaluationRecordUncheckedUpdateInput) {
+  updateEvaluation(
+    id: string,
+    data: Prisma.EMSEvaluationRecordUncheckedUpdateInput,
+  ) {
     return this.prisma.eMSEvaluationRecord.update({ where: { id }, data });
   }
 
@@ -371,11 +471,17 @@ export class EmsRepository {
 
   // --- Moderation ---
   createModeration(data: Prisma.EMSModerationRecordUncheckedCreateInput) {
-    return this.prisma.eMSModerationRecord.create({ data, include: { moderator: true } });
+    return this.prisma.eMSModerationRecord.create({
+      data,
+      include: { moderator: true },
+    });
   }
 
   findModerationForSchedule(scheduleId: string) {
-    return this.prisma.eMSModerationRecord.findMany({ where: { scheduleId }, include: { moderator: true } });
+    return this.prisma.eMSModerationRecord.findMany({
+      where: { scheduleId },
+      include: { moderator: true },
+    });
   }
 
   // --- Grading Schemes ---
@@ -384,7 +490,9 @@ export class EmsRepository {
   }
 
   findAllGradingSchemes() {
-    return this.prisma.eMSGradingScheme.findMany({ orderBy: { createdAt: "desc" } });
+    return this.prisma.eMSGradingScheme.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   findGradingSchemeById(id: string) {
@@ -401,7 +509,13 @@ export class EmsRepository {
   }
 
   findAllGradebooks() {
-    return this.prisma.eMSGradebook.findMany({ include: { session: true, class: true, results: { include: { student: true } } } });
+    return this.prisma.eMSGradebook.findMany({
+      include: {
+        session: true,
+        class: true,
+        results: { include: { student: true } },
+      },
+    });
   }
 
   findGradebookById(id: string) {
@@ -432,7 +546,7 @@ export class EmsRepository {
     return this.prisma.eMSResult.findMany({
       where: { studentId },
       include: { gradebook: { include: { session: true, class: true } } },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -444,18 +558,23 @@ export class EmsRepository {
   }
 
   createReportCard(data: Prisma.EMSReportCardUncheckedCreateInput) {
-    return this.prisma.eMSReportCard.create({ data, include: { student: true, session: true } });
+    return this.prisma.eMSReportCard.create({
+      data,
+      include: { student: true, session: true },
+    });
   }
 
   findAllReportCards() {
-    return this.prisma.eMSReportCard.findMany({ include: { student: true, session: true } });
+    return this.prisma.eMSReportCard.findMany({
+      include: { student: true, session: true },
+    });
   }
 
   findReportCardsForStudent(studentId: string) {
     return this.prisma.eMSReportCard.findMany({
       where: { studentId },
       include: { session: true },
-      orderBy: { publishedAt: "desc" },
+      orderBy: { publishedAt: 'desc' },
     });
   }
 
@@ -465,13 +584,19 @@ export class EmsRepository {
   // loosen that constraint (a schema change), we lazily create one inert,
   // non-login Staff row the first time it's needed and reuse it forever.
   async getOrCreateSystemGraderId(): Promise<string> {
-    const existing = await this.prisma.staff.findUnique({ where: { email: SYSTEM_GRADER_EMAIL } });
+    const existing = await this.prisma.staff.findUnique({
+      where: { email: SYSTEM_GRADER_EMAIL },
+    });
     if (existing) return existing.id;
 
-    let role = await this.prisma.role.findFirst({ where: { name: "System" } });
+    let role = await this.prisma.role.findFirst({ where: { name: 'System' } });
     if (!role) {
       role = await this.prisma.role.create({
-        data: { name: "System", description: "Internal automation identity — cannot log in", permissions: [] },
+        data: {
+          name: 'System',
+          description: 'Internal automation identity — cannot log in',
+          permissions: [],
+        },
       });
     }
 
@@ -480,9 +605,9 @@ export class EmsRepository {
       data: {
         email: SYSTEM_GRADER_EMAIL,
         passwordHash,
-        fullName: "Auto-Grader (System)",
+        fullName: 'Auto-Grader (System)',
         roleId: role.id,
-        status: "Inactive",
+        status: 'Inactive',
       },
     });
     return created.id;

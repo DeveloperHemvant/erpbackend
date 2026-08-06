@@ -1,7 +1,18 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseInterceptors, UploadedFile, ParseUUIDPipe } from "@nestjs/common";
-import { FileInterceptor } from "@nestjs/platform-express";
-import { AcmsService } from "./acms.service";
-import { imageUploadOptions, imageUrlFor } from "../common/image-upload";
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseInterceptors,
+  UploadedFile,
+  ParseUUIDPipe,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { AcmsService } from './acms.service';
+import { imageUploadOptions, imageUrlFor } from '../common/image-upload';
 import {
   CreateAcademicTermDto,
   CreateHolidayDto,
@@ -9,104 +20,110 @@ import {
   CreateAcmsEventDto,
   UpdateAcmsEventDto,
   CreateResourceBookingDto,
-} from "./dto/acms.dto";
+} from './dto/acms.dto';
 
-@Controller("acms")
+@Controller('acms')
 export class AcmsController {
   constructor(private readonly acmsService: AcmsService) {}
 
-  @Get("terms")
+  @Get('terms')
   getTerms() {
     return this.acmsService.getTerms();
   }
 
-  @Post("terms")
+  @Post('terms')
   createTerm(@Body() data: CreateAcademicTermDto) {
     return this.acmsService.createTerm({
       ...data,
       startDate: new Date(data.startDate),
-      endDate: new Date(data.endDate)
+      endDate: new Date(data.endDate),
     });
   }
 
-  @Get("holidays")
+  @Get('holidays')
   getHolidays() {
     return this.acmsService.getHolidays();
   }
 
-  @Post("holidays")
+  @Post('holidays')
   createHoliday(@Body() data: CreateHolidayDto) {
     return this.acmsService.createHoliday({
       ...data,
-      date: new Date(data.date)
+      date: new Date(data.date),
     });
   }
 
-  @Get("working-days")
+  @Get('working-days')
   getWorkingDays() {
     return this.acmsService.getWorkingDays();
   }
 
-  @Post("working-days")
+  @Post('working-days')
   createWorkingDay(@Body() data: CreateWorkingDayDto) {
     return this.acmsService.createWorkingDay(data);
   }
 
-  @Get("events")
+  @Get('events')
   getEvents() {
     return this.acmsService.getEvents();
   }
 
-  @Get("events/:id")
-  getEvent(@Param("id", ParseUUIDPipe) id: string) {
+  @Get('events/:id')
+  getEvent(@Param('id', ParseUUIDPipe) id: string) {
     return this.acmsService.getEvent(id);
   }
 
-  @Post("events")
+  @Post('events')
   createEvent(@Body() data: CreateAcmsEventDto) {
     return this.acmsService.createEvent({
       ...data,
       startDate: new Date(data.startDate),
-      endDate: new Date(data.endDate)
+      endDate: new Date(data.endDate),
     });
   }
 
-  @Put("events/:id")
-  updateEvent(@Param("id", ParseUUIDPipe) id: string, @Body() data: UpdateAcmsEventDto) {
+  @Put('events/:id')
+  updateEvent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() data: UpdateAcmsEventDto,
+  ) {
     return this.acmsService.updateEvent(id, {
       ...data,
       startDate: data.startDate ? new Date(data.startDate) : undefined,
-      endDate: data.endDate ? new Date(data.endDate) : undefined
+      endDate: data.endDate ? new Date(data.endDate) : undefined,
     });
   }
 
-  @Delete("events/:id")
-  deleteEvent(@Param("id", ParseUUIDPipe) id: string) {
+  @Delete('events/:id')
+  deleteEvent(@Param('id', ParseUUIDPipe) id: string) {
     return this.acmsService.deleteEvent(id);
   }
 
-  @Post("events/:id/image")
-  @UseInterceptors(FileInterceptor("file", imageUploadOptions("events")))
-  uploadEventImage(@Param("id", ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File) {
-    const imageUrl = imageUrlFor("events", file.filename);
+  @Post('events/:id/image')
+  @UseInterceptors(FileInterceptor('file', imageUploadOptions('events')))
+  uploadEventImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const imageUrl = imageUrlFor('events', file.filename);
     return this.acmsService.setEventImage(id, imageUrl);
   }
 
-  @Get("bookings")
+  @Get('bookings')
   getBookings() {
     return this.acmsService.getBookings();
   }
 
-  @Post("bookings")
+  @Post('bookings')
   createBooking(@Body() data: CreateResourceBookingDto) {
     return this.acmsService.createBooking({
       ...data,
       startDate: new Date(data.startDate),
-      endDate: new Date(data.endDate)
+      endDate: new Date(data.endDate),
     });
   }
 
-  @Get("my-calendar")
+  @Get('my-calendar')
   getUnifiedCalendar() {
     return this.acmsService.getUnifiedCalendar();
   }

@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class DiaryRepository {
@@ -17,11 +17,14 @@ export class DiaryRepository {
     return this.prisma.schoolDiaryEntry.findMany({
       where,
       include: { student: true, teacher: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  updateDiaryEntry(id: string, data: Prisma.SchoolDiaryEntryUncheckedUpdateInput) {
+  updateDiaryEntry(
+    id: string,
+    data: Prisma.SchoolDiaryEntryUncheckedUpdateInput,
+  ) {
     return this.prisma.schoolDiaryEntry.update({ where: { id }, data });
   }
 
@@ -32,7 +35,7 @@ export class DiaryRepository {
   findNewsItems(where?: Prisma.DailyNewsItemWhereInput) {
     return this.prisma.dailyNewsItem.findMany({
       where,
-      orderBy: { date: "desc" },
+      orderBy: { date: 'desc' },
     });
   }
 
@@ -47,7 +50,7 @@ export class DiaryRepository {
     return this.prisma.lostFoundItem.findMany({
       where,
       include: { reporter: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -62,11 +65,14 @@ export class DiaryRepository {
   findDocLifecycles(where?: Prisma.DocumentLifecycleWhereInput) {
     return this.prisma.documentLifecycle.findMany({
       where,
-      orderBy: { expiryDate: "asc" },
+      orderBy: { expiryDate: 'asc' },
     });
   }
 
-  updateDocLifecycle(id: string, data: Prisma.DocumentLifecycleUncheckedUpdateInput) {
+  updateDocLifecycle(
+    id: string,
+    data: Prisma.DocumentLifecycleUncheckedUpdateInput,
+  ) {
     return this.prisma.documentLifecycle.update({ where: { id }, data });
   }
 }

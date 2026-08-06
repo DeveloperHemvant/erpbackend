@@ -17,8 +17,13 @@ describe('AiService', () => {
   });
 
   it('returns an honest not_configured result instead of fabricating an AI response', async () => {
-    const result = await service.infer('summarize-student-360', { studentId: 'abc' });
+    const result = await service.infer('summarize-student-360', {
+      studentId: 'abc',
+    });
 
-    expect(result).toEqual({ status: 'not_configured', task: 'summarize-student-360' });
+    expect(result).toEqual({
+      status: 'not_configured',
+      task: 'summarize-student-360',
+    });
   });
 });

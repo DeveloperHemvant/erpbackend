@@ -1,15 +1,15 @@
-import { IsString, IsNotEmpty, IsOptional, IsIn } from "class-validator";
+import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
 
 export class CreateDocumentTemplateDto {
   @IsString()
   @IsNotEmpty()
   name: string;
 
-  @IsIn(["ID_CARD", "CERTIFICATE"])
+  @IsIn(['ID_CARD', 'CERTIFICATE'])
   @IsNotEmpty()
   type: string;
 
-  @IsIn(["STAFF", "STUDENT"])
+  @IsIn(['STAFF', 'STUDENT'])
   @IsNotEmpty()
   targetAudience: string;
 
@@ -26,11 +26,11 @@ export class UpdateDocumentTemplateDto {
   @IsOptional()
   name?: string;
 
-  @IsIn(["ID_CARD", "CERTIFICATE"])
+  @IsIn(['ID_CARD', 'CERTIFICATE'])
   @IsOptional()
   type?: string;
 
-  @IsIn(["STAFF", "STUDENT"])
+  @IsIn(['STAFF', 'STUDENT'])
   @IsOptional()
   targetAudience?: string;
 

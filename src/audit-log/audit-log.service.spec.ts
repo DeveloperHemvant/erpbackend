@@ -37,7 +37,12 @@ describe('AuditLogService', () => {
 
     it('merges systemAuditLog and auditLog rows sorted by timestamp, newest first', async () => {
       mockPrismaService.systemAuditLog.findMany.mockResolvedValue([
-        { id: 'sys-1', action: 'CREATE', module: 'fees', timestamp: new Date('2026-08-02T10:00:00Z') },
+        {
+          id: 'sys-1',
+          action: 'CREATE',
+          module: 'fees',
+          timestamp: new Date('2026-08-02T10:00:00Z'),
+        },
       ]);
       mockPrismaService.auditLog.findMany.mockResolvedValue([
         {
@@ -67,7 +72,14 @@ describe('AuditLogService', () => {
     it('falls back to SYSTEM as performedBy when the global log has no userEmail', async () => {
       mockPrismaService.systemAuditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.findMany.mockResolvedValue([
-        { id: 'glob-1', action: 'DELETE', tableName: 'fees', recordId: 'r1', userEmail: null, timestamp: new Date() },
+        {
+          id: 'glob-1',
+          action: 'DELETE',
+          tableName: 'fees',
+          recordId: 'r1',
+          userEmail: null,
+          timestamp: new Date(),
+        },
       ]);
 
       const result = await service.getLogs();
@@ -101,14 +113,22 @@ describe('AuditLogService', () => {
       mockPrismaService.systemAuditLog.findMany.mockResolvedValue([]);
       mockPrismaService.auditLog.findMany.mockResolvedValue([]);
 
-      await service.getLogs({ module: 'fees', action: 'CREATE', from: '2026-01-01', to: '2026-01-31' });
+      await service.getLogs({
+        module: 'fees',
+        action: 'CREATE',
+        from: '2026-01-01',
+        to: '2026-01-31',
+      });
 
       expect(mockPrismaService.systemAuditLog.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             module: 'fees',
             action: { contains: 'CREATE', mode: 'insensitive' },
-            timestamp: { gte: new Date('2026-01-01'), lte: new Date('2026-01-31') },
+            timestamp: {
+              gte: new Date('2026-01-01'),
+              lte: new Date('2026-01-31'),
+            },
           }),
         }),
       );

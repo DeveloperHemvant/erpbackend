@@ -1,6 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
-import { CreateHostelDto, AddHostelRoomDto, CreateMessMenuDto, MarkHostelAttendanceDto } from "./dto/hostel.dto";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  CreateHostelDto,
+  AddHostelRoomDto,
+  CreateMessMenuDto,
+  MarkHostelAttendanceDto,
+} from './dto/hostel.dto';
 
 @Injectable()
 export class HostelService {
@@ -16,7 +25,7 @@ export class HostelService {
         rooms: {
           include: {
             allocations: {
-              where: { status: "Active" },
+              where: { status: 'Active' },
               include: {
                 enrollment: {
                   include: {
@@ -40,22 +49,22 @@ export class HostelService {
   async allocateRoom(roomId: string, enrollmentId: string) {
     const room = await this.prisma.hostelRoom.findUnique({
       where: { id: roomId },
-      include: { allocations: { where: { status: "Active" } } },
+      include: { allocations: { where: { status: 'Active' } } },
     });
-    if (!room) throw new NotFoundException("Room not found");
+    if (!room) throw new NotFoundException('Room not found');
     if (room.allocations.length >= room.capacity) {
-      throw new BadRequestException("Room capacity exceeded");
+      throw new BadRequestException('Room capacity exceeded');
     }
 
     return this.prisma.hostelAllocation.create({
-      data: { roomId, enrollmentId }
+      data: { roomId, enrollmentId },
     });
   }
 
   async getActiveAllocations(hostelId?: string) {
     return this.prisma.hostelAllocation.findMany({
       where: {
-        status: "Active",
+        status: 'Active',
         room: hostelId ? { hostelId } : undefined,
       },
       include: {
@@ -67,27 +76,32 @@ export class HostelService {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   async getStudentHostel(enrollmentId: string) {
     return this.prisma.hostelAllocation.findFirst({
-      where: { enrollmentId, status: "Active" },
-      include: { room: { include: { hostel: { include: { menus: true } } } } }
+      where: { enrollmentId, status: 'Active' },
+      include: { room: { include: { hostel: { include: { menus: true } } } } },
     });
   }
 
-  async fileGrievance(hostelId: string, enrollmentId: string, title: string, description: string) {
+  async fileGrievance(
+    hostelId: string,
+    enrollmentId: string,
+    title: string,
+    description: string,
+  ) {
     return this.prisma.hostelGrievance.create({
-      data: { hostelId, enrollmentId, title, description }
+      data: { hostelId, enrollmentId, title, description },
     });
   }
 
   async getGrievances(enrollmentId: string) {
     return this.prisma.hostelGrievance.findMany({
       where: { enrollmentId },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -97,7 +111,7 @@ export class HostelService {
         hostel: true,
         enrollment: { include: { student: true, section: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -128,7 +142,7 @@ export class HostelService {
         enrollment: hostelId
           ? {
               hostelAllocations: {
-                some: { room: { hostelId }, status: "Active" },
+                some: { room: { hostelId }, status: 'Active' },
               },
             }
           : undefined,
@@ -139,13 +153,13 @@ export class HostelService {
             student: true,
             section: { include: { class: true } },
             hostelAllocations: {
-              where: { status: "Active" },
+              where: { status: 'Active' },
               include: { room: { include: { hostel: true } } },
             },
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -161,21 +175,25 @@ export class HostelService {
     return this.prisma.messMenu.delete({ where: { id } });
   }
 
-  async updateAllocation(allocationId: string, status?: string, roomId?: string) {
+  async updateAllocation(
+    allocationId: string,
+    status?: string,
+    roomId?: string,
+  ) {
     const allocation = await this.prisma.hostelAllocation.findUnique({
       where: { id: allocationId },
       include: { room: true },
     });
-    if (!allocation) throw new NotFoundException("Allocation not found");
+    if (!allocation) throw new NotFoundException('Allocation not found');
 
     if (roomId && roomId !== allocation.roomId) {
       const room = await this.prisma.hostelRoom.findUnique({
         where: { id: roomId },
-        include: { allocations: { where: { status: "Active" } } },
+        include: { allocations: { where: { status: 'Active' } } },
       });
-      if (!room) throw new NotFoundException("Target room not found");
+      if (!room) throw new NotFoundException('Target room not found');
       if (room.allocations.length >= room.capacity) {
-        throw new BadRequestException("Target room capacity exceeded");
+        throw new BadRequestException('Target room capacity exceeded');
       }
     }
 

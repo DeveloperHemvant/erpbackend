@@ -6,19 +6,22 @@
  * static per-route @RequirePermissions() decorator.
  */
 export const ENTITY_VIEW_PERMISSION: Record<string, string> = {
-  student: "VIEW_STUDENTS",
-  staff: "MANAGE_USERS",
-  vehicle: "VIEW_TRANSPORT",
-  route: "VIEW_TRANSPORT",
-  invoice: "MANAGE_FEES",
-  applicant: "MANAGE_ADMISSIONS_PIPELINE",
-  "discipline-case": "MANAGE_DISCIPLINE",
-  "class-section": "MANAGE_ACADEMICS",
-  parent: "MANAGE_USERS",
+  student: 'VIEW_STUDENTS',
+  staff: 'MANAGE_USERS',
+  vehicle: 'VIEW_TRANSPORT',
+  route: 'VIEW_TRANSPORT',
+  invoice: 'MANAGE_FEES',
+  applicant: 'MANAGE_ADMISSIONS_PIPELINE',
+  'discipline-case': 'MANAGE_DISCIPLINE',
+  'class-section': 'MANAGE_ACADEMICS',
+  parent: 'MANAGE_USERS',
 };
 
-export function canAccessEntityType(permissions: string[], entityType: string): boolean {
-  if (permissions.includes("*")) return true;
+export function canAccessEntityType(
+  permissions: string[],
+  entityType: string,
+): boolean {
+  if (permissions.includes('*')) return true;
   const required = ENTITY_VIEW_PERMISSION[entityType];
   if (!required) return false;
   return permissions.includes(required);

@@ -1,6 +1,17 @@
-import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+} from '@nestjs/common';
 import { IdCardService } from './idcard.service';
-import { CreateIdCardTemplateDto, UpdateIdCardTemplateDto } from './dto/idcard-template.dto';
+import {
+  CreateIdCardTemplateDto,
+  UpdateIdCardTemplateDto,
+} from './dto/idcard-template.dto';
 
 @Controller('idcards')
 export class IdCardController {
@@ -29,7 +40,10 @@ export class IdCardController {
   }
 
   @Put('templates/:id')
-  updateTemplate(@Param('id') id: string, @Body() data: UpdateIdCardTemplateDto) {
+  updateTemplate(
+    @Param('id') id: string,
+    @Body() data: UpdateIdCardTemplateDto,
+  ) {
     return this.idCardService.updateTemplate(id, data);
   }
 

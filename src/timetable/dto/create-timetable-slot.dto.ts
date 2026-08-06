@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsBoolean, IsUUID } from "class-validator";
+import { IsString, IsNotEmpty, IsBoolean, IsUUID } from 'class-validator';
 
 export class CreateTimetableSlotDto {
   @IsString()

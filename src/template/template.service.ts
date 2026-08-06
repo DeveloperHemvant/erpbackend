@@ -13,19 +13,19 @@ export class TemplateService {
         targetAudience: data.targetAudience,
         designJson: data.designJson || {},
         status: data.status || 'Active',
-      }
+      },
     });
   }
 
   async findAll() {
     return this.prisma.documentTemplate.findMany({
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   async findOne(id: string) {
     const template = await this.prisma.documentTemplate.findUnique({
-      where: { id }
+      where: { id },
     });
     if (!template) throw new NotFoundException('Template not found');
     return template;
@@ -40,19 +40,19 @@ export class TemplateService {
         targetAudience: data.targetAudience,
         designJson: data.designJson,
         status: data.status,
-      }
+      },
     });
   }
 
   async remove(id: string) {
     return this.prisma.documentTemplate.delete({
-      where: { id }
+      where: { id },
     });
   }
 
   async render(templateId: string, targetId: string) {
     const template = await this.findOne(templateId);
-    
+
     let targetData: any = null;
     if (template.targetAudience === 'STAFF') {
       targetData = await this.prisma.staff.findUnique({
@@ -62,8 +62,8 @@ export class TemplateService {
           fullName: true,
           email: true,
           photoUrl: true,
-          role: { select: { name: true } }
-        }
+          role: { select: { name: true } },
+        },
       });
     } else if (template.targetAudience === 'STUDENT') {
       targetData = await this.prisma.student.findUnique({
@@ -73,7 +73,7 @@ export class TemplateService {
           fullName: true,
           admissionNumber: true,
           photoUrl: true,
-        }
+        },
       });
     }
 
@@ -81,7 +81,7 @@ export class TemplateService {
 
     return {
       template,
-      targetData
+      targetData,
     };
   }
 }

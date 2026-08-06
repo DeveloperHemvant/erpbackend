@@ -1,9 +1,20 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { CommunicationService } from "../communication/communication.service";
-import { StudentRepository } from "../students/repositories/student.repository";
-import { FeeRepository } from "./repositories/fee.repository";
-import { ErpCoreAuditLogRepository } from "./repositories/audit-log.repository";
-import { CreateFeeStructureDto, CreateFeeInvoiceDto, CreateFeePaymentDto, RequestRefundDto, ResolveRefundDto, WebhookPaymentDto } from "./dto/fee.dto";
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { CommunicationService } from '../communication/communication.service';
+import { StudentRepository } from '../students/repositories/student.repository';
+import { FeeRepository } from './repositories/fee.repository';
+import { ErpCoreAuditLogRepository } from './repositories/audit-log.repository';
+import {
+  CreateFeeStructureDto,
+  CreateFeeInvoiceDto,
+  CreateFeePaymentDto,
+  RequestRefundDto,
+  ResolveRefundDto,
+  WebhookPaymentDto,
+} from './dto/fee.dto';
 
 @Injectable()
 export class FeesService {
@@ -47,16 +58,20 @@ export class FeesService {
 
   async generateInvoicesJob(sessionId: string) {
     // Find all active enrollments for the session
-    const enrollments = await this.feeRepository.findEnrollmentsBySessionEnrolled(sessionId);
+    const enrollments =
+      await this.feeRepository.findEnrollmentsBySessionEnrolled(sessionId);
 
-    const structures = await this.feeRepository.findStructuresBySession(sessionId);
+    const structures =
+      await this.feeRepository.findStructuresBySession(sessionId);
 
     let generatedCount = 0;
 
     // In real app, you would check billing cycle dates, but for now we generate for all active students.
     for (const enr of enrollments) {
       // Find structure matching student's class, or general structure
-      const struct = structures.find(s => s.classId === enr.section.classId) || structures[0];
+      const struct =
+        structures.find((s) => s.classId === enr.section.classId) ||
+        structures[0];
       if (!struct) continue;
 
       await this.feeRepository.createInvoiceRaw({
@@ -64,9 +79,11 @@ export class FeesService {
         structureId: struct.id,
         amount: struct.amount,
         totalAmount: struct.amount,
-        dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +15 days
-        status: "Unpaid",
-        createdBy: "SYSTEM"
+        dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split('T')[0], // +15 days
+        status: 'Unpaid',
+        createdBy: 'SYSTEM',
       });
       generatedCount++;
     }
@@ -87,14 +104,20 @@ export class FeesService {
       const lateFee = baseAmount * 0.05;
       const totalAmount = baseAmount + lateFee;
 
-      const updatedInv = await this.feeRepository.updateInvoiceOverdue(inv.id, lateFee.toString(), totalAmount.toString());
+      const updatedInv = await this.feeRepository.updateInvoiceOverdue(
+        inv.id,
+        lateFee.toString(),
+        totalAmount.toString(),
+      );
 
       if (updatedInv.enrollment?.studentId) {
-        this.commService.sendFeeReminder(
-          updatedInv.enrollment.studentId,
-          (updatedInv.totalAmount || updatedInv.amount).toString(),
-          updatedInv.dueDate
-        ).catch(console.error);
+        this.commService
+          .sendFeeReminder(
+            updatedInv.enrollment.studentId,
+            (updatedInv.totalAmount || updatedInv.amount).toString(),
+            updatedInv.dueDate,
+          )
+          .catch(console.error);
       }
 
       updatedCount++;
@@ -104,11 +127,20 @@ export class FeesService {
   }
 
   async createFeeInvoice(dto: CreateFeeInvoiceDto) {
-    const activeSession = await this.studentRepository.findActiveAcademicSession();
-    if (!activeSession) throw new BadRequestException("No active academic session found.");
+    const activeSession =
+      await this.studentRepository.findActiveAcademicSession();
+    if (!activeSession)
+      throw new BadRequestException('No active academic session found.');
 
-    const enrollment = await this.studentRepository.findEnrollmentByStudentAndSession(dto.studentId, activeSession.id);
-    if (!enrollment) throw new BadRequestException("Student is not enrolled in the active academic session.");
+    const enrollment =
+      await this.studentRepository.findEnrollmentByStudentAndSession(
+        dto.studentId,
+        activeSession.id,
+      );
+    if (!enrollment)
+      throw new BadRequestException(
+        'Student is not enrolled in the active academic session.',
+      );
 
     const invoice = await this.feeRepository.createInvoiceFromDto({
       enrollmentId: enrollment.id,
@@ -116,7 +148,7 @@ export class FeesService {
       totalAmount: dto.amount,
       dueDate: dto.dueDate,
       status: dto.status,
-      createdBy: "SYSTEM",
+      createdBy: 'SYSTEM',
     });
 
     return this.reshapeInvoice(invoice);
@@ -124,12 +156,12 @@ export class FeesService {
 
   async getFeeInvoices() {
     const invoices = await this.feeRepository.findAllInvoices();
-    return invoices.map(inv => this.reshapeInvoice(inv));
+    return invoices.map((inv) => this.reshapeInvoice(inv));
   }
 
   async updateFeeInvoiceStatus(id: string, status: string) {
     const invoice = await this.feeRepository.findInvoiceById(id);
-    if (!invoice) throw new NotFoundException("Invoice not found.");
+    if (!invoice) throw new NotFoundException('Invoice not found.');
 
     const updated = await this.feeRepository.updateInvoiceStatus(id, status);
     return this.reshapeInvoice(updated);
@@ -144,7 +176,7 @@ export class FeesService {
   // ==========================================
   async recordFeePayment(invoiceId: string, dto: CreateFeePaymentDto) {
     const invoice = await this.feeRepository.findInvoiceWithPayments(invoiceId);
-    if (!invoice) throw new NotFoundException("Fee Invoice not found.");
+    if (!invoice) throw new NotFoundException('Fee Invoice not found.');
 
     // Create the payment record
     const payment = await this.feeRepository.createPayment({
@@ -153,18 +185,20 @@ export class FeesService {
       paymentMode: dto.paymentMode,
       referenceNo: dto.referenceNo || null,
       paymentDate: dto.paymentDate,
-      createdBy: "SYSTEM",
+      createdBy: 'SYSTEM',
     });
 
     // Re-calculate invoice status
-    const totalPaid = invoice.payments.reduce((sum, p) => sum + Number(p.amountPaid), 0) + Number(dto.amountPaid);
+    const totalPaid =
+      invoice.payments.reduce((sum, p) => sum + Number(p.amountPaid), 0) +
+      Number(dto.amountPaid);
     const invoiceAmount = Number(invoice.totalAmount || invoice.amount);
 
     let newStatus = invoice.status;
     if (totalPaid >= invoiceAmount) {
-      newStatus = "Paid";
+      newStatus = 'Paid';
     } else if (totalPaid > 0) {
-      newStatus = "Unpaid"; // or "Partial"
+      newStatus = 'Unpaid'; // or "Partial"
     }
 
     await this.feeRepository.updateInvoiceStatusSimple(invoiceId, newStatus);
@@ -175,19 +209,20 @@ export class FeesService {
   async processOnlinePaymentWebhook(payload: WebhookPaymentDto) {
     // Simulate receiving a webhook from Stripe/Razorpay
     // Payload should contain invoiceId and status
-    const { invoiceId, amountPaid, paymentMode, referenceNo, gatewayResponse } = payload;
+    const { invoiceId, amountPaid, paymentMode, referenceNo, gatewayResponse } =
+      payload;
 
     const invoice = await this.feeRepository.findInvoiceById(invoiceId);
-    if (!invoice) throw new NotFoundException("Invoice not found");
+    if (!invoice) throw new NotFoundException('Invoice not found');
 
     return this.feeRepository.createWebhookPayment({
       invoiceId,
       amountPaid: amountPaid.toString(),
-      paymentMode: paymentMode || "Stripe",
+      paymentMode: paymentMode || 'Stripe',
       referenceNo: referenceNo || `TRX-${Date.now()}`,
       paymentDate: new Date().toISOString().split('T')[0],
       gatewayResponse: gatewayResponse,
-      createdBy: "WEBHOOK"
+      createdBy: 'WEBHOOK',
     });
     // In a real flow, we'd also trigger recordFeePayment logic or similar to update invoice status.
     // For this mock, we'll just update it directly here.
@@ -202,17 +237,17 @@ export class FeesService {
   // ==========================================
   async requestRefund(paymentId: string, dto: RequestRefundDto) {
     const payment = await this.feeRepository.findPaymentWithRefunds(paymentId);
-    if (!payment) throw new NotFoundException("Payment not found.");
+    if (!payment) throw new NotFoundException('Payment not found.');
 
     const requestedAmount = Number(dto.amount);
     if (!(requestedAmount > 0)) {
-      throw new BadRequestException("Refund amount must be greater than zero.");
+      throw new BadRequestException('Refund amount must be greater than zero.');
     }
 
     // Requested + Approved refunds both hold a claim against the payment; only
     // Rejected ones free up the balance again.
     const alreadyClaimed = (payment.refunds || [])
-      .filter((r) => r.status !== "Rejected")
+      .filter((r) => r.status !== 'Rejected')
       .reduce((sum, r) => sum + Number(r.amount), 0);
     const remaining = Number(payment.amountPaid) - alreadyClaimed;
 
@@ -227,15 +262,17 @@ export class FeesService {
       amount: dto.amount,
       reason: dto.reason,
       refundMode: dto.refundMode || payment.paymentMode,
-      requestedBy: dto.requestedBy || "SYSTEM",
+      requestedBy: dto.requestedBy || 'SYSTEM',
     });
   }
 
   async resolveRefund(id: string, dto: ResolveRefundDto) {
     const refund = await this.feeRepository.findRefundById(id);
-    if (!refund) throw new NotFoundException("Refund request not found.");
-    if (refund.status !== "Requested") {
-      throw new BadRequestException(`Only pending requests can be resolved (current status: ${refund.status}).`);
+    if (!refund) throw new NotFoundException('Refund request not found.');
+    if (refund.status !== 'Requested') {
+      throw new BadRequestException(
+        `Only pending requests can be resolved (current status: ${refund.status}).`,
+      );
     }
 
     const updated = await this.feeRepository.updateRefundStatus(id, {
@@ -246,7 +283,7 @@ export class FeesService {
       resolvedAt: new Date(),
     });
 
-    if (dto.status === "Approved") {
+    if (dto.status === 'Approved') {
       await this.recalculateInvoiceAfterRefund(refund.payment.invoiceId);
     }
 
@@ -254,18 +291,19 @@ export class FeesService {
   }
 
   private async recalculateInvoiceAfterRefund(invoiceId: string) {
-    const invoice = await this.feeRepository.findInvoiceWithPaymentsAndRefunds(invoiceId);
+    const invoice =
+      await this.feeRepository.findInvoiceWithPaymentsAndRefunds(invoiceId);
     if (!invoice) return;
 
     const netPaid = invoice.payments.reduce((sum, p) => {
       const refundedOnThisPayment = (p.refunds || [])
-        .filter((r) => r.status === "Approved")
+        .filter((r) => r.status === 'Approved')
         .reduce((s, r) => s + Number(r.amount), 0);
       return sum + (Number(p.amountPaid) - refundedOnThisPayment);
     }, 0);
 
     const invoiceAmount = Number(invoice.totalAmount || invoice.amount);
-    const newStatus = netPaid >= invoiceAmount ? "Paid" : "Unpaid";
+    const newStatus = netPaid >= invoiceAmount ? 'Paid' : 'Unpaid';
 
     await this.feeRepository.updateInvoiceStatusSimple(invoiceId, newStatus);
   }
@@ -290,32 +328,35 @@ export class FeesService {
     let totalOutstanding = 0;
     const defaulters: any[] = [];
 
-    invoices.forEach(inv => {
+    invoices.forEach((inv) => {
       const amount = Number(inv.totalAmount || inv.amount);
       totalExpected += amount;
-      if (inv.status === "Paid") {
+      if (inv.status === 'Paid') {
         totalCollected += amount;
       } else {
         totalOutstanding += amount;
-        if (inv.status === "Overdue" || new Date(inv.dueDate) < new Date()) {
+        if (inv.status === 'Overdue' || new Date(inv.dueDate) < new Date()) {
           defaulters.push({
             studentName: inv.enrollment.student.fullName,
             class: inv.enrollment.section.class.grade,
             amountDue: amount,
-            dueDate: inv.dueDate
+            dueDate: inv.dueDate,
           });
         }
       }
     });
 
-    const collectionRate = totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : "0.0";
+    const collectionRate =
+      totalExpected > 0
+        ? ((totalCollected / totalExpected) * 100).toFixed(1)
+        : '0.0';
 
     return {
       totalExpected,
       totalCollected,
       totalOutstanding,
       collectionRate,
-      defaulters
+      defaulters,
     };
   }
 }

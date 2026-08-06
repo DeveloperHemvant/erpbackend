@@ -1,15 +1,23 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsInt, IsBoolean, IsIn } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsInt,
+  IsBoolean,
+  IsIn,
+} from 'class-validator';
 
 export const ACMS_EVENT_TYPES = [
-  "ACADEMIC",
-  "SPORTS",
-  "CULTURAL",
-  "TRIP",
-  "COMPETITION",
-  "EXHIBITION",
-  "OLYMPIAD",
-  "SEMINAR",
-  "TOUR",
+  'ACADEMIC',
+  'SPORTS',
+  'CULTURAL',
+  'TRIP',
+  'COMPETITION',
+  'EXHIBITION',
+  'OLYMPIAD',
+  'SEMINAR',
+  'TOUR',
 ] as const;
 
 export class CreateAcademicTermDto {

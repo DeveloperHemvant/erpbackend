@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException, OnModuleInit } from "@nestjs/common";
-import { RuleRepository } from "./repositories/rule.repository";
+import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { RuleRepository } from './repositories/rule.repository';
 
-type Op = "==" | "!=" | ">=" | "<=" | ">" | "<";
+type Op = '==' | '!=' | '>=' | '<=' | '>' | '<';
 
 interface RuleCondition {
   field: string;
@@ -17,12 +17,18 @@ interface RuleDefinition {
 
 function compare(actual: unknown, op: Op, expected: unknown): boolean {
   switch (op) {
-    case "==": return actual === expected;
-    case "!=": return actual !== expected;
-    case ">=": return (actual as number) >= (expected as number);
-    case "<=": return (actual as number) <= (expected as number);
-    case ">": return (actual as number) > (expected as number);
-    case "<": return (actual as number) < (expected as number);
+    case '==':
+      return actual === expected;
+    case '!=':
+      return actual !== expected;
+    case '>=':
+      return (actual as number) >= (expected as number);
+    case '<=':
+      return (actual as number) <= (expected as number);
+    case '>':
+      return (actual as number) > (expected as number);
+    case '<':
+      return (actual as number) < (expected as number);
   }
 }
 
@@ -42,16 +48,41 @@ export class RulesEngineService implements OnModuleInit {
   async onModuleInit() {
     const definition: RuleDefinition = {
       conditions: [
-        { field: "isStaffChild", op: "==", value: true, then: { discountPercent: 100, reason: "Staff Child Concession (100% Free)" } },
-        { field: "siblingCount", op: ">=", value: 3, then: { discountPercent: 100, reason: "Sibling Concession (3+ children: 100% Free)" } },
-        { field: "siblingCount", op: "==", value: 2, then: { discountPercent: 20, reason: "Sibling Concession (2 children: 20% Discount)" } },
+        {
+          field: 'isStaffChild',
+          op: '==',
+          value: true,
+          then: {
+            discountPercent: 100,
+            reason: 'Staff Child Concession (100% Free)',
+          },
+        },
+        {
+          field: 'siblingCount',
+          op: '>=',
+          value: 3,
+          then: {
+            discountPercent: 100,
+            reason: 'Sibling Concession (3+ children: 100% Free)',
+          },
+        },
+        {
+          field: 'siblingCount',
+          op: '==',
+          value: 2,
+          then: {
+            discountPercent: 20,
+            reason: 'Sibling Concession (2 children: 20% Discount)',
+          },
+        },
       ],
-      default: { discountPercent: 0, reason: "None" },
+      default: { discountPercent: 0, reason: 'None' },
     };
-    await this.repository.upsert("sibling-discount", {
-      key: "sibling-discount",
-      entityType: "invoice",
-      description: "Fee concession: staff-child and sibling-count based tuition discount",
+    await this.repository.upsert('sibling-discount', {
+      key: 'sibling-discount',
+      entityType: 'invoice',
+      description:
+        'Fee concession: staff-child and sibling-count based tuition discount',
       definition: definition as any,
       active: true,
     });
@@ -59,7 +90,8 @@ export class RulesEngineService implements OnModuleInit {
 
   async evaluate(key: string, context: Record<string, unknown>) {
     const rule = await this.repository.findByKey(key);
-    if (!rule || !rule.active) throw new NotFoundException(`No active rule found for key "${key}".`);
+    if (!rule || !rule.active)
+      throw new NotFoundException(`No active rule found for key "${key}".`);
 
     const definition = rule.definition as unknown as RuleDefinition;
     for (const condition of definition.conditions) {

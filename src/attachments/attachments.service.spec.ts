@@ -13,13 +13,26 @@ describe('AttachmentsService', () => {
     delete: jest.fn(),
   };
 
-  const staffUser = { userId: 'staff-1', identifier: 's', role: 'HR', permissions: ['MANAGE_USERS'] };
-  const unprivilegedUser = { userId: 'staff-2', identifier: 'u', role: 'Driver', permissions: [] };
+  const staffUser = {
+    userId: 'staff-1',
+    identifier: 's',
+    role: 'HR',
+    permissions: ['MANAGE_USERS'],
+  };
+  const unprivilegedUser = {
+    userId: 'staff-2',
+    identifier: 'u',
+    role: 'Driver',
+    permissions: [],
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AttachmentsService, { provide: AttachmentRepository, useValue: mockRepository }],
+      providers: [
+        AttachmentsService,
+        { provide: AttachmentRepository, useValue: mockRepository },
+      ],
     }).compile();
 
     service = module.get<AttachmentsService>(AttachmentsService);
@@ -36,7 +49,7 @@ describe('AttachmentsService', () => {
       await service.uploadAttachment(
         { entityType: 'staff', entityId: 'entity-1' },
         { originalname: 'resume.pdf', size: 1024 },
-        staffUser as any,
+        staffUser,
       );
 
       expect(mockRepository.create).toHaveBeenCalledWith({
@@ -51,7 +64,11 @@ describe('AttachmentsService', () => {
 
     it('throws Forbidden when the caller lacks permission for this entity type', async () => {
       await expect(
-        service.uploadAttachment({ entityType: 'staff', entityId: 'entity-1' }, { originalname: 'x.pdf', size: 1 }, unprivilegedUser as any),
+        service.uploadAttachment(
+          { entityType: 'staff', entityId: 'entity-1' },
+          { originalname: 'x.pdf', size: 1 },
+          unprivilegedUser as any,
+        ),
       ).rejects.toThrow(ForbiddenException);
     });
   });
@@ -60,21 +77,31 @@ describe('AttachmentsService', () => {
     it('throws NotFound when the attachment does not exist', async () => {
       mockRepository.findById.mockResolvedValue(null);
 
-      await expect(service.deleteAttachment('missing-id', staffUser as any)).rejects.toThrow(NotFoundException);
+      await expect(
+        service.deleteAttachment('missing-id', staffUser as any),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('throws Forbidden when the caller lacks permission for the attachment entity type', async () => {
-      mockRepository.findById.mockResolvedValue({ id: 'a1', entityType: 'staff' });
+      mockRepository.findById.mockResolvedValue({
+        id: 'a1',
+        entityType: 'staff',
+      });
 
-      await expect(service.deleteAttachment('a1', unprivilegedUser as any)).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.deleteAttachment('a1', unprivilegedUser as any),
+      ).rejects.toThrow(ForbiddenException);
       expect(mockRepository.delete).not.toHaveBeenCalled();
     });
 
     it('deletes when permitted', async () => {
-      mockRepository.findById.mockResolvedValue({ id: 'a1', entityType: 'staff' });
+      mockRepository.findById.mockResolvedValue({
+        id: 'a1',
+        entityType: 'staff',
+      });
       mockRepository.delete.mockResolvedValue({ id: 'a1' });
 
-      await service.deleteAttachment('a1', staffUser as any);
+      await service.deleteAttachment('a1', staffUser);
 
       expect(mockRepository.delete).toHaveBeenCalledWith('a1');
     });

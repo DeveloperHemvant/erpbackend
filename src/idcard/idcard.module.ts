@@ -7,6 +7,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [PrismaModule],
   controllers: [IdCardController],
   providers: [IdCardService],
-  exports: [IdCardService]
+  exports: [IdCardService],
 })
 export class IdCardModule {}

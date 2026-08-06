@@ -1,12 +1,12 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { ActivitiesRepository } from "./repositories/activities.repository";
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { ActivitiesRepository } from './repositories/activities.repository';
 import {
   CreateAssemblyDto,
   CreateSchoolHouseDto,
   UpdateSchoolHouseDto,
   CreateStudentAchievementDto,
   CreateStaffDutyDto,
-} from "./dto/activities.dto";
+} from './dto/activities.dto';
 
 @Injectable()
 export class ActivitiesService {
@@ -40,7 +40,7 @@ export class ActivitiesService {
 
   async updateHouse(houseId: string, dto: UpdateSchoolHouseDto) {
     const existing = await this.repository.findHouseById(houseId);
-    if (!existing) throw new NotFoundException("House not found");
+    if (!existing) throw new NotFoundException('House not found');
     return this.repository.updateHouse(houseId, {
       name: dto.name,
       captainId: dto.captainId,

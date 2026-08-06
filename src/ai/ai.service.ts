@@ -1,7 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable } from '@nestjs/common';
 
 export interface AiInferenceResult {
-  status: "not_configured" | "ok";
+  status: 'not_configured' | 'ok';
   task: string;
   output?: unknown;
 }
@@ -19,7 +19,7 @@ export interface AiInferenceResult {
  */
 @Injectable()
 export class AiService {
-  async infer(task: string, _payload: unknown): Promise<AiInferenceResult> {
-    return { status: "not_configured", task };
+  infer(task: string, _payload: unknown): Promise<AiInferenceResult> {
+    return Promise.resolve({ status: 'not_configured', task });
   }
 }

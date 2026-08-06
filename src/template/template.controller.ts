@@ -1,6 +1,18 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { TemplateService } from './template.service';
-import { CreateDocumentTemplateDto, UpdateDocumentTemplateDto } from './dto/template.dto';
+import {
+  CreateDocumentTemplateDto,
+  UpdateDocumentTemplateDto,
+} from './dto/template.dto';
 
 @Controller('templates')
 export class TemplateController {
@@ -19,7 +31,7 @@ export class TemplateController {
   @Get('render')
   render(
     @Query('templateId') templateId: string,
-    @Query('targetId') targetId: string
+    @Query('targetId') targetId: string,
   ) {
     return this.templateService.render(templateId, targetId);
   }

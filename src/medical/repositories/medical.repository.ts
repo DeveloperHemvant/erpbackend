@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class MedicalRepository {
@@ -17,7 +17,7 @@ export class MedicalRepository {
     return this.prisma.healthVisit.findMany({
       where,
       include: { student: true, loggedByStaff: true },
-      orderBy: { visitDate: "desc" },
+      orderBy: { visitDate: 'desc' },
     });
   }
 }

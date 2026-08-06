@@ -1,10 +1,10 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { SubstitutionService } from "./substitution.service";
-import { SubstitutionRepository } from "./repositories/substitution.repository";
-import { NotificationsService } from "../notifications/notifications.service";
-import { PrismaService } from "../prisma/prisma.service";
+import { Test, TestingModule } from '@nestjs/testing';
+import { SubstitutionService } from './substitution.service';
+import { SubstitutionRepository } from './repositories/substitution.repository';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PrismaService } from '../prisma/prisma.service';
 
-describe("SubstitutionService", () => {
+describe('SubstitutionService', () => {
   let service: SubstitutionService;
 
   const mockRepository = {
@@ -40,25 +40,25 @@ describe("SubstitutionService", () => {
     service = module.get<SubstitutionService>(SubstitutionService);
   });
 
-  it("should be defined", () => {
+  it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it("creates a teacher substitution entry", async () => {
+  it('creates a teacher substitution entry', async () => {
     const dto = {
-      leaveApplicationId: "leave-uuid",
-      primaryTeacherId: "teacher1-uuid",
-      substituteTeacherId: "teacher2-uuid",
-      date: "2026-08-05",
-      timetablePeriodId: "period-uuid",
+      leaveApplicationId: 'leave-uuid',
+      primaryTeacherId: 'teacher1-uuid',
+      substituteTeacherId: 'teacher2-uuid',
+      date: '2026-08-05',
+      timetablePeriodId: 'period-uuid',
     };
     mockRepository.createSubstitution.mockResolvedValue({
-      id: "sub-uuid",
+      id: 'sub-uuid',
       ...dto,
-      timetablePeriod: { startTime: "08:00", endTime: "08:45" },
+      timetablePeriod: { startTime: '08:00', endTime: '08:45' },
     });
 
     const result = await service.createSubstitution(dto);
-    expect(result.id).toBe("sub-uuid");
+    expect(result.id).toBe('sub-uuid');
   });
 });

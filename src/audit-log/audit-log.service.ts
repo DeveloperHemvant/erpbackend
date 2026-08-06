@@ -24,26 +24,41 @@ export class AuditLogService {
     });
   }
 
-  async getLogs(filters: {
-    search?: string;
-    module?: string;
-    action?: string;
-    performedBy?: string;
-    from?: string;
-    to?: string;
-    page?: number;
-    pageSize?: number;
-    /** Scopes results to one record's Activity Timeline (IA §16 #1) — additive, optional. */
-    entityType?: string;
-    entityId?: string;
-  } = {}) {
-    const { search, module, action, performedBy, from, to, entityType, entityId } = filters;
+  async getLogs(
+    filters: {
+      search?: string;
+      module?: string;
+      action?: string;
+      performedBy?: string;
+      from?: string;
+      to?: string;
+      page?: number;
+      pageSize?: number;
+      /** Scopes results to one record's Activity Timeline (IA §16 #1) — additive, optional. */
+      entityType?: string;
+      entityId?: string;
+    } = {},
+  ) {
+    const {
+      search,
+      module,
+      action,
+      performedBy,
+      from,
+      to,
+      entityType,
+      entityId,
+    } = filters;
     const page = Math.max(1, filters.page || 1);
     const pageSize = Math.min(100, Math.max(1, filters.pageSize || 25));
 
-    const timestamp = (from || to)
-      ? { gte: from ? new Date(from) : undefined, lte: to ? new Date(to) : undefined }
-      : undefined;
+    const timestamp =
+      from || to
+        ? {
+            gte: from ? new Date(from) : undefined,
+            lte: to ? new Date(to) : undefined,
+          }
+        : undefined;
 
     // Pull a generous, filtered window from each source table, then merge in memory —
     // the two tables can't be paginated as a single SQL query since they're separate
@@ -54,7 +69,9 @@ export class AuditLogService {
       where: {
         module: module || undefined,
         action: action ? { contains: action, mode: 'insensitive' } : undefined,
-        performedBy: performedBy ? { contains: performedBy, mode: 'insensitive' } : undefined,
+        performedBy: performedBy
+          ? { contains: performedBy, mode: 'insensitive' }
+          : undefined,
         entityType: entityType || undefined,
         entityId: entityId || undefined,
         timestamp,
@@ -77,7 +94,9 @@ export class AuditLogService {
       where: {
         tableName: entityType || module || undefined,
         action: action ? { contains: action, mode: 'insensitive' } : undefined,
-        userEmail: performedBy ? { contains: performedBy, mode: 'insensitive' } : undefined,
+        userEmail: performedBy
+          ? { contains: performedBy, mode: 'insensitive' }
+          : undefined,
         recordId: entityId || undefined,
         timestamp,
         ...(search
@@ -94,7 +113,7 @@ export class AuditLogService {
       take: HARD_CAP,
     });
 
-    const mappedGlobalLogs = globalLogs.map(l => ({
+    const mappedGlobalLogs = globalLogs.map((l) => ({
       id: l.id,
       action: l.action,
       module: l.tableName,
@@ -104,21 +123,28 @@ export class AuditLogService {
       role: 'SYSTEM',
       details: {
         oldValue: l.oldValue,
-        newValue: l.newValue
+        newValue: l.newValue,
       },
       ipAddress: l.ipAddress,
       deviceInfo: l.userAgent,
-      timestamp: l.timestamp
+      timestamp: l.timestamp,
     }));
 
     const merged = [...sysLogs, ...mappedGlobalLogs].sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
 
     const total = merged.length;
     const start = (page - 1) * pageSize;
     const data = merged.slice(start, start + pageSize);
 
-    return { data, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+    return {
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
   }
 }

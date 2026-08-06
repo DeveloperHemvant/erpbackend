@@ -1,4 +1,12 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsIn, IsBoolean, IsInt } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsNumber,
+  IsIn,
+  IsBoolean,
+  IsInt,
+} from 'class-validator';
 
 export class UpsertHealthProfileDto {
   @IsString() @IsOptional() bloodGroup?: string;
@@ -31,7 +39,12 @@ export class CreateHealthVisitDto {
   @IsOptional()
   treatmentGiven?: string;
 
-  @IsIn(["Observed and Released", "Sent Home", "Referred to Doctor", "Hospitalized"])
+  @IsIn([
+    'Observed and Released',
+    'Sent Home',
+    'Referred to Doctor',
+    'Hospitalized',
+  ])
   @IsOptional()
   actionTaken?: string;
 

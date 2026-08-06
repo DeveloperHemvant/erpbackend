@@ -1,4 +1,13 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsIn, IsInt, Min, Max } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsIn,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class ApplyLeaveDto {
   @IsUUID()
@@ -23,9 +32,9 @@ export class ApplyLeaveDto {
 }
 
 export class ProcessLeaveDto {
-  @IsIn(["Approved", "Rejected"])
+  @IsIn(['Approved', 'Rejected'])
   @IsNotEmpty()
-  status: "Approved" | "Rejected";
+  status: 'Approved' | 'Rejected';
 
   @IsUUID()
   @IsNotEmpty()

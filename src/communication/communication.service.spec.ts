@@ -44,8 +44,12 @@ describe('CommunicationService', () => {
     });
 
     it('looks up notifications by the portal account, newest first', async () => {
-      mockPrismaService.portalAccount.findFirst.mockResolvedValue({ id: 'account-1' });
-      mockPrismaService.notification.findMany.mockResolvedValue([{ id: 'n1', readStatus: false }]);
+      mockPrismaService.portalAccount.findFirst.mockResolvedValue({
+        id: 'account-1',
+      });
+      mockPrismaService.notification.findMany.mockResolvedValue([
+        { id: 'n1', readStatus: false },
+      ]);
 
       const result = await service.getNotifications('parent-1');
 
@@ -59,7 +63,10 @@ describe('CommunicationService', () => {
 
   describe('markNotificationRead', () => {
     it('sets readStatus true on the given notification id', async () => {
-      mockPrismaService.notification.update.mockResolvedValue({ id: 'n1', readStatus: true });
+      mockPrismaService.notification.update.mockResolvedValue({
+        id: 'n1',
+        readStatus: true,
+      });
 
       await service.markNotificationRead('n1');
 
@@ -81,7 +88,9 @@ describe('CommunicationService', () => {
     });
 
     it('marks only that account unread notifications as read', async () => {
-      mockPrismaService.portalAccount.findFirst.mockResolvedValue({ id: 'account-1' });
+      mockPrismaService.portalAccount.findFirst.mockResolvedValue({
+        id: 'account-1',
+      });
       mockPrismaService.notification.updateMany.mockResolvedValue({ count: 3 });
 
       const result = await service.markAllNotificationsRead('parent-1');

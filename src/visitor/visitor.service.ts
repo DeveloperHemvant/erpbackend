@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { VisitorRepository } from "./repositories/visitor.repository";
-import { CreateVisitorDto, CreateStudentGatePassDto } from "./dto/visitor.dto";
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { VisitorRepository } from './repositories/visitor.repository';
+import { CreateVisitorDto, CreateStudentGatePassDto } from './dto/visitor.dto';
 
 @Injectable()
 export class VisitorService {
@@ -9,23 +13,24 @@ export class VisitorService {
   async createVisitor(dto: CreateVisitorDto) {
     return this.repository.createVisitor({
       ...dto,
-      hostConfirmation: dto.hostId ? "PENDING" : "APPROVED",
-      status: "CheckedIn",
+      hostConfirmation: dto.hostId ? 'PENDING' : 'APPROVED',
+      status: 'CheckedIn',
     });
   }
 
   async confirmVisitor(id: string, status: string) {
     const visitor = await this.repository.findVisitorById(id);
-    if (!visitor) throw new NotFoundException("Visitor record not found");
+    if (!visitor) throw new NotFoundException('Visitor record not found');
     return this.repository.updateVisitor(id, { hostConfirmation: status });
   }
 
   async checkOutVisitor(id: string) {
     const visitor = await this.repository.findVisitorById(id);
-    if (!visitor) throw new NotFoundException("Visitor record not found");
-    if (visitor.status === "CheckedOut") throw new BadRequestException("Visitor already checked out");
+    if (!visitor) throw new NotFoundException('Visitor record not found');
+    if (visitor.status === 'CheckedOut')
+      throw new BadRequestException('Visitor already checked out');
     return this.repository.updateVisitor(id, {
-      status: "CheckedOut",
+      status: 'CheckedOut',
       exitTime: new Date(),
     });
   }
@@ -36,7 +41,7 @@ export class VisitorService {
 
   async getVisitorById(id: string) {
     const visitor = await this.repository.findVisitorById(id);
-    if (!visitor) throw new NotFoundException("Visitor record not found");
+    if (!visitor) throw new NotFoundException('Visitor record not found');
     return visitor;
   }
 
@@ -46,22 +51,22 @@ export class VisitorService {
       reason: dto.reason,
       leaveType: dto.leaveType,
       approvedById: staffId,
-      status: "Approved",
+      status: 'Approved',
     });
   }
 
   async verifyGatePassExit(id: string) {
     const pass = await this.repository.findGatePassById(id);
-    if (!pass) throw new NotFoundException("Gate pass not found");
+    if (!pass) throw new NotFoundException('Gate pass not found');
     return this.repository.updateGatePass(id, { exitTime: new Date() });
   }
 
   async recordGatePassReturn(id: string) {
     const pass = await this.repository.findGatePassById(id);
-    if (!pass) throw new NotFoundException("Gate pass not found");
+    if (!pass) throw new NotFoundException('Gate pass not found');
     return this.repository.updateGatePass(id, {
       returnTime: new Date(),
-      status: "Returned",
+      status: 'Returned',
     });
   }
 

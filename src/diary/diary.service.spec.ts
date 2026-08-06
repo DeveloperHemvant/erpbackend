@@ -1,8 +1,8 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { DiaryService } from "./diary.service";
-import { DiaryRepository } from "./repositories/diary.repository";
+import { Test, TestingModule } from '@nestjs/testing';
+import { DiaryService } from './diary.service';
+import { DiaryRepository } from './repositories/diary.repository';
 
-describe("DiaryService", () => {
+describe('DiaryService', () => {
   let service: DiaryService;
 
   const mockRepository = {
@@ -30,19 +30,22 @@ describe("DiaryService", () => {
     service = module.get<DiaryService>(DiaryService);
   });
 
-  it("should be defined", () => {
+  it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it("creates a diary entry", async () => {
+  it('creates a diary entry', async () => {
     const dto = {
-      studentId: "student-uuid",
-      type: "HOMEWORK",
-      content: "Complete page 12 of math book",
+      studentId: 'student-uuid',
+      type: 'HOMEWORK',
+      content: 'Complete page 12 of math book',
     };
-    mockRepository.createDiaryEntry.mockResolvedValue({ id: "entry-uuid", ...dto });
+    mockRepository.createDiaryEntry.mockResolvedValue({
+      id: 'entry-uuid',
+      ...dto,
+    });
 
-    const result = await service.createDiaryEntry("teacher-uuid", dto);
-    expect(result.type).toBe("HOMEWORK");
+    const result = await service.createDiaryEntry('teacher-uuid', dto);
+    expect(result.type).toBe('HOMEWORK');
   });
 });

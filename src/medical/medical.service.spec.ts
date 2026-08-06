@@ -1,8 +1,8 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { MedicalService } from "./medical.service";
-import { MedicalRepository } from "./repositories/medical.repository";
+import { Test, TestingModule } from '@nestjs/testing';
+import { MedicalService } from './medical.service';
+import { MedicalRepository } from './repositories/medical.repository';
 
-describe("MedicalService", () => {
+describe('MedicalService', () => {
   let service: MedicalService;
 
   const mockRepository = {
@@ -21,19 +21,19 @@ describe("MedicalService", () => {
     service = module.get<MedicalService>(MedicalService);
   });
 
-  it("should be defined", () => {
+  it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it("logs a medical visit record", async () => {
+  it('logs a medical visit record', async () => {
     const dto = {
-      studentId: "student-uuid",
-      symptoms: "Fever",
-      treatment: "Paracetamol",
+      studentId: 'student-uuid',
+      symptoms: 'Fever',
+      treatment: 'Paracetamol',
     };
-    mockRepository.createVisit.mockResolvedValue({ id: "visit-uuid", ...dto });
+    mockRepository.createVisit.mockResolvedValue({ id: 'visit-uuid', ...dto });
 
-    const result = await service.createVisit("staff-uuid", dto);
-    expect(result.symptoms).toBe("Fever");
+    const result = await service.createVisit('staff-uuid', dto);
+    expect(result.symptoms).toBe('Fever');
   });
 });

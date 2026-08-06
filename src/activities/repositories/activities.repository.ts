@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class ActivitiesRepository {
@@ -13,8 +13,12 @@ export class ActivitiesRepository {
   findAssemblies(where?: Prisma.MorningAssemblyWhereInput) {
     return this.prisma.morningAssembly.findMany({
       where,
-      include: { campus: true, performingSection: true, supervisingStaff: true },
-      orderBy: { date: "desc" },
+      include: {
+        campus: true,
+        performingSection: true,
+        supervisingStaff: true,
+      },
+      orderBy: { date: 'desc' },
     });
   }
 
@@ -46,15 +50,20 @@ export class ActivitiesRepository {
 
   findHouses() {
     return this.prisma.schoolHouse.findMany({
-      include: { captain: true, viceCaptain: true, teacherIncharge: true, _count: { select: { members: true } } },
-      orderBy: { points: "desc" },
+      include: {
+        captain: true,
+        viceCaptain: true,
+        teacherIncharge: true,
+        _count: { select: { members: true } },
+      },
+      orderBy: { points: 'desc' },
     });
   }
 
   findHouseMembers(houseId: string) {
     return this.prisma.student.findMany({
       where: { houseId },
-      orderBy: { fullName: "asc" },
+      orderBy: { fullName: 'asc' },
     });
   }
 
@@ -69,7 +78,7 @@ export class ActivitiesRepository {
     return this.prisma.studentAchievement.findMany({
       where: { studentId },
       include: { issuedBy: true },
-      orderBy: { issuedAt: "desc" },
+      orderBy: { issuedAt: 'desc' },
     });
   }
 
@@ -84,7 +93,7 @@ export class ActivitiesRepository {
     return this.prisma.staffDutyAllocation.findMany({
       where,
       include: { staff: true },
-      orderBy: { date: "desc" },
+      orderBy: { date: 'desc' },
     });
   }
 }

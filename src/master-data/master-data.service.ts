@@ -1,6 +1,10 @@
-// @ts-nocheck
-import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateSessionDto,
   CreateCampusDto,
@@ -11,8 +15,8 @@ import {
   UpdateCampusDto,
   UpdateClassDto,
   UpdateSubjectDto,
-  UpdateAssignmentDto
-} from "./dto/master-data.dto";
+  UpdateAssignmentDto,
+} from './dto/master-data.dto';
 
 @Injectable()
 export class MasterDataService {
@@ -33,22 +37,26 @@ export class MasterDataService {
       data: {
         name: dto.name,
         isActive: dto.isActive || false,
-        createdBy: "SYSTEM",
+        createdBy: 'SYSTEM',
       },
     });
   }
 
   async getSessions() {
     return this.prisma.academicSession.findMany({
-      orderBy: { name: "desc" },
+      orderBy: { name: 'desc' },
     });
   }
 
   async setActiveSession(id: string) {
     // Verify session exists
-    const session = await this.prisma.academicSession.findUnique({ where: { id } });
+    const session = await this.prisma.academicSession.findUnique({
+      where: { id },
+    });
     if (!session) {
-      throw new NotFoundException(`Academic Session with ID "${id}" not found.`);
+      throw new NotFoundException(
+        `Academic Session with ID "${id}" not found.`,
+      );
     }
 
     // Set all other sessions to inactive and the targeted one to active
@@ -62,7 +70,9 @@ export class MasterDataService {
       }),
     ]);
 
-    return { message: `Session "${session.name}" is now the active academic session.` };
+    return {
+      message: `Session "${session.name}" is now the active academic session.`,
+    };
   }
 
   async updateSession(id: string, dto: UpdateSessionDto) {
@@ -71,8 +81,8 @@ export class MasterDataService {
       data: {
         name: dto.name,
         isActive: dto.isActive,
-        updatedBy: "SYSTEM",
-      }
+        updatedBy: 'SYSTEM',
+      },
     });
   }
 
@@ -80,7 +90,9 @@ export class MasterDataService {
   // CAMPUS SERVICES
   // ==========================================
   async createCampus(dto: CreateCampusDto) {
-    const existing = await this.prisma.campus.findUnique({ where: { name: dto.name } });
+    const existing = await this.prisma.campus.findUnique({
+      where: { name: dto.name },
+    });
     if (existing) {
       throw new ConflictException(`Campus "${dto.name}" already registered.`);
     }
@@ -88,7 +100,10 @@ export class MasterDataService {
     let profileId = dto.schoolProfileId;
     if (!profileId) {
       const profile = await this.prisma.schoolProfile.findFirst();
-      if (!profile) throw new BadRequestException("No School Profile found. Please initialize the school first.");
+      if (!profile)
+        throw new BadRequestException(
+          'No School Profile found. Please initialize the school first.',
+        );
       profileId = profile.id;
     }
 
@@ -98,13 +113,13 @@ export class MasterDataService {
         address: dto.address,
         capacity: parseInt(dto.capacity.toString(), 10),
         schoolProfileId: profileId,
-        createdBy: "SYSTEM",
+        createdBy: 'SYSTEM',
       },
     });
   }
 
   async getCampuses() {
-    return this.prisma.campus.findMany({ orderBy: { name: "asc" } });
+    return this.prisma.campus.findMany({ orderBy: { name: 'asc' } });
   }
 
   async deleteCampus(id: string) {
@@ -112,14 +127,14 @@ export class MasterDataService {
   }
 
   async updateCampus(id: string, dto: UpdateCampusDto) {
-    const updateData: any = { ...dto, updatedBy: "SYSTEM" };
+    const updateData: any = { ...dto, updatedBy: 'SYSTEM' };
     if (dto.capacity) {
       updateData.capacity = parseInt(dto.capacity.toString(), 10);
     }
 
     return this.prisma.campus.update({
       where: { id },
-      data: updateData
+      data: updateData,
     });
   }
 
@@ -132,10 +147,11 @@ export class MasterDataService {
         grade: dto.grade,
         campusId: dto.campusId,
         sessionId: dto.sessionId,
-        createdBy: "SYSTEM",
+        createdBy: 'SYSTEM',
         sections: {
-          create: dto.sections?.map(s => ({ name: s, createdBy: "SYSTEM" })) || []
-        }
+          create:
+            dto.sections?.map((s) => ({ name: s, createdBy: 'SYSTEM' })) || [],
+        },
       },
       include: { campus: true, session: true, sections: true },
     });
@@ -144,7 +160,7 @@ export class MasterDataService {
   async getClasses() {
     return this.prisma.class.findMany({
       include: { campus: true, session: true, sections: true },
-      orderBy: { grade: "asc" },
+      orderBy: { grade: 'asc' },
     });
   }
 
@@ -159,7 +175,7 @@ export class MasterDataService {
         grade: dto.grade,
         campusId: dto.campusId,
         sessionId: dto.sessionId,
-        updatedBy: "SYSTEM",
+        updatedBy: 'SYSTEM',
       },
       include: { campus: true, session: true, sections: true },
     });
@@ -174,7 +190,7 @@ export class MasterDataService {
         name: dto.name,
         classes: { create: [{ classId: dto.classId }] },
         medium: dto.medium,
-        createdBy: "SYSTEM",
+        createdBy: 'SYSTEM',
       },
       include: { classes: { include: { class: true } } },
     });
@@ -182,8 +198,10 @@ export class MasterDataService {
 
   async getSubjects() {
     return this.prisma.subject.findMany({
-      include: { classes: { include: { class: { include: { campus: true } } } } },
-      orderBy: { name: "asc" },
+      include: {
+        classes: { include: { class: { include: { campus: true } } } },
+      },
+      orderBy: { name: 'asc' },
     });
   }
 
@@ -197,7 +215,7 @@ export class MasterDataService {
       data: {
         name: dto.name,
         medium: dto.medium,
-        updatedBy: "SYSTEM",
+        updatedBy: 'SYSTEM',
       },
       include: { classes: { include: { class: true } } },
     });
@@ -213,8 +231,8 @@ export class MasterDataService {
         sessionId: dto.sessionId,
         subjectId: dto.subjectId || null,
         sectionId: dto.sectionId || null,
-        hoursPerWeek: dto.hoursPerWeek,
-        createdBy: "SYSTEM",
+        hoursPerWeek: dto.workload ? parseFloat(dto.workload) : null,
+        createdBy: 'SYSTEM',
       },
       include: { session: true },
     });
@@ -222,11 +240,15 @@ export class MasterDataService {
 
   async getAllocations() {
     return this.prisma.teacherAssignment.findMany({
-      include: { 
-        session: true, 
-        subject: { include: { classes: { include: { class: { include: { campus: true } } } } } }, 
+      include: {
+        session: true,
+        subject: {
+          include: {
+            classes: { include: { class: { include: { campus: true } } } },
+          },
+        },
         section: { include: { class: { include: { campus: true } } } },
-        staff: true
+        staff: true,
       },
     });
   }
@@ -243,8 +265,8 @@ export class MasterDataService {
         sessionId: dto.sessionId,
         subjectId: dto.subjectId || null,
         sectionId: dto.sectionId || null,
-        hoursPerWeek: dto.workload,
-        updatedBy: "SYSTEM",
+        hoursPerWeek: dto.workload ? parseFloat(dto.workload) : null,
+        updatedBy: 'SYSTEM',
       },
       include: { session: true },
     });
@@ -267,7 +289,7 @@ export class MasterDataService {
   async getRooms() {
     return this.prisma.room.findMany({
       include: { campus: true },
-      orderBy: { name: "asc" },
+      orderBy: { name: 'asc' },
     });
   }
 

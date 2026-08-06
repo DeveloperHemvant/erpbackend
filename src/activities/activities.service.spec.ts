@@ -1,8 +1,8 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { ActivitiesService } from "./activities.service";
-import { ActivitiesRepository } from "./repositories/activities.repository";
+import { Test, TestingModule } from '@nestjs/testing';
+import { ActivitiesService } from './activities.service';
+import { ActivitiesRepository } from './repositories/activities.repository';
 
-describe("ActivitiesService", () => {
+describe('ActivitiesService', () => {
   let service: ActivitiesService;
 
   const mockRepository = {
@@ -27,23 +27,26 @@ describe("ActivitiesService", () => {
     service = module.get<ActivitiesService>(ActivitiesService);
   });
 
-  it("should be defined", () => {
+  it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it("creates a morning assembly log", async () => {
+  it('creates a morning assembly log', async () => {
     const dto = {
-      date: "2026-08-05T08:00:00.000Z",
-      campusId: "campus-uuid",
-      theme: "Honesty",
-      performingSectionId: "section-uuid",
-      supervisingStaffId: "staff-uuid",
-      venue: "Auditorium",
+      date: '2026-08-05T08:00:00.000Z',
+      campusId: 'campus-uuid',
+      theme: 'Honesty',
+      performingSectionId: 'section-uuid',
+      supervisingStaffId: 'staff-uuid',
+      venue: 'Auditorium',
       activities: [],
     };
-    mockRepository.createAssembly.mockResolvedValue({ id: "assembly-uuid", ...dto });
+    mockRepository.createAssembly.mockResolvedValue({
+      id: 'assembly-uuid',
+      ...dto,
+    });
 
     const result = await service.createAssembly(dto);
-    expect(result.theme).toBe("Honesty");
+    expect(result.theme).toBe('Honesty');
   });
 });

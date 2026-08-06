@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class WorkflowDefinitionRepository {
@@ -14,7 +14,11 @@ export class WorkflowDefinitionRepository {
     return this.prisma.workflowDefinition.findMany();
   }
 
-  upsert(entityType: string, name: string, data: Prisma.WorkflowDefinitionUncheckedCreateInput) {
+  upsert(
+    entityType: string,
+    name: string,
+    data: Prisma.WorkflowDefinitionUncheckedCreateInput,
+  ) {
     return this.prisma.workflowDefinition.upsert({
       where: { entityType_name: { entityType, name } },
       create: data,

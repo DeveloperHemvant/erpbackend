@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class ExamRepository {
@@ -11,10 +11,18 @@ export class ExamRepository {
   }
 
   findAllExams() {
-    return this.prisma.exam.findMany({ include: { session: true }, orderBy: { createdAt: "desc" } });
+    return this.prisma.exam.findMany({
+      include: { session: true },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  findClashingSlot(date: string, room: string, startTime: string, endTime: string) {
+  findClashingSlot(
+    date: string,
+    room: string,
+    startTime: string,
+    endTime: string,
+  ) {
     return this.prisma.examSlot.findFirst({
       where: {
         date,
@@ -31,26 +39,40 @@ export class ExamRepository {
   findAllExamSlots() {
     return this.prisma.examSlot.findMany({
       include: { exam: true, class: true, subject: true },
-      orderBy: { date: "asc" },
+      orderBy: { date: 'asc' },
     });
   }
 
   findExamMarkByEnrollment(examSlotId: string, enrollmentId: string) {
-    return this.prisma.examMarks.findFirst({ where: { examSlotId, enrollmentId } });
+    return this.prisma.examMarks.findFirst({
+      where: { examSlotId, enrollmentId },
+    });
   }
 
-  updateExamMark(id: string, marksObtained: number | undefined, isAbsent: boolean | undefined) {
-    return this.prisma.examMarks.update({ where: { id }, data: { marksObtained, isAbsent } });
+  updateExamMark(
+    id: string,
+    marksObtained: number | undefined,
+    isAbsent: boolean | undefined,
+  ) {
+    return this.prisma.examMarks.update({
+      where: { id },
+      data: { marksObtained, isAbsent },
+    });
   }
 
-  createExamMark(examSlotId: string, enrollmentId: string, marksObtained: number | undefined, isAbsent: boolean | undefined) {
+  createExamMark(
+    examSlotId: string,
+    enrollmentId: string,
+    marksObtained: number | undefined,
+    isAbsent: boolean | undefined,
+  ) {
     return this.prisma.examMarks.create({
       data: {
         examSlotId,
         enrollmentId,
         marksObtained,
         isAbsent,
-        createdBy: "SYSTEM",
+        createdBy: 'SYSTEM',
       },
     });
   }

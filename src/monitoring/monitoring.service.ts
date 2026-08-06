@@ -5,10 +5,13 @@ import * as os from 'os';
 
 @Injectable()
 export class MonitoringService {
-  private previousCpuTimes: { idle: number, total: number } | null = null;
+  private previousCpuTimes: { idle: number; total: number } | null = null;
   private currentCpuUsage: number = 0;
 
-  constructor(private prisma: PrismaService, private jobsService: JobsService) {
+  constructor(
+    private prisma: PrismaService,
+    private jobsService: JobsService,
+  ) {
     // Periodically calculate CPU usage (works on Windows & Linux)
     setInterval(() => this.calculateCpuUsage(), 2000);
   }
@@ -28,8 +31,8 @@ export class MonitoringService {
     if (this.previousCpuTimes) {
       const idleDifference = idle - this.previousCpuTimes.idle;
       const totalDifference = total - this.previousCpuTimes.total;
-      
-      const percentageCpu = 100 - (100 * idleDifference / totalDifference);
+
+      const percentageCpu = 100 - (100 * idleDifference) / totalDifference;
       this.currentCpuUsage = percentageCpu;
     }
 
@@ -51,7 +54,7 @@ export class MonitoringService {
 
     // Node process stats
     const memoryUsage = process.memoryUsage();
-    
+
     // DB Health Check
     let dbStatus = 'healthy';
     let dbPing = 0;
@@ -59,7 +62,7 @@ export class MonitoringService {
       const start = Date.now();
       await this.prisma.$queryRaw`SELECT 1`;
       dbPing = Date.now() - start;
-    } catch (error) {
+    } catch {
       dbStatus = 'offline';
     }
 
@@ -91,7 +94,7 @@ export class MonitoringService {
       database: {
         status: dbStatus,
         pingMs: dbPing,
-      }
+      },
     };
   }
 
