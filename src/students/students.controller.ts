@@ -28,6 +28,7 @@ export class StudentsController {
   constructor(private readonly studentsService: StudentsService) {}
 
   @Post('students')
+  @RequirePermissions('MANAGE_USERS')
   @ApiOperation({ summary: 'Admit a new student' })
   createStudent(@Body() dto: CreateStudentDto) {
     return this.studentsService.createStudent(dto);
@@ -68,6 +69,7 @@ export class StudentsController {
   }
 
   @Delete('students/:id')
+  @RequirePermissions('MANAGE_USERS')
   @ApiParam({ name: 'id', format: 'uuid' })
   deleteStudent(@Param('id', ParseUUIDPipe) id: string) {
     return this.studentsService.deleteStudent(id);
@@ -84,6 +86,7 @@ export class StudentsController {
   }
 
   @Patch('parents/:id/credentials')
+  @RequirePermissions('MANAGE_USERS')
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOperation({ summary: 'Update parent email and password' })
   updateParentCredentials(
@@ -94,6 +97,7 @@ export class StudentsController {
   }
 
   @Post('students/:id/setup-parent-portal')
+  @RequirePermissions('MANAGE_USERS')
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOperation({ summary: 'Setup parent portal account' })
   setupParentPortal(
@@ -104,6 +108,9 @@ export class StudentsController {
   }
 
   @Get('students/:id/certificates')
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission('VIEW_STUDENTS', 'MANAGE_TRANSPORT')
+  @RequirePermissions()
   @ApiOperation({ summary: 'Generate certificates for a student' })
   @ApiParam({ name: 'id', format: 'uuid' })
   getCertificates(@Param('id', ParseUUIDPipe) id: string) {

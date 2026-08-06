@@ -33,6 +33,7 @@ export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
   @Post()
+  @RequirePermissions('MANAGE_USERS')
   @ApiOperation({ summary: 'Onboard new staff member' })
   @ApiResponse({ status: 201, description: 'Staff onboarded successfully' })
   @ApiResponse({ status: 409, description: 'Email already exists in roster' })
@@ -71,6 +72,7 @@ export class StaffController {
   }
 
   @Patch(':id')
+  @RequirePermissions('MANAGE_USERS')
   @ApiOperation({ summary: 'Update staff details / roles link' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Staff updated successfully' })
@@ -83,6 +85,7 @@ export class StaffController {
   }
 
   @Post(':id/assignments')
+  @RequirePermissions('MANAGE_USERS')
   @ApiOperation({ summary: 'Update Teacher Assignments' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 201, description: 'Teacher assignments updated' })
@@ -94,6 +97,7 @@ export class StaffController {
   }
 
   @Post(':id/transport-assignments')
+  @RequirePermissions('MANAGE_USERS')
   @ApiOperation({ summary: 'Update Transport Assignments' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 201, description: 'Transport assignments updated' })
@@ -126,6 +130,9 @@ export class StaffController {
   }
 
   @Get(':id/attendance-logs')
+  @UseGuards(SelfOrPermissionGuard)
+  @RequireSelfOrPermission('id', 'MANAGE_USERS')
+  @RequirePermissions()
   @ApiOperation({ summary: 'Get staff attendance logs' })
   @ApiQuery({
     name: 'month',
@@ -140,6 +147,9 @@ export class StaffController {
   }
 
   @Post(':id/leaves')
+  @UseGuards(SelfOrPermissionGuard)
+  @RequireSelfOrPermission('id', 'MANAGE_USERS')
+  @RequirePermissions()
   @ApiOperation({ summary: 'Apply for a leave' })
   applyLeave(
     @Param('id', ParseUUIDPipe) id: string,
@@ -155,6 +165,7 @@ export class StaffController {
   }
 
   @Delete(':id')
+  @RequirePermissions('MANAGE_USERS')
   @ApiOperation({ summary: 'Delete staff member by UUID' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Staff deleted successfully' })
@@ -164,6 +175,7 @@ export class StaffController {
   }
 
   @Post(':id/upload')
+  @RequirePermissions('MANAGE_USERS')
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Upload file (photo/document) for staff' })
   @ApiParam({ name: 'id', format: 'uuid' })
