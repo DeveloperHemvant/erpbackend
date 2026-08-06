@@ -179,7 +179,7 @@ model Student {
   EMSExamAttempt      EMSExamAttempt[]
   EMSResult           EMSResult[]
   EMSReportCard       EMSReportCard[]
-  EMSCertificate      EMSCertificate[]
+  certificates        Certificate[]
   IdCards             IdCard[]
 
   healthProfile       HealthProfile?
@@ -1113,7 +1113,31 @@ model DocumentTemplate {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  certificates Certificate[]
+
   @@map("document_templates")
+}
+
+// Phase 3 item 3.3 — replaces LMSCertificate (0 rows, no controller, no UI)
+// and EMSCertificate (115 rows, no controller, no UI — seed data with no
+// application surface to reach it) with one real, issuable certificate
+// model that a DocumentTemplate (type="CERTIFICATE") can actually feed into,
+// giving the Certificate Designer screen a downstream consumer for the
+// first time.
+model Certificate {
+  id         String            @id @default(uuid()) @db.Uuid
+  templateId String?           @db.Uuid
+  template   DocumentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  studentId  String?           @db.Uuid
+  student    Student?          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  type       String // MERIT, PARTICIPATION, COMPLETION, ... (carried over from EMSCertificate)
+  title      String
+  fileUrl    String?
+  issueDate  DateTime          @default(now())
+  status     String            @default("Active")
+  createdAt  DateTime          @default(now())
+
+  @@map("certificates")
 }
 
 // ==========================================
@@ -1609,7 +1633,6 @@ model LMSCourse {
   LMSGradebook        LMSGradebook?
   LMSLiveClass        LMSLiveClass[]
   LMSDiscussionThread LMSDiscussionThread[]
-  LMSCertificate      LMSCertificate[]
 
   @@map("lms_courses")
 }
@@ -1904,8 +1927,7 @@ model LMSStudentPortfolio {
   totalXP   Int      @default(0)
   createdAt DateTime @default(now())
 
-  badges       LMSBadge[]
-  certificates LMSCertificate[]
+  badges LMSBadge[]
 
   @@map("lms_student_portfolios")
 }
@@ -1921,17 +1943,6 @@ model LMSBadge {
   @@map("lms_badges")
 }
 
-model LMSCertificate {
-  id          String              @id @default(uuid()) @db.Uuid
-  portfolioId String              @db.Uuid
-  portfolio   LMSStudentPortfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  courseId    String              @db.Uuid
-  course      LMSCourse           @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  issueDate   DateTime            @default(now())
-  fileUrl     String?
-
-  @@map("lms_certificates")
-}
 
 model LMSAIGeneration {
   id        String   @id @default(uuid()) @db.Uuid
@@ -2257,17 +2268,6 @@ model EMSReportCard {
   @@map("ems_report_cards")
 }
 
-model EMSCertificate {
-  id        String   @id @default(uuid()) @db.Uuid
-  studentId String   @db.Uuid
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  type      String // MERIT, PARTICIPATION, COMPLETION
-  title     String
-  fileUrl   String?
-  issueDate DateTime @default(now())
-
-  @@map("ems_certificates")
-}
 
 // ==========================================
 // ACMS PHASE 1: ACADEMIC CALENDAR & TERMS

@@ -12,6 +12,7 @@ import { TemplateService } from './template.service';
 import {
   CreateDocumentTemplateDto,
   UpdateDocumentTemplateDto,
+  IssueCertificateDto,
 } from './dto/template.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
 
@@ -55,5 +56,20 @@ export class TemplateController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.templateService.remove(id);
+  }
+
+  @Post(':id/certificates')
+  issueCertificate(@Param('id') id: string, @Body() data: IssueCertificateDto) {
+    return this.templateService.issueCertificate(id, data);
+  }
+
+  @Get(':id/certificates')
+  getCertificatesForTemplate(@Param('id') id: string) {
+    return this.templateService.getCertificatesForTemplate(id);
+  }
+
+  @Get('certificates/all')
+  getCertificates(@Query('studentId') studentId?: string) {
+    return this.templateService.getCertificates(studentId);
   }
 }

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -83,5 +87,47 @@ export class TemplateService {
       template,
       targetData,
     };
+  }
+
+  // Phase 3 item 3.3 — gives Certificate Designer templates a real downstream
+  // consumer for the first time (previously: 0 rows ever created against
+  // this model despite a full CRUD screen existing).
+  async issueCertificate(
+    templateId: string,
+    data: { studentId: string; type: string; title: string; fileUrl?: string },
+  ) {
+    const template = await this.findOne(templateId);
+    if (template.type !== 'CERTIFICATE') {
+      throw new BadRequestException(
+        `Template ${templateId} is type "${template.type}", not "CERTIFICATE" -- cannot issue a certificate from an ID card template.`,
+      );
+    }
+    return this.prisma.certificate.create({
+      data: {
+        templateId,
+        studentId: data.studentId,
+        type: data.type,
+        title: data.title,
+        fileUrl: data.fileUrl,
+      },
+    });
+  }
+
+  async getCertificatesForTemplate(templateId: string) {
+    return this.prisma.certificate.findMany({
+      where: { templateId },
+      orderBy: { issueDate: 'desc' },
+    });
+  }
+
+  async getCertificates(studentId?: string) {
+    return this.prisma.certificate.findMany({
+      where: studentId ? { studentId } : undefined,
+      include: {
+        student: { select: { id: true, fullName: true, admissionNumber: true } },
+        template: { select: { id: true, name: true } },
+      },
+      orderBy: { issueDate: 'desc' },
+    });
   }
 }

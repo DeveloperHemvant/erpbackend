@@ -21,6 +21,24 @@ export class CreateDocumentTemplateDto {
   status?: string;
 }
 
+export class IssueCertificateDto {
+  @IsString()
+  @IsNotEmpty()
+  studentId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  type: string; // MERIT, PARTICIPATION, COMPLETION, ...
+
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @IsString()
+  @IsOptional()
+  fileUrl?: string;
+}
+
 export class UpdateDocumentTemplateDto {
   @IsString()
   @IsOptional()

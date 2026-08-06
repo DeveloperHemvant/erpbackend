@@ -1541,7 +1541,7 @@ async function main() {
       issueDate: new Date('2027-03-15'),
     });
   }
-  await batchInsert('ems_certificates', prisma.eMSCertificate, certificateRows);
+  await batchInsert('certificates', prisma.certificate, certificateRows);
 
   console.log('\n19) Final validation summary...');
   const studentCount = await prisma.student.count();
