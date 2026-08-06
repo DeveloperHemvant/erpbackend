@@ -1,8 +1,10 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import Razorpay from 'razorpay';
 import { CommunicationService } from '../communication/communication.service';
 import { StudentRepository } from '../students/repositories/student.repository';
 import { FeeRepository } from './repositories/fee.repository';
@@ -18,12 +20,27 @@ import {
 
 @Injectable()
 export class FeesService {
+  private readonly logger = new Logger(FeesService.name);
+  private razorpayClient: Razorpay | null = null;
+
   constructor(
     private readonly commService: CommunicationService,
     private readonly studentRepository: StudentRepository,
     private readonly feeRepository: FeeRepository,
     private readonly auditLogRepository: ErpCoreAuditLogRepository,
-  ) {}
+  ) {
+    const { RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET } = process.env;
+    if (RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) {
+      this.razorpayClient = new Razorpay({
+        key_id: RAZORPAY_KEY_ID,
+        key_secret: RAZORPAY_KEY_SECRET,
+      });
+    } else {
+      this.logger.warn(
+        'Razorpay not configured (RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET) — fee payment order creation will return not_configured instead of a real order.',
+      );
+    }
+  }
 
   // Flattens `invoice.enrollment.{student,section.class}` into the `invoice.student.*` shape
   // the frontend (web-app/app/dashboard/fees/page.tsx) actually consumes.
@@ -174,6 +191,44 @@ export class FeesService {
   // ==========================================
   // FEE PAYMENTS & AUDIT LOGS
   // ==========================================
+  // Phase 2 scaffold (SOR item 2.11): the fee payment UI/API were fully built
+  // but the gateway itself was explicitly simulated (fees.tsx's own comment:
+  // "Payment gateway is simulated"). This creates a real Razorpay order when
+  // credentials are configured; recordFeePayment/processOnlinePaymentWebhook
+  // above are untouched, so nothing that currently works changes behavior.
+  async createRazorpayOrder(invoiceId: string) {
+    const invoice = await this.feeRepository.findInvoiceWithPayments(invoiceId);
+    if (!invoice) throw new NotFoundException('Fee Invoice not found.');
+
+    const totalPaid = invoice.payments.reduce(
+      (sum, p) => sum + Number(p.amountPaid),
+      0,
+    );
+    const invoiceAmount = Number(invoice.totalAmount || invoice.amount);
+    const outstanding = invoiceAmount - totalPaid;
+    if (outstanding <= 0) {
+      throw new BadRequestException('This invoice has no outstanding balance.');
+    }
+
+    if (!this.razorpayClient) {
+      return {
+        status: 'not_configured',
+        message:
+          'Razorpay is not configured on this server. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to enable real online payments.',
+        outstanding,
+      };
+    }
+
+    const order = await this.razorpayClient.orders.create({
+      amount: Math.round(outstanding * 100), // paise
+      currency: 'INR',
+      receipt: `invoice-${invoiceId}`,
+      notes: { invoiceId },
+    });
+
+    return { status: 'created', order };
+  }
+
   async recordFeePayment(invoiceId: string, dto: CreateFeePaymentDto) {
     const invoice = await this.feeRepository.findInvoiceWithPayments(invoiceId);
     if (!invoice) throw new NotFoundException('Fee Invoice not found.');

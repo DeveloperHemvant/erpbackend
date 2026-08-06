@@ -85,6 +85,19 @@ export class FeesController {
     return this.feesService.deleteFeeInvoice(id);
   }
 
+  @Post('fees/:id/payments/razorpay-order')
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission('PAY_FEES', 'MANAGE_FEES')
+  @RequirePermissions()
+  @ApiOperation({
+    summary:
+      'Create a Razorpay order for online payment of an invoice — returns not_configured if no credentials are set',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  createRazorpayOrder(@Param('id', ParseUUIDPipe) id: string) {
+    return this.feesService.createRazorpayOrder(id);
+  }
+
   @Post('fees/:id/payments')
   @UseGuards(AnyPermissionGuard)
   @RequireAnyPermission('PAY_FEES', 'MANAGE_FEES')
