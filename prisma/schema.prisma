@@ -120,6 +120,8 @@ model Staff {
   hostelOutpassesApproved HostelOutpass[]
   vehicleGateLogsLogged   VehicleGateLog[]
   studentGateLogsLogged   StudentGateLog[]
+  courierLogsLogged       CourierLog[]
+  appointmentsHosted      Appointment[]
 
   healthVisitsLogged        HealthVisit[]
   disciplineIncidentsFiled  DisciplineIncident[]       @relation("DisciplineReportedBy")
@@ -2648,6 +2650,35 @@ model StudentGatePass {
   updatedAt    DateTime  @updatedAt
 
   @@map("student_gate_passes")
+}
+
+// Added Phase 2 — Reception desk (SOR items 2.6/2.7). Neither existed in any
+// form before (no model, no screen, no API) per the operational readiness audit.
+model CourierLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  type        String // INCOMING, OUTGOING
+  sender      String?
+  recipient   String?
+  description String
+  status      String   @default("Received") // Received, Dispatched, Collected
+  loggedById  String?  @db.Uuid
+  loggedBy    Staff?   @relation(fields: [loggedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@map("courier_logs")
+}
+
+model Appointment {
+  id           String   @id @default(uuid()) @db.Uuid
+  visitorName  String
+  purpose      String
+  scheduledFor DateTime
+  hostId       String?  @db.Uuid
+  host         Staff?   @relation(fields: [hostId], references: [id], onDelete: SetNull)
+  status       String   @default("Scheduled") // Scheduled, Completed, Cancelled
+  createdAt    DateTime @default(now())
+
+  @@map("appointments")
 }
 
 model SchoolHouse {

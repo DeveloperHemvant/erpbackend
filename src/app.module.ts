@@ -52,6 +52,7 @@ import { WorkflowEngineModule } from './workflow-engine/workflow-engine.module';
 import { RulesEngineModule } from './rules-engine/rules-engine.module';
 import { AiModule } from './ai/ai.module';
 import { VisitorModule } from './visitor/visitor.module';
+import { ReceptionModule } from './reception/reception.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { MedicalModule } from './medical/medical.module';
 import { SubstitutionModule } from './substitution/substitution.module';
@@ -114,6 +115,7 @@ import { SimulatorModule } from './testing/simulator/simulator.module';
     RulesEngineModule,
     AiModule,
     VisitorModule,
+    ReceptionModule,
     ActivitiesModule,
     MedicalModule,
     SubstitutionModule,
