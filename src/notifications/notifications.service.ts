@@ -61,4 +61,22 @@ export class NotificationsService {
       this.logger.warn(`Expo push send failed: ${err}`);
     }
   }
+
+  async getNotifications(userId: string) {
+    const account = await this.prisma.portalAccount.findFirst({
+      where: { referenceId: userId },
+    });
+    if (!account) return [];
+    return this.prisma.notification.findMany({
+      where: { recipientId: account.id },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async markNotificationRead(id: string) {
+    return this.prisma.notification.update({
+      where: { id },
+      data: { readStatus: true },
+    });
+  }
 }

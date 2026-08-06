@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DiaryRepository } from './repositories/diary.repository';
 import {
   CreateDiaryEntryDto,
@@ -12,6 +12,9 @@ export class DiaryService {
   constructor(private readonly repository: DiaryRepository) {}
 
   async createDiaryEntry(teacherId: string, dto: CreateDiaryEntryDto) {
+    if (dto.type === 'HOMEWORK') {
+      throw new BadRequestException('Homework must be registered using LMS Assignment Engine rather than the School Diary.');
+    }
     return this.repository.createDiaryEntry({
       studentId: dto.studentId,
       teacherId,

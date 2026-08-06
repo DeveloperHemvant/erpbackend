@@ -37,7 +37,7 @@ describe('DiaryService', () => {
   it('creates a diary entry', async () => {
     const dto = {
       studentId: 'student-uuid',
-      type: 'HOMEWORK',
+      type: 'REMARK',
       content: 'Complete page 12 of math book',
     };
     mockRepository.createDiaryEntry.mockResolvedValue({
@@ -46,6 +46,6 @@ describe('DiaryService', () => {
     });
 
     const result = await service.createDiaryEntry('teacher-uuid', dto);
-    expect(result.type).toBe('HOMEWORK');
+    expect(result.type).toBe('REMARK');
   });
 });

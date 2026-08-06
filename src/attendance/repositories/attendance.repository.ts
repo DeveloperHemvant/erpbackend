@@ -44,6 +44,19 @@ export class AttendanceRepository {
     });
   }
 
+  update(id: string, data: Prisma.AttendanceRecordUncheckedUpdateInput) {
+    return this.prisma.attendanceRecord.update({
+      where: { id },
+      data,
+      include: {
+        enrollment: {
+          include: { student: true, section: { include: { class: true } } },
+        },
+        staff: true,
+      },
+    });
+  }
+
   delete(id: string) {
     return this.prisma.attendanceRecord.delete({ where: { id } });
   }

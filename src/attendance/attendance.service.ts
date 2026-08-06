@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { CommunicationService } from '../communication/communication.service';
 import { AttendanceRepository } from './repositories/attendance.repository';
-import { CreateAttendanceDto } from './dto/attendance.dto';
+import { CreateAttendanceDto, UpdateAttendanceDto } from './dto/attendance.dto';
 
 @Injectable()
 export class AttendanceService {
@@ -66,6 +66,18 @@ export class AttendanceService {
     }
 
     return this.attendanceRepository.findMany(where);
+  }
+
+  async updateAttendance(id: string, dto: UpdateAttendanceDto) {
+    const record = await this.attendanceRepository.update(id, {
+      status: dto.status,
+    });
+    if (record.status === 'Absent' && record.enrollment?.studentId) {
+      this.commService
+        .sendAbsenceAlert(record.enrollment.studentId, record.date)
+        .catch(console.error);
+    }
+    return record;
   }
 
   async deleteAttendance(id: string) {

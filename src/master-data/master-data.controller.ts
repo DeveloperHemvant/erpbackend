@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { MasterDataService } from './master-data.service';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import {
   CreateSessionDto,
   CreateCampusDto,
@@ -24,6 +25,7 @@ import {
 } from './dto/master-data.dto';
 
 @ApiTags('Master Data Repository')
+@RequirePermissions('MANAGE_ACADEMICS')
 @Controller('master-data')
 export class MasterDataController {
   constructor(private readonly masterDataService: MasterDataService) {}

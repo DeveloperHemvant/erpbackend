@@ -15,6 +15,9 @@ describe('SearchService', () => {
     searchDisciplineCases: jest.fn(),
     searchClassSections: jest.fn(),
     searchParents: jest.fn(),
+    searchAnnouncements: jest.fn(),
+    searchEvents: jest.fn(),
+    searchHouses: jest.fn(),
   };
 
   const superAdmin = {

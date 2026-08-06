@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -10,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { AttendanceService } from './attendance.service';
-import { CreateAttendanceDto } from './dto/attendance.dto';
+import { CreateAttendanceDto, UpdateAttendanceDto } from './dto/attendance.dto';
 
 @ApiTags('ERP Core Features')
 @Controller('erp-core')
@@ -61,6 +62,16 @@ export class AttendanceController {
       status: 'accepted',
       message: 'Biometric record queued for processing',
     };
+  }
+
+  @Patch('attendance/:id')
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOperation({ summary: 'Correct/update an existing attendance record status' })
+  updateAttendance(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAttendanceDto,
+  ) {
+    return this.attendanceService.updateAttendance(id, dto);
   }
 
   @Delete('attendance/:id')

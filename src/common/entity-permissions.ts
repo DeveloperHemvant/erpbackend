@@ -15,6 +15,9 @@ export const ENTITY_VIEW_PERMISSION: Record<string, string> = {
   'discipline-case': 'MANAGE_DISCIPLINE',
   'class-section': 'MANAGE_ACADEMICS',
   parent: 'MANAGE_USERS',
+  announcement: 'MANAGE_COMMUNICATION',
+  event: 'VIEW_STUDENTS',
+  house: 'VIEW_STUDENTS',
 };
 
 export function canAccessEntityType(

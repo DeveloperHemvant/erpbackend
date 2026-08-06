@@ -194,4 +194,62 @@ export class SearchRepository {
       updatedAt: p.updatedAt,
     }));
   }
+
+  async searchAnnouncements(q: string, limit: number): Promise<SearchResult[]> {
+    const rows = await this.prisma.announcement.findMany({
+      where: {
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { body: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+    });
+    return rows.map((a) => ({
+      id: a.id,
+      entityType: 'announcement',
+      title: a.title,
+      subtitle: a.body,
+      href: `/announcements/${a.id}`,
+      updatedAt: a.updatedAt,
+    }));
+  }
+
+  async searchEvents(q: string, limit: number): Promise<SearchResult[]> {
+    const rows = await this.prisma.aCMSEvent.findMany({
+      where: {
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+    });
+    return rows.map((e) => ({
+      id: e.id,
+      entityType: 'event',
+      title: e.title,
+      subtitle: e.description ?? undefined,
+      href: `/events/${e.id}`,
+      updatedAt: e.updatedAt,
+    }));
+  }
+
+  async searchHouses(q: string, limit: number): Promise<SearchResult[]> {
+    const rows = await this.prisma.schoolHouse.findMany({
+      where: { name: { contains: q, mode: 'insensitive' } },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+    });
+    return rows.map((h) => ({
+      id: h.id,
+      entityType: 'house',
+      title: h.name,
+      subtitle: `${h.points} Points`,
+      href: `/houses/${h.id}`,
+      updatedAt: h.updatedAt,
+    }));
+  }
 }

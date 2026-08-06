@@ -19,6 +19,9 @@ const SEARCHERS: Record<
   'discipline-case': (repo, q, limit) => repo.searchDisciplineCases(q, limit),
   'class-section': (repo, q, limit) => repo.searchClassSections(q, limit),
   parent: (repo, q, limit) => repo.searchParents(q, limit),
+  announcement: (repo, q, limit) => repo.searchAnnouncements(q, limit),
+  event: (repo, q, limit) => repo.searchEvents(q, limit),
+  house: (repo, q, limit) => repo.searchHouses(q, limit),
 };
 
 /**

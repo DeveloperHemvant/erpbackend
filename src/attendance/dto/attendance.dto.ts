@@ -44,3 +44,10 @@ export class CreateAttendanceDto {
   @IsOptional()
   location?: string;
 }
+
+export class UpdateAttendanceDto {
+  @ApiProperty({ example: 'Present', enum: ['Present', 'Absent', 'Late'] })
+  @IsString()
+  @IsNotEmpty()
+  status: string;
+}
