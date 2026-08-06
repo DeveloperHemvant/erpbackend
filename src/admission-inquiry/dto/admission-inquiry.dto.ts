@@ -51,3 +51,29 @@ export class ConvertInquiryDto {
   @IsNotEmpty()
   studentId: string;
 }
+
+// Phase 3 item 3.4 — the actual fix for "Applicant -> Student is a manual,
+// disconnected step." ConvertInquiryDto (above) assumes a Student was
+// already created elsewhere and just links an ID; this creates the Student
+// AND links it in one call, pre-filled from the inquiry so staff don't
+// re-type name/guardian/phone they already captured at inquiry time.
+export class ConvertAndCreateStudentDto {
+  @IsString()
+  @IsNotEmpty()
+  admissionNumber: string;
+
+  @IsString()
+  @IsNotEmpty()
+  gender: string;
+
+  @IsEmail()
+  @IsNotEmpty()
+  parentEmail: string; // required by StudentsService.createStudent for portal account setup; inquiry.email is optional, so this can't always be silently defaulted
+
+  @IsString() @IsOptional() fullName?: string; // defaults to inquiry.childName
+  @IsString() @IsOptional() guardianName?: string; // defaults to inquiry.parentName
+  @IsString() @IsOptional() phone?: string; // defaults to inquiry.phone
+
+  @IsUUID() @IsOptional() classId?: string;
+  @IsUUID() @IsOptional() sectionId?: string;
+}

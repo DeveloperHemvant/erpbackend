@@ -8,6 +8,7 @@ import {
   UpdateInquiryDto,
   AddFollowUpDto,
   ConvertInquiryDto,
+  ConvertAndCreateStudentDto,
 } from './dto/admission-inquiry.dto';
 
 @RequirePermissions('MANAGE_ADMISSIONS_PIPELINE')
@@ -47,5 +48,13 @@ export class AdmissionInquiryController {
   @Post(':id/convert')
   convert(@Param('id') id: string, @Body() dto: ConvertInquiryDto) {
     return this.service.convert(id, dto);
+  }
+
+  @Post(':id/convert-and-create-student')
+  convertAndCreateStudent(
+    @Param('id') id: string,
+    @Body() dto: ConvertAndCreateStudentDto,
+  ) {
+    return this.service.convertAndCreateStudent(id, dto);
   }
 }

@@ -4,16 +4,21 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { AdmissionInquiryRepository } from './repositories/admission-inquiry.repository';
+import { StudentsService } from '../students/students.service';
 import {
   CreateInquiryDto,
   UpdateInquiryDto,
   AddFollowUpDto,
   ConvertInquiryDto,
+  ConvertAndCreateStudentDto,
 } from './dto/admission-inquiry.dto';
 
 @Injectable()
 export class AdmissionInquiryService {
-  constructor(private readonly repository: AdmissionInquiryRepository) {}
+  constructor(
+    private readonly repository: AdmissionInquiryRepository,
+    private readonly studentsService: StudentsService,
+  ) {}
 
   async create(dto: CreateInquiryDto) {
     return this.repository.create(dto);
@@ -54,5 +59,30 @@ export class AdmissionInquiryService {
       status: 'Converted',
       convertedStudentId: dto.studentId,
     });
+  }
+
+  async convertAndCreateStudent(id: string, dto: ConvertAndCreateStudentDto) {
+    const existing = await this.repository.findById(id);
+    if (!existing) throw new NotFoundException('Inquiry not found');
+    if (existing.convertedStudentId)
+      throw new BadRequestException('This inquiry has already been converted');
+
+    const student = await this.studentsService.createStudent({
+      admissionNumber: dto.admissionNumber,
+      fullName: dto.fullName || existing.childName,
+      gender: dto.gender,
+      guardianName: dto.guardianName || existing.parentName,
+      phone: dto.phone || existing.phone,
+      classId: dto.classId,
+      sectionId: dto.sectionId,
+      details: { emailId: dto.parentEmail },
+    });
+
+    await this.repository.update(id, {
+      status: 'Converted',
+      convertedStudentId: student.id,
+    });
+
+    return student;
   }
 }
