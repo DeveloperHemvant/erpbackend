@@ -36,6 +36,13 @@ export class LibraryController {
     return this.libraryService.getBooks();
   }
 
+  @Get('reports')
+  @RequirePermissions('MANAGE_ACADEMICS')
+  @ApiOperation({ summary: 'Get library usage/inventory report' })
+  async getLibraryReport() {
+    return this.libraryService.getLibraryReport();
+  }
+
   @Post('issues')
   @ApiOperation({ summary: 'Issue Book' })
   async issueBook(@Body() data: IssueBookDto) {

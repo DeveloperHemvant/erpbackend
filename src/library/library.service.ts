@@ -23,6 +23,49 @@ export class LibraryService {
     return this.prisma.libraryBook.findMany();
   }
 
+  async getLibraryReport() {
+    const [totalTitles, copiesAgg, currentlyIssued, overdueCount, unpaidFines, topBorrowedRaw] =
+      await Promise.all([
+        this.prisma.libraryBook.count(),
+        this.prisma.libraryBook.aggregate({
+          _sum: { totalCopies: true, available: true },
+        }),
+        this.prisma.bookIssue.count({ where: { status: 'Issued' } }),
+        this.prisma.bookIssue.count({
+          where: { status: 'Issued', dueDate: { lt: new Date() } },
+        }),
+        this.prisma.libraryFine.aggregate({
+          where: { status: 'Unpaid' },
+          _sum: { amount: true },
+          _count: true,
+        }),
+        this.prisma.bookIssue.groupBy({
+          by: ['bookId'],
+          _count: { bookId: true },
+          orderBy: { _count: { bookId: 'desc' } },
+          take: 5,
+        }),
+      ]);
+
+    const topBorrowedBooks = await Promise.all(
+      topBorrowedRaw.map(async (row) => ({
+        book: await this.prisma.libraryBook.findUnique({ where: { id: row.bookId } }),
+        issueCount: row._count.bookId,
+      })),
+    );
+
+    return {
+      totalTitles,
+      totalCopies: copiesAgg._sum.totalCopies || 0,
+      availableCopies: copiesAgg._sum.available || 0,
+      currentlyIssued,
+      overdueCount,
+      unpaidFinesTotal: unpaidFines._sum.amount || 0,
+      unpaidFinesCount: unpaidFines._count,
+      topBorrowedBooks,
+    };
+  }
+
   async issueBook(bookId: string, enrollmentId: string, dueDate: string) {
     const book = await this.prisma.libraryBook.findUnique({
       where: { id: bookId },
