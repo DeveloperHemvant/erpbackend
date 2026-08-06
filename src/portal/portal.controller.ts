@@ -84,6 +84,33 @@ export class PortalController {
     return this.portalService.applyStudentLeave(id, data);
   }
 
+  @Get('student/:id/diary')
+  @RequireSelfAccess('id')
+  @RequirePermissions('VIEW_OWN_PROFILE')
+  @ApiOperation({ summary: 'Get diary entries for this student' })
+  getStudentDiary(@Param('id', ParseUUIDPipe) id: string) {
+    return this.portalService.getStudentDiary(id);
+  }
+
+  @Get('parent/:id/diary')
+  @RequireSelfAccess('id')
+  @RequirePermissions('VIEW_CHILD_PROFILE')
+  @ApiOperation({ summary: "Get diary entries for all of this parent's children" })
+  getParentDiary(@Param('id', ParseUUIDPipe) id: string) {
+    return this.portalService.getParentDiary(id);
+  }
+
+  @Post('staff/:id/diary-entries')
+  @RequireSelfAccess('id')
+  @RequirePermissions('VIEW_STUDENTS')
+  @ApiOperation({ summary: 'Teacher creates a diary entry for a student in their class' })
+  createTeacherDiaryEntry(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() data: { studentId: string; type: string; content: string },
+  ) {
+    return this.portalService.createTeacherDiaryEntry(id, data);
+  }
+
   @Get('staff/:id/class-desk')
   @RequireSelfAccess('id')
   @RequirePermissions('VIEW_STUDENTS')

@@ -3,9 +3,10 @@ import { PortalController } from './portal.controller';
 import { PortalService } from './portal.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
+import { DiaryModule } from '../diary/diary.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, DiaryModule],
   controllers: [PortalController],
   providers: [PortalService],
   exports: [PortalService],

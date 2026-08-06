@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { DiaryService } from '../diary/diary.service';
 
 @Injectable()
 export class PortalService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private diaryService: DiaryService,
+  ) {}
 
   async getStudentDashboard(studentId: string) {
     const student = await this.prisma.student.findUnique({
@@ -381,6 +385,36 @@ export class PortalService {
         reason: data.reason,
       },
     });
+  }
+
+  // Reuses DiaryService (the module backing /diary) rather than querying
+  // SchoolDiaryEntry directly here, so the HOMEWORK-type rejection and any
+  // future diary business rules stay in one place.
+  async getStudentDiary(studentId: string) {
+    return this.diaryService.getDiaryEntries(studentId);
+  }
+
+  async getParentDiary(parentId: string) {
+    const parent = await this.prisma.parent.findUnique({
+      where: { id: parentId },
+      include: { students: { include: { student: true } } },
+    });
+    if (!parent) throw new NotFoundException('Parent not found');
+
+    const perChild = await Promise.all(
+      parent.students.map(async (ps) => ({
+        student: { id: ps.student.id, name: ps.student.fullName },
+        entries: await this.diaryService.getDiaryEntries(ps.student.id),
+      })),
+    );
+    return perChild;
+  }
+
+  async createTeacherDiaryEntry(
+    teacherId: string,
+    dto: { studentId: string; type: string; content: string },
+  ) {
+    return this.diaryService.createDiaryEntry(teacherId, dto);
   }
 
   async getClassTeacherDesk(staffId: string, sectionId: string) {
