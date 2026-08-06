@@ -252,4 +252,28 @@ export class SearchRepository {
       updatedAt: h.updatedAt,
     }));
   }
+
+  async searchLibraryBooks(q: string, limit: number): Promise<SearchResult[]> {
+    const rows = await this.prisma.libraryBook.findMany({
+      where: {
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { author: { contains: q, mode: 'insensitive' } },
+          { isbn: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return rows.map((b) => ({
+      id: b.id,
+      entityType: 'library-book',
+      title: b.title,
+      subtitle: b.author ?? undefined,
+      href: `/dashboard/admin/library?bookId=${b.id}`,
+      // LibraryBook has no updatedAt column -- createdAt is the closest
+      // recency signal this model tracks (catalog entries rarely change).
+      updatedAt: b.createdAt,
+    }));
+  }
 }

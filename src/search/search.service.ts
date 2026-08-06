@@ -22,6 +22,7 @@ const SEARCHERS: Record<
   announcement: (repo, q, limit) => repo.searchAnnouncements(q, limit),
   event: (repo, q, limit) => repo.searchEvents(q, limit),
   house: (repo, q, limit) => repo.searchHouses(q, limit),
+  'library-book': (repo, q, limit) => repo.searchLibraryBooks(q, limit),
 };
 
 /**

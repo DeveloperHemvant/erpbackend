@@ -18,6 +18,7 @@ describe('SearchService', () => {
     searchAnnouncements: jest.fn(),
     searchEvents: jest.fn(),
     searchHouses: jest.fn(),
+    searchLibraryBooks: jest.fn(),
   };
 
   const superAdmin = {

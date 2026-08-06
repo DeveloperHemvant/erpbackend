@@ -18,6 +18,7 @@ export const ENTITY_VIEW_PERMISSION: Record<string, string> = {
   announcement: 'MANAGE_COMMUNICATION',
   event: 'VIEW_STUDENTS',
   house: 'VIEW_STUDENTS',
+  'library-book': 'MANAGE_ACADEMICS',
 };
 
 export function canAccessEntityType(
