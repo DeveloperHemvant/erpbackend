@@ -8,6 +8,7 @@ import {
   Patch,
   Query,
   Delete,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { HostelService } from './hostel.service';
@@ -24,9 +25,21 @@ import {
   ResolveHostelOutpassDto,
 } from './dto/hostel.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
+import { RequireAnyPermission } from '../auth/any-permission.decorator';
+import { AnyPermissionGuard } from '../auth/any-permission.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
+// Class-level MANAGE_HOSTEL default. Every method below except getHostels was
+// previously undecorated, which under the global PermissionsGuard's fallback
+// (no requirement -> implicit literal "read"/"write" permission) meant the
+// entire Hostel feature -- allocations, attendance, grievances, mess-menus,
+// and the new outpass endpoints -- was unreachable by Warden (permissions:
+// ['MANAGE_HOSTEL', 'VIEW_REPORTS']), the only role this module exists for.
+// Discovered while adding item 2.3 (outpasses); fixed here since it directly
+// broke both this session's Phase 1 mess-menu work and Phase 2 outpass work,
+// not carried further into other controllers (that's Phase 3 scope).
+@RequirePermissions('MANAGE_HOSTEL')
 @ApiTags('Hostel')
 @Controller('hostel')
 export class HostelController {
@@ -39,7 +52,9 @@ export class HostelController {
   }
 
   @Get('hostels')
-  @RequirePermissions('MANAGE_ACADEMICS')
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission('MANAGE_ACADEMICS', 'MANAGE_HOSTEL')
+  @RequirePermissions()
   @ApiOperation({ summary: 'Get Hostels' })
   async getHostels() {
     return this.hostelService.getHostels();
