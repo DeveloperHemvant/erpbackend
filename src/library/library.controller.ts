@@ -18,6 +18,16 @@ import {
 } from './dto/library.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
 
+// Class-level MANAGE_ACADEMICS default. Every method except getBooks/
+// getLibraryReport was previously undecorated, which under the global
+// PermissionsGuard's fallback (no requirement -> implicit literal "read"/
+// "write" permission) meant issueBook/returnBook/reservations/fines were
+// unreachable by Librarian (permissions: ['MANAGE_ACADEMICS', 'VIEW_REPORTS'])
+// despite already holding the permission the two decorated routes require.
+// Same bug class as hostel.controller.ts (see that file's comment); fixed
+// here because it directly undermined this session's Phase 1 item 1.7
+// (Library search-picker) and Phase 2 item 2.10 (library reports) work.
+@RequirePermissions('MANAGE_ACADEMICS')
 @ApiTags('Library')
 @Controller('library')
 export class LibraryController {
