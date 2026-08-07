@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
+import { resolveSingleCampusIdOrThrow } from '../common/utils/campus-resolution';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -42,6 +43,10 @@ export class StaffService {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(generatedPassword, saltRounds);
 
+    const campusId =
+      createStaffDto.campusId ??
+      (await resolveSingleCampusIdOrThrow(this.prisma));
+
     const staff = await this.prisma.staff.create({
       data: {
         email: createStaffDto.email,
@@ -51,6 +56,7 @@ export class StaffService {
         status: createStaffDto.status || 'Active',
         details: createStaffDto.details || undefined,
         createdBy: createStaffDto.createdBy || 'SYSTEM',
+        campusId,
       },
       select: {
         id: true,

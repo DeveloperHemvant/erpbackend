@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveSystemAccountCampusId } from '../../common/utils/campus-resolution';
 import fs from 'fs';
 import path from 'path';
 
@@ -103,12 +104,14 @@ export class SimulatorService {
           },
         });
       }
+      const campusId = await resolveSystemAccountCampusId(this.prisma);
       staff = await this.prisma.staff.create({
         data: {
           email: 'admin@futureinternationalschool.com',
           passwordHash: 'admin',
           fullName: 'System Admin',
           roleId: role.id,
+          campusId,
         },
       });
     }

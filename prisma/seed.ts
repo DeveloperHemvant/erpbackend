@@ -288,6 +288,7 @@ async function main() {
       passwordHash: adminHash,
       roleId: roles['Super Admin'],
       status: 'Active',
+      campusId: campus.id,
     },
   });
 
@@ -302,6 +303,7 @@ async function main() {
       education: 'Ph.D. in Education',
       experience: '18 years',
       details: { designation: 'Principal', campus: campus.name },
+      campusId: campus.id,
     },
   });
 
@@ -315,6 +317,7 @@ async function main() {
       status: 'Active',
       education: 'M.Ed',
       experience: '15 years',
+      campusId: campus.id,
     },
   });
 
@@ -327,6 +330,7 @@ async function main() {
       gender: 'Male',
       status: 'Active',
       education: 'M.Sc. Education',
+      campusId: campus.id,
       experience: '12 years',
     },
   });
@@ -416,6 +420,7 @@ async function main() {
       education: 'B.Ed',
       experience: `${faker.number.int({ min: 3, max: 20 })} years`,
       details: extras,
+      campusId: campus.id,
     });
     payrollRecords.push({ staffId: id, basicSalary: salary, allowances: Math.round(salary * 0.16), deductions: Math.round(salary * 0.05) });
     leaveBalanceRecords.push({ staffId: id, leaveType: 'Casual', totalAllowed: 12, used: 0, year: 2026 });

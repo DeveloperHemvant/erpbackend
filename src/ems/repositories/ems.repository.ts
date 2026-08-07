@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { resolveSystemAccountCampusId } from '../../common/utils/campus-resolution';
 
 const SYSTEM_GRADER_EMAIL = 'system.grader@internal.ems';
 
@@ -601,6 +602,7 @@ export class EmsRepository {
     }
 
     const passwordHash = await bcrypt.hash(randomUUID(), 10);
+    const campusId = await resolveSystemAccountCampusId(this.prisma);
     const created = await this.prisma.staff.create({
       data: {
         email: SYSTEM_GRADER_EMAIL,
@@ -608,6 +610,7 @@ export class EmsRepository {
         fullName: 'Auto-Grader (System)',
         roleId: role.id,
         status: 'Inactive',
+        campusId,
       },
     });
     return created.id;
