@@ -56,6 +56,10 @@ model Campus {
   morningAssemblies MorningAssembly[]
   acmsEvents        ACMSEvent[]
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_PLAN.md)
+  staff             Staff[]
+  staffCampusAccess StaffCampusAccess[]
+
   @@map("campuses")
 }
 
@@ -93,6 +97,18 @@ model Staff {
   updatedAt    DateTime            @updatedAt
   createdBy    String?
   updatedBy    String?
+
+  // Campus Isolation Layer (CAMPUS_ISOLATION_PLAN.md, Phase 0). Required —
+  // per D3, NULL must never be treated as unrestricted access, so this is
+  // DB-enforced, not an app-level convention. onDelete: Restrict (matching
+  // Class, the other required campusId relation) — a Campus with staff on
+  // it cannot be deleted out from under them.
+  // StaffCampusAccess (below) covers staff needing access beyond this
+  // primary campus — D1's refinement, not a second campusId.
+  campusId     String              @db.Uuid
+  campus       Campus              @relation(fields: [campusId], references: [id], onDelete: Restrict)
+  campusAccess StaffCampusAccess[]
+
   assignments  TeacherAssignment[]
   attendance   AttendanceRecord[]
 
@@ -146,6 +162,23 @@ model Staff {
   issuedAchievements    StudentAchievement[]  @relation("IssuedBy")
 
   @@map("staff")
+}
+
+/// Campus Isolation Layer (CAMPUS_ISOLATION_PLAN.md, D1 refinement) — grants a
+/// staff member access to a campus beyond their primary `Staff.campusId`
+/// (e.g. a traveling teacher, a district coordinator). Distinct from
+/// `canAccessAllCampuses`-style permissions, which grant unrestricted access
+/// to every campus; this is scoped to specific named campuses only.
+model StaffCampusAccess {
+  id        String   @id @default(uuid()) @db.Uuid
+  staffId   String   @db.Uuid
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  campusId  String   @db.Uuid
+  campus    Campus   @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([staffId, campusId])
+  @@map("staff_campus_access")
 }
 
 model Student {

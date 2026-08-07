@@ -9,8 +9,10 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "scripts": {
-    "seed": "ts-node prisma/seed.ts",
-    "seed:demo": "ts-node prisma/seed.ts",
+    "seed": "ts-node prisma/seed.ts && ts-node scripts/seed-extensions.ts && ts-node scripts/seed-remaining-tables.ts",
+    "seed:demo": "ts-node prisma/seed.ts && ts-node scripts/seed-extensions.ts && ts-node scripts/seed-remaining-tables.ts",
+    "seed:extensions": "ts-node scripts/seed-extensions.ts",
+    "seed:absolutely-all": "ts-node scripts/seed-absolutely-all.ts",
     "seed:db": "prisma db seed",
     "build": "nest build",
     "db:generate": "npx prisma generate",

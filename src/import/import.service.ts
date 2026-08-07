@@ -115,7 +115,7 @@ export class ImportService {
     return { processed, errors };
   }
 
-  private async importStaff(data: any[], _campusId: string) {
+  private async importStaff(data: any[], campusId: string) {
     let processed = 0;
     const errors: any[] = [];
 
@@ -163,6 +163,7 @@ export class ImportService {
             fullName: row.fullName,
             passwordHash: 'hashed_temp_password', // Mock hash
             roleId: roleId,
+            campusId,
           },
         });
 

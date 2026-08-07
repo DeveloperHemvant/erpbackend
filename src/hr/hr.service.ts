@@ -46,9 +46,12 @@ export class HrService {
     });
   }
 
-  async getLeaveApplications(status?: string) {
+  async getLeaveApplications(status?: string, staffId?: string) {
     return this.prisma.leaveApplication.findMany({
-      where: status ? { status } : undefined,
+      where: {
+        ...(status ? { status } : {}),
+        ...(staffId ? { staffId } : {}),
+      },
       include: {
         staff: { select: { id: true, fullName: true, email: true } },
         resolvedBy: { select: { id: true, fullName: true } },

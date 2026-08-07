@@ -67,4 +67,13 @@ export class CreateStaffDto {
   })
   @IsOptional()
   details?: any;
+
+  @ApiProperty({
+    description:
+      'Primary campus for this staff member. Optional only until CAMPUS_ISOLATION_PLAN.md Phase 1 wires campusId through TenantContext — omitting it works today (exactly one campus exists) and will start failing loudly the moment a second campus exists, by design.',
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  campusId?: string;
 }

@@ -36,15 +36,10 @@ function nextGradeOf(grade: string): string | null {
 export class PromotionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async computePassStatus(
-    enrollmentId: string,
-    sessionId: string,
+  private evaluatePassStatus(
+    reportCard: { computedData: unknown; gpa: string } | undefined,
     threshold: number,
-  ): Promise<{ passed: boolean; percentage: number | null }> {
-    const reportCard = await this.prisma.reportCard.findFirst({
-      where: { enrollmentId, exam: { sessionId } },
-      orderBy: { createdAt: 'desc' },
-    });
+  ): { passed: boolean; percentage: number | null } {
     if (!reportCard) return { passed: true, percentage: null }; // no record — default to promote, admin can override
 
     const computed = reportCard.computedData as any;
@@ -57,6 +52,44 @@ export class PromotionsService {
     if (percentage == null || isNaN(percentage))
       return { passed: true, percentage: null };
     return { passed: percentage >= threshold, percentage };
+  }
+
+  /**
+   * Batched replacement for calling a per-enrollment `findFirst` in a loop —
+   * that pattern is a real N+1 (one query per student), fine for a single
+   * class but a multi-second-to-minutes hang at whole-session scale (9,000+
+   * students in the seeded dataset). One query for every candidate
+   * enrollment, then the same "latest report card, same threshold logic" as
+   * before — same semantics, not a behavior change.
+   */
+  private async batchPassStatuses(
+    enrollmentIds: string[],
+    sessionId: string,
+    threshold: number,
+  ): Promise<Map<string, { passed: boolean; percentage: number | null }>> {
+    const reportCards = await this.prisma.reportCard.findMany({
+      where: { enrollmentId: { in: enrollmentIds }, exam: { sessionId } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const latestByEnrollment = new Map<string, (typeof reportCards)[number]>();
+    for (const rc of reportCards) {
+      if (!latestByEnrollment.has(rc.enrollmentId)) {
+        latestByEnrollment.set(rc.enrollmentId, rc);
+      }
+    }
+
+    const result = new Map<
+      string,
+      { passed: boolean; percentage: number | null }
+    >();
+    for (const enrollmentId of enrollmentIds) {
+      result.set(
+        enrollmentId,
+        this.evaluatePassStatus(latestByEnrollment.get(enrollmentId), threshold),
+      );
+    }
+    return result;
   }
 
   async preview(dto: PreviewPromotionDto) {
@@ -75,6 +108,15 @@ export class PromotionsService {
       },
       orderBy: { grade: 'asc' },
     });
+
+    const allEnrollmentIds = classes.flatMap((cls) =>
+      cls.sections.flatMap((s) => s.enrollments.map((e) => e.id)),
+    );
+    const passStatuses = await this.batchPassStatuses(
+      allEnrollmentIds,
+      dto.fromSessionId,
+      threshold,
+    );
 
     const results: {
       classId: string;
@@ -102,11 +144,7 @@ export class PromotionsService {
         percentage: number | null;
       }[] = [];
       for (const enr of enrollments) {
-        const { passed, percentage } = await this.computePassStatus(
-          enr.id,
-          dto.fromSessionId,
-          threshold,
-        );
+        const { passed, percentage } = passStatuses.get(enr.id)!;
         if (passed) passing++;
         else {
           failing++;
@@ -255,6 +293,15 @@ export class PromotionsService {
     let repeatedCount = 0;
     let graduatedCount = 0;
 
+    const allEnrollmentIds = classes.flatMap((cls) =>
+      cls.sections.flatMap((s) => s.enrollments.map((e) => e.id)),
+    );
+    const passStatuses = await this.batchPassStatuses(
+      allEnrollmentIds,
+      dto.fromSessionId,
+      threshold,
+    );
+
     for (const cls of classes) {
       const nextGrade = nextGradeOf(cls.grade);
       const enrollments = cls.sections.flatMap((s) => s.enrollments);
@@ -264,10 +311,7 @@ export class PromotionsService {
         let passed: boolean;
         if (forcePromote.has(enr.studentId)) passed = true;
         else if (holdBack.has(enr.studentId)) passed = false;
-        else
-          passed = (
-            await this.computePassStatus(enr.id, dto.fromSessionId, threshold)
-          ).passed;
+        else passed = passStatuses.get(enr.id)!.passed;
 
         if (passed && nextGrade) {
           const section = await getBalancedSection(nextGrade, cls.campusId);

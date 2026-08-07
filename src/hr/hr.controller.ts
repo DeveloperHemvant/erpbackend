@@ -22,6 +22,8 @@ import { RequireSelfOrPermission } from '../auth/self-or-permission.decorator';
 import { SelfOrPermissionGuard } from '../auth/self-or-permission.guard';
 import { RequireAnyPermission } from '../auth/any-permission.decorator';
 import { AnyPermissionGuard } from '../auth/any-permission.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
 @ApiTags('HR')
 @Controller('hr')
@@ -52,9 +54,29 @@ export class HrController {
 
   @Get('leave-applications')
   @RequirePermissions()
-  @ApiOperation({ summary: 'List leave applications' })
-  async getLeaveApplications(@Query('status') status?: string) {
-    return this.hrService.getLeaveApplications(status);
+  @ApiOperation({
+    summary:
+      "List leave applications — your own, or org-wide for HR/admins. Non-HR callers are always scoped to their own applications server-side, regardless of query params.",
+  })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({
+    name: 'staffId',
+    required: false,
+    description:
+      'Only honored for HR/admin callers (MANAGE_HR); ignored otherwise since non-HR callers are forced to their own id.',
+  })
+  async getLeaveApplications(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('status') status?: string,
+    @Query('staffId') staffId?: string,
+  ) {
+    const isHr =
+      user.permissions?.includes('*') ||
+      user.permissions?.includes('MANAGE_HR');
+    return this.hrService.getLeaveApplications(
+      status,
+      isHr ? staffId : user.userId,
+    );
   }
 
   @Patch('leave-applications/:id/process')
