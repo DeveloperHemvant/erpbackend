@@ -1,5 +1,16 @@
-import { Type } from "class-transformer";
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsBoolean, IsNumber, IsArray, ValidateNested, IsIn, IsInt } from "class-validator";
+import { Type } from 'class-transformer';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsBoolean,
+  IsNumber,
+  IsArray,
+  ValidateNested,
+  IsIn,
+  IsInt,
+} from 'class-validator';
 
 export class CreateEmsSessionDto {
   @IsString()
@@ -174,7 +185,7 @@ export class QuestionOptionDto {
 }
 
 export class CreateQuestionDto {
-  @IsIn(["MCQ", "DESCRIPTIVE", "PRACTICAL"])
+  @IsIn(['MCQ', 'DESCRIPTIVE', 'PRACTICAL'])
   @IsNotEmpty()
   type: string;
 
@@ -186,7 +197,7 @@ export class CreateQuestionDto {
   @IsOptional()
   bloomLevel?: string;
 
-  @IsIn(["EASY", "MEDIUM", "HARD"])
+  @IsIn(['EASY', 'MEDIUM', 'HARD'])
   @IsOptional()
   difficulty?: string;
 

@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsInt, IsNumber } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsInt,
+  IsNumber,
+} from 'class-validator';
 
 export class CreateAssetCategoryDto {
   @IsString()
@@ -56,4 +63,20 @@ export class CreatePurchaseRequisitionDto {
   @IsString()
   @IsOptional()
   status?: string;
+}
+
+export class UpdateAssetDto {
+  @IsString()
+  @IsOptional()
+  status?: string;
+
+  @IsInt()
+  @IsOptional()
+  quantity?: number;
+}
+
+export class UpdatePurchaseRequisitionStatusDto {
+  @IsString()
+  @IsNotEmpty()
+  status: string; // Pending, Approved, Ordered, Received, Rejected
 }

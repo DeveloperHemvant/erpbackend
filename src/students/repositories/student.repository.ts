@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class StudentRepository {
@@ -14,24 +14,34 @@ export class StudentRepository {
     return this.prisma.student.create({ data });
   }
 
-  findAll() {
+  findAll(sectionId?: string) {
     return this.prisma.student.findMany({
-      orderBy: { fullName: "asc" },
-      include: { enrollments: { include: { section: { include: { class: true } } } } },
+      where: sectionId ? { enrollments: { some: { sectionId } } } : undefined,
+      orderBy: { fullName: 'asc' },
+      include: {
+        enrollments: { include: { section: { include: { class: true } } } },
+        house: true,
+      },
     });
   }
 
-  findPage(skip: number, take: number) {
+  findPage(skip: number, take: number, sectionId?: string) {
     return this.prisma.student.findMany({
+      where: sectionId ? { enrollments: { some: { sectionId } } } : undefined,
       skip,
       take,
-      orderBy: { fullName: "asc" },
-      include: { enrollments: { include: { section: { include: { class: true } } } } },
+      orderBy: { fullName: 'asc' },
+      include: {
+        enrollments: { include: { section: { include: { class: true } } } },
+        house: true,
+      },
     });
   }
 
-  count() {
-    return this.prisma.student.count();
+  count(sectionId?: string) {
+    return this.prisma.student.count({
+      where: sectionId ? { enrollments: { some: { sectionId } } } : undefined,
+    });
   }
 
   findById(id: string) {
@@ -51,6 +61,8 @@ export class StudentRepository {
       where: { id },
       include: {
         documents: true,
+        house: true,
+        admissionInquiry: true,
         parents: {
           include: {
             parent: true,
@@ -93,7 +105,9 @@ export class StudentRepository {
   }
 
   countEnrollmentsInSection(sectionId: string, sessionId: string) {
-    return this.prisma.studentEnrollment.count({ where: { sectionId, sessionId } });
+    return this.prisma.studentEnrollment.count({
+      where: { sectionId, sessionId },
+    });
   }
 
   findSectionWithClassGrade(sectionId: string) {
@@ -108,7 +122,9 @@ export class StudentRepository {
   }
 
   findEnrollmentByStudentAndSession(studentId: string, sessionId: string) {
-    return this.prisma.studentEnrollment.findFirst({ where: { studentId, sessionId } });
+    return this.prisma.studentEnrollment.findFirst({
+      where: { studentId, sessionId },
+    });
   }
 
   findEnrollmentWithStudentAndSection(enrollmentId: string) {
@@ -127,7 +143,9 @@ export class StudentRepository {
   }
 
   findParentByEmailExcluding(email: string, excludeParentId: string) {
-    return this.prisma.parent.findFirst({ where: { email, id: { not: excludeParentId } } });
+    return this.prisma.parent.findFirst({
+      where: { email, id: { not: excludeParentId } },
+    });
   }
 
   createParent(data: Prisma.ParentCreateInput) {
@@ -143,11 +161,15 @@ export class StudentRepository {
   }
 
   findParentStudentLink(parentId: string, studentId: string) {
-    return this.prisma.parentStudent.findFirst({ where: { parentId, studentId } });
+    return this.prisma.parentStudent.findFirst({
+      where: { parentId, studentId },
+    });
   }
 
   findPortalAccountByReference(referenceId: string, userType: string) {
-    return this.prisma.portalAccount.findFirst({ where: { referenceId, userType } });
+    return this.prisma.portalAccount.findFirst({
+      where: { referenceId, userType },
+    });
   }
 
   createPortalAccount(data: Prisma.PortalAccountCreateInput) {

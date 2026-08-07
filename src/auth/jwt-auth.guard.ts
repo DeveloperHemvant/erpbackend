@@ -21,7 +21,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return super.canActivate(context);
   }
 
-  handleRequest(err: unknown, user: { identifier?: string } | false, info: unknown, context: ExecutionContext) {
+  handleRequest(
+    err: unknown,
+    user: { identifier?: string } | false,
+    info: unknown,
+    context: ExecutionContext,
+  ) {
     const authenticatedUser = super.handleRequest(err, user, info, context);
     const store = tenantContext.getStore();
     if (store && authenticatedUser && typeof authenticatedUser === 'object') {

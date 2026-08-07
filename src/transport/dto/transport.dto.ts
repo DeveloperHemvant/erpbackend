@@ -1,5 +1,14 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsInt, IsNumber, IsBoolean } from "class-validator";
-import { PartialType } from "@nestjs/swagger";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsInt,
+  IsNumber,
+  IsBoolean,
+  IsIn,
+} from 'class-validator';
+import { PartialType } from '@nestjs/swagger';
 
 export class CreateVehicleDto {
   @IsString()
@@ -671,4 +680,120 @@ export class CreateTransportExpenseDto {
   @IsString()
   @IsOptional()
   receiptUrl?: string;
+}
+
+// --- Odometer logs ---
+export class CreateOdometerLogDto {
+  @IsUUID()
+  @IsNotEmpty()
+  vehicleId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  date: string;
+
+  @IsNumber()
+  @IsNotEmpty()
+  openingReading: number;
+
+  @IsNumber()
+  @IsOptional()
+  closingReading?: number;
+
+  @IsString()
+  @IsOptional()
+  remarks?: string;
+}
+
+export class UpdateOdometerLogDto {
+  @IsNumber()
+  @IsNotEmpty()
+  closingReading: number;
+
+  @IsString()
+  @IsOptional()
+  remarks?: string;
+}
+
+// --- Pre-trip daily safety check ---
+export class CreateDailyCheckDto {
+  @IsUUID()
+  @IsNotEmpty()
+  vehicleId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  date: string;
+
+  @IsString()
+  @IsNotEmpty()
+  shift: string;
+
+  @IsUUID()
+  @IsOptional()
+  tripId?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  brakesOk?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  tyresOk?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  lightsIndicatorsOk?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  hornOk?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  firstAidKitOk?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  fireExtinguisherOk?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  fuelLevelOk?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  odometerReading?: number;
+
+  @IsString()
+  @IsOptional()
+  remarks?: string;
+}
+
+// --- Fuel / expense approval ---
+export class ResolveFuelLogDto {
+  @IsIn(['Approved', 'Rejected'])
+  @IsNotEmpty()
+  status: string;
+
+  @IsString()
+  @IsOptional()
+  rejectionReason?: string;
+}
+
+export class ResolveTransportExpenseDto {
+  @IsIn(['Approved', 'Rejected'])
+  @IsNotEmpty()
+  status: string;
+
+  @IsString()
+  @IsOptional()
+  rejectionReason?: string;
+}
+
+// --- Incident acknowledgment ---
+export class AcknowledgeIncidentDto {
+  @IsString()
+  @IsOptional()
+  remarks?: string;
 }

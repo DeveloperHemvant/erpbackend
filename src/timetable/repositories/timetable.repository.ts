@@ -1,13 +1,16 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class TimetableRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   createSlot(data: Prisma.TimetableSlotUncheckedCreateInput) {
-    return this.prisma.timetableSlot.create({ data, include: { session: true } });
+    return this.prisma.timetableSlot.create({
+      data,
+      include: { session: true },
+    });
   }
 
   createSlotBulkItem(data: Prisma.TimetableSlotUncheckedCreateInput) {
@@ -17,7 +20,7 @@ export class TimetableRepository {
   findAllSlots() {
     return this.prisma.timetableSlot.findMany({
       include: { session: true },
-      orderBy: { startTime: "asc" },
+      orderBy: { startTime: 'asc' },
     });
   }
 
@@ -32,18 +35,21 @@ export class TimetableRepository {
   findNonBreakSlotsBySession(sessionId: string) {
     return this.prisma.timetableSlot.findMany({
       where: { sessionId, isBreak: false },
-      orderBy: { startTime: "asc" },
+      orderBy: { startTime: 'asc' },
     });
   }
 
   createTimetable(data: Prisma.TimetableUncheckedCreateInput) {
-    return this.prisma.timetable.create({ data, include: { session: true, periods: true } });
+    return this.prisma.timetable.create({
+      data,
+      include: { session: true, periods: true },
+    });
   }
 
   findAllTimetables() {
     return this.prisma.timetable.findMany({
       include: { session: true, periods: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -52,15 +58,24 @@ export class TimetableRepository {
   }
 
   findTimetableByIdWithSession(id: string) {
-    return this.prisma.timetable.findUnique({ where: { id }, include: { session: true } });
+    return this.prisma.timetable.findUnique({
+      where: { id },
+      include: { session: true },
+    });
   }
 
   deactivateTimetablesInSession(sessionId: string) {
-    return this.prisma.timetable.updateMany({ where: { sessionId }, data: { status: "Draft" } });
+    return this.prisma.timetable.updateMany({
+      where: { sessionId },
+      data: { status: 'Draft' },
+    });
   }
 
   activateTimetable(id: string) {
-    return this.prisma.timetable.update({ where: { id }, data: { status: "Active" } });
+    return this.prisma.timetable.update({
+      where: { id },
+      data: { status: 'Active' },
+    });
   }
 
   deletePeriodsByTimetable(timetableId: string) {
@@ -76,7 +91,9 @@ export class TimetableRepository {
   }
 
   findClassSubjectsBySession(sessionId: string) {
-    return this.prisma.classSubject.findMany({ where: { class: { sessionId } } });
+    return this.prisma.classSubject.findMany({
+      where: { class: { sessionId } },
+    });
   }
 
   createManyPeriods(data: Prisma.TimetablePeriodUncheckedCreateInput[]) {
@@ -87,13 +104,21 @@ export class TimetableRepository {
     return this.prisma.teacherAssignment.findUnique({ where: { id } });
   }
 
-  findClashingPeriods(staffId: string, dayOfWeek: string, startTime: string, endTime: string) {
+  findClashingPeriods(
+    staffId: string,
+    dayOfWeek: string,
+    startTime: string,
+    endTime: string,
+  ) {
     return this.prisma.timetablePeriod.findMany({
       where: {
         assignment: { staffId },
         dayOfWeek,
         NOT: {
-          OR: [{ endTime: { lte: startTime } }, { startTime: { gte: endTime } }],
+          OR: [
+            { endTime: { lte: startTime } },
+            { startTime: { gte: endTime } },
+          ],
         },
       },
     });
@@ -102,24 +127,37 @@ export class TimetableRepository {
   createPeriod(data: Prisma.TimetablePeriodUncheckedCreateInput) {
     return this.prisma.timetablePeriod.create({
       data,
-      include: { section: true, subject: true, assignment: { include: { staff: true } }, timetable: true },
+      include: {
+        section: true,
+        subject: true,
+        assignment: { include: { staff: true } },
+        timetable: true,
+      },
     });
   }
 
   findTeacherAssignmentsForSubject(subjectId: string) {
     return this.prisma.teacherAssignment.findMany({
-      where: { subjectId, status: "Active" },
+      where: { subjectId, status: 'Active' },
       include: { staff: true },
     });
   }
 
-  findBusyPeriods(teacherIds: string[], dayOfWeek: string, startTime: string, endTime: string) {
+  findBusyPeriods(
+    teacherIds: string[],
+    dayOfWeek: string,
+    startTime: string,
+    endTime: string,
+  ) {
     return this.prisma.timetablePeriod.findMany({
       where: {
         assignment: { staffId: { in: teacherIds } },
         dayOfWeek,
         NOT: {
-          OR: [{ endTime: { lte: startTime } }, { startTime: { gte: endTime } }],
+          OR: [
+            { endTime: { lte: startTime } },
+            { startTime: { gte: endTime } },
+          ],
         },
       },
       include: { assignment: true },
@@ -128,8 +166,13 @@ export class TimetableRepository {
 
   findAllPeriods() {
     return this.prisma.timetablePeriod.findMany({
-      include: { section: true, subject: true, assignment: { include: { staff: true } }, timetable: true },
-      orderBy: { startTime: "asc" },
+      include: {
+        section: true,
+        subject: true,
+        assignment: { include: { staff: true } },
+        timetable: true,
+      },
+      orderBy: { startTime: 'asc' },
     });
   }
 

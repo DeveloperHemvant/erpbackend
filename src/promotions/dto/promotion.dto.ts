@@ -1,4 +1,13 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsNumber, IsArray, Min, Max } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsNumber,
+  IsArray,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class PreviewPromotionDto {
   @IsUUID()

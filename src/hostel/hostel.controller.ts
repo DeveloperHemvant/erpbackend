@@ -1,57 +1,204 @@
-import { Controller, Get, Post, Body, Param, ParseUUIDPipe } from "@nestjs/common";
-import { ApiTags, ApiOperation } from "@nestjs/swagger";
-import { HostelService } from "./hostel.service";
-import { CreateHostelDto, AddHostelRoomDto, AllocateRoomDto, FileGrievanceDto } from "./dto/hostel.dto";
-import { RequirePermissions } from "../auth/permissions.decorator";
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Query,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { HostelService } from './hostel.service';
+import {
+  CreateHostelDto,
+  AddHostelRoomDto,
+  AllocateRoomDto,
+  FileGrievanceDto,
+  MarkHostelAttendanceDto,
+  CreateMessMenuDto,
+  UpdateHostelAllocationDto,
+  UpdateHostelGrievanceDto,
+  CreateHostelOutpassDto,
+  ResolveHostelOutpassDto,
+} from './dto/hostel.dto';
+import { RequirePermissions } from '../auth/permissions.decorator';
+import { RequireAnyPermission } from '../auth/any-permission.decorator';
+import { AnyPermissionGuard } from '../auth/any-permission.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
-@ApiTags("Hostel")
-@Controller("hostel")
+// Class-level MANAGE_HOSTEL default. Every method below except getHostels was
+// previously undecorated, which under the global PermissionsGuard's fallback
+// (no requirement -> implicit literal "read"/"write" permission) meant the
+// entire Hostel feature -- allocations, attendance, grievances, mess-menus,
+// and the new outpass endpoints -- was unreachable by Warden (permissions:
+// ['MANAGE_HOSTEL', 'VIEW_REPORTS']), the only role this module exists for.
+// Discovered while adding item 2.3 (outpasses); fixed here since it directly
+// broke both this session's Phase 1 mess-menu work and Phase 2 outpass work,
+// not carried further into other controllers (that's Phase 3 scope).
+@RequirePermissions('MANAGE_HOSTEL')
+@ApiTags('Hostel')
+@Controller('hostel')
 export class HostelController {
   constructor(private readonly hostelService: HostelService) {}
 
-  @Post("hostels")
-  @ApiOperation({ summary: "Create Hostel" })
+  @Post('hostels')
+  @ApiOperation({ summary: 'Create Hostel' })
   async createHostel(@Body() data: CreateHostelDto) {
     return this.hostelService.createHostel(data);
   }
 
-  @Get("hostels")
-  @RequirePermissions("MANAGE_ACADEMICS")
-  @ApiOperation({ summary: "Get Hostels" })
+  @Get('hostels')
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission('MANAGE_ACADEMICS', 'MANAGE_HOSTEL')
+  @RequirePermissions()
+  @ApiOperation({ summary: 'Get Hostels' })
   async getHostels() {
     return this.hostelService.getHostels();
   }
 
-  @Post("hostels/:id/rooms")
-  @ApiOperation({ summary: "Add Room to Hostel" })
+  @Post('hostels/:id/rooms')
+  @ApiOperation({ summary: 'Add Room to Hostel' })
   async addRoom(
-    @Param("id", ParseUUIDPipe) id: string,
-    @Body() data: AddHostelRoomDto
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() data: AddHostelRoomDto,
   ) {
     return this.hostelService.addRoom(id, data);
   }
 
-  @Post("allocations")
-  @ApiOperation({ summary: "Allocate Room to Student" })
+  @Post('allocations')
+  @ApiOperation({ summary: 'Allocate Room to Student' })
   async allocateRoom(@Body() data: AllocateRoomDto) {
     return this.hostelService.allocateRoom(data.roomId, data.enrollmentId);
   }
 
-  @Get("student/:enrollmentId")
-  @ApiOperation({ summary: "Get Student Hostel Info" })
-  async getStudentHostel(@Param("enrollmentId", ParseUUIDPipe) enrollmentId: string) {
+  @Get('allocations')
+  @ApiOperation({ summary: 'Get Active Allocations' })
+  async getActiveAllocations(@Query('hostelId') hostelId?: string) {
+    return this.hostelService.getActiveAllocations(hostelId);
+  }
+
+  @Patch('allocations/:id')
+  @ApiOperation({ summary: 'Update Room Allocation' })
+  async updateAllocation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() data: UpdateHostelAllocationDto,
+  ) {
+    return this.hostelService.updateAllocation(id, data.status, data.roomId);
+  }
+
+  @Get('student/:enrollmentId')
+  @ApiOperation({ summary: 'Get Student Hostel Info' })
+  async getStudentHostel(
+    @Param('enrollmentId', ParseUUIDPipe) enrollmentId: string,
+  ) {
     return this.hostelService.getStudentHostel(enrollmentId);
   }
 
-  @Post("grievances")
-  @ApiOperation({ summary: "File Grievance" })
+  @Post('grievances')
+  @ApiOperation({ summary: 'File Grievance' })
   async fileGrievance(@Body() data: FileGrievanceDto) {
-    return this.hostelService.fileGrievance(data.hostelId, data.enrollmentId, data.title, data.description);
+    return this.hostelService.fileGrievance(
+      data.hostelId,
+      data.enrollmentId,
+      data.title,
+      data.description,
+    );
   }
 
-  @Get("grievances/student/:enrollmentId")
-  @ApiOperation({ summary: "Get Student Grievances" })
-  async getGrievances(@Param("enrollmentId", ParseUUIDPipe) enrollmentId: string) {
+  @Get('grievances/student/:enrollmentId')
+  @ApiOperation({ summary: 'Get Student Grievances' })
+  async getGrievances(
+    @Param('enrollmentId', ParseUUIDPipe) enrollmentId: string,
+  ) {
     return this.hostelService.getGrievances(enrollmentId);
+  }
+
+  @Get('grievances')
+  @ApiOperation({ summary: 'Get All Hostel Grievances' })
+  async getAllGrievances() {
+    return this.hostelService.getAllGrievances();
+  }
+
+  @Patch('grievances/:id')
+  @ApiOperation({ summary: 'Resolve or update hostel grievance' })
+  async resolveGrievance(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() data: UpdateHostelGrievanceDto,
+  ) {
+    return this.hostelService.resolveGrievance(id, data.status);
+  }
+
+  @Post('outpasses')
+  @ApiOperation({ summary: 'Request a hostel outpass' })
+  async createOutpass(@Body() data: CreateHostelOutpassDto) {
+    return this.hostelService.createOutpass(data);
+  }
+
+  @Get('outpasses')
+  @ApiOperation({ summary: 'List hostel outpasses (optionally by student enrollment)' })
+  async getOutpasses(@Query('enrollmentId') enrollmentId?: string) {
+    return this.hostelService.getOutpasses(enrollmentId);
+  }
+
+  @Patch('outpasses/:id/resolve')
+  @ApiOperation({ summary: 'Approve or reject an outpass request' })
+  async resolveOutpass(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() data: ResolveHostelOutpassDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.hostelService.resolveOutpass(id, data.status, user.userId);
+  }
+
+  @Patch('outpasses/:id/exit')
+  @ApiOperation({ summary: 'Verify student departure on an approved outpass' })
+  async verifyOutpassExit(@Param('id', ParseUUIDPipe) id: string) {
+    return this.hostelService.verifyOutpassExit(id);
+  }
+
+  @Patch('outpasses/:id/return')
+  @ApiOperation({ summary: 'Record student return from outpass' })
+  async recordOutpassReturn(@Param('id', ParseUUIDPipe) id: string) {
+    return this.hostelService.recordOutpassReturn(id);
+  }
+
+  @Post('attendance')
+  @ApiOperation({ summary: 'Mark hostel attendance' })
+  async markAttendance(@Body() data: MarkHostelAttendanceDto) {
+    return this.hostelService.markAttendance(data);
+  }
+
+  @Get('attendance')
+  @ApiOperation({ summary: 'Get hostel attendance by date' })
+  async getAttendanceByDate(
+    @Query('date') date: string,
+    @Query('hostelId') hostelId?: string,
+  ) {
+    return this.hostelService.getAttendanceByDate(date, hostelId);
+  }
+
+  @Post('mess-menus')
+  @ApiOperation({ summary: 'Create mess menu row' })
+  async createMessMenu(@Body() data: CreateMessMenuDto) {
+    return this.hostelService.createMessMenu(data);
+  }
+
+  @Patch('mess-menus/:id')
+  @ApiOperation({ summary: 'Update mess menu row' })
+  async updateMessMenu(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() data: Partial<CreateMessMenuDto>,
+  ) {
+    return this.hostelService.updateMessMenu(id, data);
+  }
+
+  @Delete('mess-menus/:id')
+  @ApiOperation({ summary: 'Delete mess menu row' })
+  async deleteMessMenu(@Param('id', ParseUUIDPipe) id: string) {
+    return this.hostelService.deleteMessMenu(id);
   }
 }

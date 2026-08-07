@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -13,19 +17,19 @@ export class TemplateService {
         targetAudience: data.targetAudience,
         designJson: data.designJson || {},
         status: data.status || 'Active',
-      }
+      },
     });
   }
 
   async findAll() {
     return this.prisma.documentTemplate.findMany({
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   async findOne(id: string) {
     const template = await this.prisma.documentTemplate.findUnique({
-      where: { id }
+      where: { id },
     });
     if (!template) throw new NotFoundException('Template not found');
     return template;
@@ -40,19 +44,19 @@ export class TemplateService {
         targetAudience: data.targetAudience,
         designJson: data.designJson,
         status: data.status,
-      }
+      },
     });
   }
 
   async remove(id: string) {
     return this.prisma.documentTemplate.delete({
-      where: { id }
+      where: { id },
     });
   }
 
   async render(templateId: string, targetId: string) {
     const template = await this.findOne(templateId);
-    
+
     let targetData: any = null;
     if (template.targetAudience === 'STAFF') {
       targetData = await this.prisma.staff.findUnique({
@@ -62,8 +66,8 @@ export class TemplateService {
           fullName: true,
           email: true,
           photoUrl: true,
-          role: { select: { name: true } }
-        }
+          role: { select: { name: true } },
+        },
       });
     } else if (template.targetAudience === 'STUDENT') {
       targetData = await this.prisma.student.findUnique({
@@ -73,7 +77,7 @@ export class TemplateService {
           fullName: true,
           admissionNumber: true,
           photoUrl: true,
-        }
+        },
       });
     }
 
@@ -81,7 +85,49 @@ export class TemplateService {
 
     return {
       template,
-      targetData
+      targetData,
     };
+  }
+
+  // Phase 3 item 3.3 — gives Certificate Designer templates a real downstream
+  // consumer for the first time (previously: 0 rows ever created against
+  // this model despite a full CRUD screen existing).
+  async issueCertificate(
+    templateId: string,
+    data: { studentId: string; type: string; title: string; fileUrl?: string },
+  ) {
+    const template = await this.findOne(templateId);
+    if (template.type !== 'CERTIFICATE') {
+      throw new BadRequestException(
+        `Template ${templateId} is type "${template.type}", not "CERTIFICATE" -- cannot issue a certificate from an ID card template.`,
+      );
+    }
+    return this.prisma.certificate.create({
+      data: {
+        templateId,
+        studentId: data.studentId,
+        type: data.type,
+        title: data.title,
+        fileUrl: data.fileUrl,
+      },
+    });
+  }
+
+  async getCertificatesForTemplate(templateId: string) {
+    return this.prisma.certificate.findMany({
+      where: { templateId },
+      orderBy: { issueDate: 'desc' },
+    });
+  }
+
+  async getCertificates(studentId?: string) {
+    return this.prisma.certificate.findMany({
+      where: studentId ? { studentId } : undefined,
+      include: {
+        student: { select: { id: true, fullName: true, admissionNumber: true } },
+        template: { select: { id: true, name: true } },
+      },
+      orderBy: { issueDate: 'desc' },
+    });
   }
 }

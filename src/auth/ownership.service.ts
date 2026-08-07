@@ -1,5 +1,5 @@
-import { ForbiddenException, Injectable } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
+import { ForbiddenException, Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface RequestUser {
   userId: string;
@@ -18,21 +18,21 @@ export class OwnershipService {
    * not waved through: there is no legitimate staff caller of this method.
    */
   async assertOwnsStudent(user: RequestUser, studentId: string): Promise<void> {
-    const role = (user.role || "").toLowerCase();
+    const role = (user.role || '').toLowerCase();
 
-    if (role === "student") {
+    if (role === 'student') {
       if (user.userId === studentId) return;
-      throw new ForbiddenException("You do not have access to this student.");
+      throw new ForbiddenException('You do not have access to this student.');
     }
 
-    if (role === "parent") {
+    if (role === 'parent') {
       const link = await this.prisma.parentStudent.findUnique({
         where: { parentId_studentId: { parentId: user.userId, studentId } },
       });
       if (link) return;
-      throw new ForbiddenException("You do not have access to this student.");
+      throw new ForbiddenException('You do not have access to this student.');
     }
 
-    throw new ForbiddenException("You do not have access to this student.");
+    throw new ForbiddenException('You do not have access to this student.');
   }
 }

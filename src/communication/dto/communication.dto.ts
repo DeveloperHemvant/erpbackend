@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsIn } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsIn,
+} from 'class-validator';
 
 export class CreateAnnouncementDto {
   @IsString()
@@ -9,13 +15,39 @@ export class CreateAnnouncementDto {
   @IsNotEmpty()
   body: string;
 
-  @IsIn(["ALL", "PARENTS", "STUDENTS", "STAFF"])
+  @IsIn(['ALL', 'PARENTS', 'STUDENTS', 'STAFF'])
   @IsOptional()
   targetAudience?: string;
 
   @IsString()
   @IsOptional()
   eventDate?: string;
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
+}
+
+export class UpdateAnnouncementDto {
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  body?: string;
+
+  @IsIn(['ALL', 'PARENTS', 'STUDENTS', 'STAFF'])
+  @IsOptional()
+  targetAudience?: string;
+
+  @IsString()
+  @IsOptional()
+  eventDate?: string;
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
 }
 
 export class SendMessageDto {

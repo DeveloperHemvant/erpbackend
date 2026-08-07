@@ -1,8 +1,12 @@
-import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
-import { CreateStaffDto } from "./dto/create-staff.dto";
-import { UpdateStaffDto } from "./dto/update-staff.dto";
-import * as bcrypt from "bcrypt";
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateStaffDto } from './dto/create-staff.dto';
+import { UpdateStaffDto } from './dto/update-staff.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class StaffService {
@@ -14,7 +18,9 @@ export class StaffService {
       where: { email: createStaffDto.email },
     });
     if (existing) {
-      throw new ConflictException(`Staff user with email "${createStaffDto.email}" already exists.`);
+      throw new ConflictException(
+        `Staff user with email "${createStaffDto.email}" already exists.`,
+      );
     }
 
     // Verify role mapping exists
@@ -22,12 +28,16 @@ export class StaffService {
       where: { id: createStaffDto.roleId },
     });
     if (!role) {
-      throw new NotFoundException(`Associated Role with ID "${createStaffDto.roleId}" not found.`);
+      throw new NotFoundException(
+        `Associated Role with ID "${createStaffDto.roleId}" not found.`,
+      );
     }
 
     // Generate password if not provided
-    const generatedPassword = createStaffDto.passwordHash || `Staff@${Math.floor(1000 + Math.random() * 9000)}`;
-    
+    const generatedPassword =
+      createStaffDto.passwordHash ||
+      `Staff@${Math.floor(1000 + Math.random() * 9000)}`;
+
     // Hash Password securely
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(generatedPassword, saltRounds);
@@ -38,9 +48,9 @@ export class StaffService {
         fullName: createStaffDto.fullName,
         passwordHash,
         roleId: createStaffDto.roleId,
-        status: createStaffDto.status || "Active",
+        status: createStaffDto.status || 'Active',
         details: createStaffDto.details || undefined,
-        createdBy: createStaffDto.createdBy || "SYSTEM",
+        createdBy: createStaffDto.createdBy || 'SYSTEM',
       },
       select: {
         id: true,
@@ -71,7 +81,7 @@ export class StaffService {
             role: { select: { id: true, name: true } },
             createdAt: true,
           },
-          orderBy: { fullName: "asc" },
+          orderBy: { fullName: 'asc' },
         }),
         this.prisma.staff.count(),
       ]);
@@ -88,7 +98,7 @@ export class StaffService {
         role: { select: { id: true, name: true } },
         createdAt: true,
       },
-      orderBy: { fullName: "asc" },
+      orderBy: { fullName: 'asc' },
     });
     return { data, totalCount: data.length, page: 1, limit: data.length };
   }
@@ -116,21 +126,21 @@ export class StaffService {
           include: {
             subject: true,
             section: {
-              include: { class: true }
-            }
-          }
+              include: { class: true },
+            },
+          },
         },
         transportAssignments: {
           include: {
-            vehicle: true
-          }
+            vehicle: true,
+          },
         },
         TransportTrip: {
           include: {
             route: true,
-            vehicle: true
-          }
-        }
+            vehicle: true,
+          },
+        },
       },
     });
     if (!staff) {
@@ -150,7 +160,9 @@ export class StaffService {
         },
       });
       if (existing) {
-        throw new ConflictException(`Another staff record with email "${updateStaffDto.email}" already exists.`);
+        throw new ConflictException(
+          `Another staff record with email "${updateStaffDto.email}" already exists.`,
+        );
       }
     }
 
@@ -165,7 +177,9 @@ export class StaffService {
         where: { id: updateStaffDto.roleId },
       });
       if (!role) {
-        throw new NotFoundException(`Role with ID "${updateStaffDto.roleId}" not found.`);
+        throw new NotFoundException(
+          `Role with ID "${updateStaffDto.roleId}" not found.`,
+        );
       }
     }
 
@@ -182,7 +196,7 @@ export class StaffService {
         experience: (updateStaffDto as any).experience,
         photoUrl: (updateStaffDto as any).photoUrl,
         details: (updateStaffDto as any).details,
-        updatedBy: updateStaffDto.updatedBy || "SYSTEM",
+        updatedBy: updateStaffDto.updatedBy || 'SYSTEM',
       },
       select: {
         id: true,
@@ -196,12 +210,18 @@ export class StaffService {
 
     // Try updating portal account if it exists for this staff member
     if (updateStaffDto.email || passwordHash) {
-      const portalAccount = await this.prisma.portalAccount.findFirst({ where: { referenceId: id, userType: "STAFF" } });
+      const portalAccount = await this.prisma.portalAccount.findFirst({
+        where: { referenceId: id, userType: 'STAFF' },
+      });
       if (portalAccount) {
         const portalUpdateData: any = {};
-        if (updateStaffDto.email) portalUpdateData.username = updateStaffDto.email;
+        if (updateStaffDto.email)
+          portalUpdateData.username = updateStaffDto.email;
         if (passwordHash) portalUpdateData.passwordHash = passwordHash;
-        await this.prisma.portalAccount.update({ where: { id: portalAccount.id }, data: portalUpdateData });
+        await this.prisma.portalAccount.update({
+          where: { id: portalAccount.id },
+          data: portalUpdateData,
+        });
       }
     }
 
@@ -211,35 +231,44 @@ export class StaffService {
   async assignTransport(staffId: string, vehicleId: string, routeType: string) {
     // Delete any existing assignments for this shift (routeType)
     await this.prisma.transportVehicleStaff.deleteMany({
-      where: { staffId, shift: routeType }
+      where: { staffId, shift: routeType },
     });
-    
+
     return this.prisma.transportVehicleStaff.create({
-      data: { staffId, vehicleId, shift: routeType }
+      data: { staffId, vehicleId, shift: routeType },
     });
   }
 
   async getSelfAttendance(staffId: string, dateStr?: string) {
-    const queryDate = dateStr ? dateStr.split('T')[0] : new Date().toISOString().split('T')[0];
+    const queryDate = dateStr
+      ? dateStr.split('T')[0]
+      : new Date().toISOString().split('T')[0];
     const record = await this.prisma.attendanceRecord.findFirst({
       where: {
         staffId,
-        date: queryDate
-      }
+        date: queryDate,
+      },
     });
     return record || { status: 'PENDING' };
   }
 
-  async markSelfAttendance(data: { staffId: string, status: string, date: string }) {
+  async markSelfAttendance(data: {
+    staffId: string;
+    status: string;
+    date: string;
+  }) {
     const dateStr = data.date.split('T')[0]; // Ensure YYYY-MM-DD
-    const nowTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const nowTime = new Date().toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
     const isCheckOut = data.status === 'CHECKED_OUT';
 
     const existing = await this.prisma.attendanceRecord.findFirst({
       where: {
         staffId: data.staffId,
-        date: dateStr
-      }
+        date: dateStr,
+      },
     });
 
     if (existing) {
@@ -248,9 +277,10 @@ export class StaffService {
         data: {
           status: data.status,
           updatedBy: data.staffId,
-          checkInTime: existing.checkInTime ?? (isCheckOut ? undefined : nowTime),
+          checkInTime:
+            existing.checkInTime ?? (isCheckOut ? undefined : nowTime),
           checkOutTime: isCheckOut ? nowTime : existing.checkOutTime,
-        }
+        },
       });
     }
 
@@ -262,7 +292,7 @@ export class StaffService {
         createdBy: data.staffId,
         checkInTime: isCheckOut ? undefined : nowTime,
         checkOutTime: isCheckOut ? nowTime : undefined,
-      }
+      },
     });
   }
 
@@ -270,46 +300,58 @@ export class StaffService {
     if (month) {
       return this.prisma.attendanceRecord.findMany({
         where: { staffId, date: { startsWith: month } },
-        orderBy: { date: 'desc' }
+        orderBy: { date: 'desc' },
       });
     } else {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
+
       return this.prisma.attendanceRecord.findMany({
         where: {
           staffId,
-          createdAt: { gte: thirtyDaysAgo }
+          createdAt: { gte: thirtyDaysAgo },
         },
-        orderBy: { date: 'desc' }
+        orderBy: { date: 'desc' },
       });
     }
   }
 
-  async applyLeave(staffId: string, data: { leaveType: string, startDate: string, endDate: string, reason?: string }) {
+  async applyLeave(
+    staffId: string,
+    data: {
+      leaveType: string;
+      startDate: string;
+      endDate: string;
+      reason?: string;
+    },
+  ) {
     return this.prisma.leaveApplication.create({
       data: {
         staffId,
         leaveType: data.leaveType,
         startDate: new Date(data.startDate),
         endDate: new Date(data.endDate),
-        reason: data.reason
-      }
+        reason: data.reason,
+      },
     });
   }
 
   async updateTeacherAssignments(id: string, assignments: any[]) {
     // Delete existing
     await this.prisma.teacherAssignment.deleteMany({ where: { staffId: id } });
-    
+
     // Create new
     if (assignments && assignments.length > 0) {
       // Find the active session
-      let activeSession = await this.prisma.academicSession.findFirst({ where: { isActive: true } });
-      if (!activeSession) activeSession = await this.prisma.academicSession.findFirst();
-      if (!activeSession) throw new NotFoundException('No academic session found in database');
+      let activeSession = await this.prisma.academicSession.findFirst({
+        where: { isActive: true },
+      });
+      if (!activeSession)
+        activeSession = await this.prisma.academicSession.findFirst();
+      if (!activeSession)
+        throw new NotFoundException('No academic session found in database');
 
-      const dataToInsert = assignments.map(a => ({
+      const dataToInsert = assignments.map((a) => ({
         staffId: id,
         sessionId: activeSession.id,
         sectionId: a.sectionId || null,
@@ -324,11 +366,15 @@ export class StaffService {
 
   async updateTransportAssignments(id: string, assignments: any[]) {
     // We only support creating one vehicle staff relation and one trip for now per submission
-    // First clear existing if they want a clean slate, or just append. 
+    // First clear existing if they want a clean slate, or just append.
     // The user wants to "assign their bus with bus route". Let's clear and re-assign.
-    await this.prisma.transportVehicleStaff.deleteMany({ where: { staffId: id } });
-    await this.prisma.transportTrip.deleteMany({ where: { driverId: id, status: "Scheduled" } });
-    
+    await this.prisma.transportVehicleStaff.deleteMany({
+      where: { staffId: id },
+    });
+    await this.prisma.transportTrip.deleteMany({
+      where: { driverId: id, status: 'Scheduled' },
+    });
+
     if (assignments && assignments.length > 0) {
       for (const a of assignments) {
         if (a.vehicleId) {
@@ -336,22 +382,22 @@ export class StaffService {
             data: {
               staffId: id,
               vehicleId: a.vehicleId,
-              shift: a.shift || "Full Day",
-              status: "Assigned"
-            }
+              shift: a.shift || 'Full Day',
+              status: 'Assigned',
+            },
           });
         }
-        
+
         if (a.routeId && a.vehicleId) {
           await this.prisma.transportTrip.create({
             data: {
               driverId: id,
               vehicleId: a.vehicleId,
               routeId: a.routeId,
-              tripType: a.tripType || "Morning",
+              tripType: a.tripType || 'Morning',
               date: new Date().toISOString().split('T')[0], // Assign for today/future
-              status: "Scheduled"
-            }
+              status: 'Scheduled',
+            },
           });
         }
       }

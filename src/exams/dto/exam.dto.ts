@@ -1,5 +1,5 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { Type } from "class-transformer";
+import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsString,
   IsNotEmpty,
@@ -9,69 +9,69 @@ import {
   IsBoolean,
   IsArray,
   ValidateNested,
-} from "class-validator";
+} from 'class-validator';
 
 export class CreateExamDto {
-  @ApiProperty({ example: "Mid-Term 2026" })
+  @ApiProperty({ example: 'Mid-Term 2026' })
   @IsString()
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: "Term 1", required: false })
+  @ApiProperty({ example: 'Term 1', required: false })
   @IsString()
   @IsOptional()
   term?: string;
 
-  @ApiProperty({ example: "e936551b-4d43-4011-8fe6-b3334863adfb" })
+  @ApiProperty({ example: 'e936551b-4d43-4011-8fe6-b3334863adfb' })
   @IsUUID()
   @IsNotEmpty()
   sessionId: string;
 
-  @ApiProperty({ example: "Scheduled", required: false })
+  @ApiProperty({ example: 'Scheduled', required: false })
   @IsString()
   @IsOptional()
   status?: string;
 }
 
 export class CreateExamSlotDto {
-  @ApiProperty({ example: "e936551b-4d43-4011-8fe6-b3334863adfb" })
+  @ApiProperty({ example: 'e936551b-4d43-4011-8fe6-b3334863adfb' })
   @IsUUID()
   @IsNotEmpty()
   examId: string;
 
-  @ApiProperty({ example: "e936551b-4d43-4011-8fe6-b3334863adfb" })
+  @ApiProperty({ example: 'e936551b-4d43-4011-8fe6-b3334863adfb' })
   @IsUUID()
   @IsNotEmpty()
   classId: string;
 
-  @ApiProperty({ example: "e936551b-4d43-4011-8fe6-b3334863adfb" })
+  @ApiProperty({ example: 'e936551b-4d43-4011-8fe6-b3334863adfb' })
   @IsUUID()
   @IsNotEmpty()
   subjectId: string;
 
-  @ApiProperty({ example: "2026-08-10" })
+  @ApiProperty({ example: '2026-08-10' })
   @IsString()
   @IsNotEmpty()
   date: string;
 
-  @ApiProperty({ example: "09:00" })
+  @ApiProperty({ example: '09:00' })
   @IsString()
   @IsNotEmpty()
   startTime: string;
 
-  @ApiProperty({ example: "10:00" })
+  @ApiProperty({ example: '10:00' })
   @IsString()
   @IsNotEmpty()
   endTime: string;
 
-  @ApiProperty({ example: "Room 102" })
+  @ApiProperty({ example: 'Room 102' })
   @IsString()
   @IsNotEmpty()
   room: string;
 }
 
 export class ExamMarkEntryDto {
-  @ApiProperty({ example: "e936551b-4d43-4011-8fe6-b3334863adfb" })
+  @ApiProperty({ example: 'e936551b-4d43-4011-8fe6-b3334863adfb' })
   @IsUUID()
   @IsNotEmpty()
   enrollmentId: string;
@@ -88,7 +88,7 @@ export class ExamMarkEntryDto {
 }
 
 export class SubmitExamMarksDto {
-  @ApiProperty({ example: "e936551b-4d43-4011-8fe6-b3334863adfb" })
+  @ApiProperty({ example: 'e936551b-4d43-4011-8fe6-b3334863adfb' })
   @IsUUID()
   @IsNotEmpty()
   examSlotId: string;

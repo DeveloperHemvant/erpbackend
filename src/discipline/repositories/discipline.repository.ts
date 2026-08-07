@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class DisciplineRepository {
@@ -17,8 +17,11 @@ export class DisciplineRepository {
   findIncidentsForStudentFull(studentId: string) {
     return this.prisma.disciplineIncident.findMany({
       where: { studentId },
-      include: { reportedByStaff: true, counselingNotes: { include: { createdByStaff: true } } },
-      orderBy: { incidentDate: "desc" },
+      include: {
+        reportedByStaff: true,
+        counselingNotes: { include: { createdByStaff: true } },
+      },
+      orderBy: { incidentDate: 'desc' },
     });
   }
 
@@ -27,28 +30,41 @@ export class DisciplineRepository {
     return this.prisma.disciplineIncident.findMany({
       where: { studentId },
       select: {
-        id: true, incidentDate: true, category: true, severity: true,
-        description: true, actionTaken: true, status: true, createdAt: true,
+        id: true,
+        incidentDate: true,
+        category: true,
+        severity: true,
+        description: true,
+        actionTaken: true,
+        status: true,
+        createdAt: true,
       },
-      orderBy: { incidentDate: "desc" },
+      orderBy: { incidentDate: 'desc' },
     });
   }
 
   findAllIncidents() {
     return this.prisma.disciplineIncident.findMany({
       include: { student: true, reportedByStaff: true },
-      orderBy: { incidentDate: "desc" },
+      orderBy: { incidentDate: 'desc' },
     });
   }
 
   findIncidentById(id: string) {
     return this.prisma.disciplineIncident.findUnique({
       where: { id },
-      include: { student: true, reportedByStaff: true, counselingNotes: { include: { createdByStaff: true } } },
+      include: {
+        student: true,
+        reportedByStaff: true,
+        counselingNotes: { include: { createdByStaff: true } },
+      },
     });
   }
 
-  updateIncident(id: string, data: Prisma.DisciplineIncidentUncheckedUpdateInput) {
+  updateIncident(
+    id: string,
+    data: Prisma.DisciplineIncidentUncheckedUpdateInput,
+  ) {
     return this.prisma.disciplineIncident.update({ where: { id }, data });
   }
 

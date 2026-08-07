@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class LmsService {
@@ -16,8 +16,8 @@ export class LmsService {
         subject: true,
         class: true,
         curriculum: true,
-        sections: { include: { teacher: true, section: true } }
-      }
+        sections: { include: { teacher: true, section: true } },
+      },
     });
   }
 
@@ -35,19 +35,19 @@ export class LmsService {
                   include: {
                     topics: {
                       include: {
-                        lessons: { include: { resources: true } }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
+                        lessons: { include: { resources: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
-        sections: { include: { teacher: true, section: true } }
-      }
+        sections: { include: { teacher: true, section: true } },
+      },
     });
-    if (!course) throw new NotFoundException("Course not found");
+    if (!course) throw new NotFoundException('Course not found');
     return course;
   }
 
@@ -81,23 +81,54 @@ export class LmsService {
     return this.prisma.lMSContentResource.create({ data });
   }
 
-  async getResources() {
+  async getResources(classId?: string) {
     return this.prisma.lMSContentResource.findMany({
-      include: { lesson: { include: { topic: { include: { chapter: true } } } } }
+      where: classId
+        ? {
+            lesson: {
+              topic: {
+                chapter: { unit: { curriculum: { course: { classId } } } },
+              },
+            },
+          }
+        : undefined,
+      include: {
+        lesson: { include: { topic: { include: { chapter: true } } } },
+      },
     });
   }
 
   // --- PHASE 2: ASSESSMENTS & GRADEBOOK ---
-  async createAssignment(data: any) {
-    return this.prisma.lMSAssignment.create({ data });
+  async createAssignment(teacherId: string, data: any) {
+    return this.prisma.lMSAssignment.create({ data: { ...data, teacherId } });
   }
 
-  async getAssignments(courseId?: string) {
+  async getAssignments(
+    courseId?: string,
+    classId?: string,
+    sectionId?: string,
+  ) {
+    const where = sectionId
+      ? { sectionId }
+      : courseId
+        ? {
+            lesson: {
+              topic: { chapter: { unit: { curriculum: { courseId } } } },
+            },
+          }
+        : classId
+          ? {
+              lesson: {
+                topic: {
+                  chapter: { unit: { curriculum: { course: { classId } } } },
+                },
+              },
+            }
+          : undefined;
     return this.prisma.lMSAssignment.findMany({
-      where: courseId
-        ? { lesson: { topic: { chapter: { unit: { curriculum: { courseId } } } } } }
-        : undefined,
-      include: { submissions: true },
+      where,
+      include: { submissions: true, teacher: { select: { id: true, fullName: true } } },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -109,16 +140,25 @@ export class LmsService {
     return this.prisma.lMSSubmission.findMany({
       where: { assignmentId },
       include: { student: { select: { id: true, fullName: true } } },
-      orderBy: { submittedAt: "desc" },
+      orderBy: { submittedAt: 'desc' },
     });
   }
 
-  async gradeSubmission(id: string, data: { score: number; feedback?: string }) {
-    const submission = await this.prisma.lMSSubmission.findUnique({ where: { id } });
-    if (!submission) throw new NotFoundException("Submission not found");
+  async gradeSubmission(
+    id: string,
+    data: { score: number; feedback?: string },
+  ) {
+    const submission = await this.prisma.lMSSubmission.findUnique({
+      where: { id },
+    });
+    if (!submission) throw new NotFoundException('Submission not found');
     return this.prisma.lMSSubmission.update({
       where: { id },
-      data: { score: data.score, feedback: data.feedback, gradedAt: new Date() },
+      data: {
+        score: data.score,
+        feedback: data.feedback,
+        gradedAt: new Date(),
+      },
     });
   }
 
@@ -126,12 +166,19 @@ export class LmsService {
   async getGradebook(courseId: string) {
     const gradebook = await this.prisma.lMSGradebook.findUnique({
       where: { courseId },
-      include: { grades: { include: { student: { select: { id: true, fullName: true } } } } },
+      include: {
+        grades: {
+          include: { student: { select: { id: true, fullName: true } } },
+        },
+      },
     });
     return gradebook || { courseId, grades: [] };
   }
 
-  async upsertGrade(courseId: string, data: { studentId: string; totalScore: number; letterGrade?: string }) {
+  async upsertGrade(
+    courseId: string,
+    data: { studentId: string; totalScore: number; letterGrade?: string },
+  ) {
     const gradebook = await this.prisma.lMSGradebook.upsert({
       where: { courseId },
       create: { courseId },
@@ -147,7 +194,12 @@ export class LmsService {
       });
     }
     return this.prisma.lMSGrade.create({
-      data: { gradebookId: gradebook.id, studentId: data.studentId, totalScore: data.totalScore, letterGrade: data.letterGrade },
+      data: {
+        gradebookId: gradebook.id,
+        studentId: data.studentId,
+        totalScore: data.totalScore,
+        letterGrade: data.letterGrade,
+      },
     });
   }
 
@@ -155,19 +207,30 @@ export class LmsService {
   async getDiscussionThreads(courseId: string) {
     return this.prisma.lMSDiscussionThread.findMany({
       where: { courseId },
-      include: { posts: { orderBy: { createdAt: "asc" } } },
-      orderBy: { createdAt: "desc" },
+      include: { posts: { orderBy: { createdAt: 'asc' } } },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  async createDiscussionThread(data: { courseId: string; title: string; authorId?: string }) {
+  async createDiscussionThread(data: {
+    courseId: string;
+    title: string;
+    authorId?: string;
+  }) {
     return this.prisma.lMSDiscussionThread.create({ data });
   }
 
-  async createDiscussionPost(threadId: string, data: { content: string; authorId?: string }) {
-    const thread = await this.prisma.lMSDiscussionThread.findUnique({ where: { id: threadId } });
-    if (!thread) throw new NotFoundException("Discussion thread not found");
-    return this.prisma.lMSDiscussionPost.create({ data: { ...data, threadId } });
+  async createDiscussionPost(
+    threadId: string,
+    data: { content: string; authorId?: string },
+  ) {
+    const thread = await this.prisma.lMSDiscussionThread.findUnique({
+      where: { id: threadId },
+    });
+    if (!thread) throw new NotFoundException('Discussion thread not found');
+    return this.prisma.lMSDiscussionPost.create({
+      data: { ...data, threadId },
+    });
   }
 
   async createQuiz(data: any) {
@@ -184,21 +247,31 @@ export class LmsService {
   }
 
   async getLiveClasses() {
-    return this.prisma.lMSLiveClass.findMany({ include: { course: true, host: true } });
+    return this.prisma.lMSLiveClass.findMany({
+      include: { course: true, host: true },
+    });
   }
 
   async awardBadge(data: any) {
     return this.prisma.lMSBadge.create({ data });
   }
 
-  async awardBadgeToStudent(data: { studentId: string; name: string; iconUrl?: string }) {
+  async awardBadgeToStudent(data: {
+    studentId: string;
+    name: string;
+    iconUrl?: string;
+  }) {
     const portfolio = await this.prisma.lMSStudentPortfolio.upsert({
       where: { studentId: data.studentId },
       create: { studentId: data.studentId },
       update: {},
     });
     return this.prisma.lMSBadge.create({
-      data: { portfolioId: portfolio.id, name: data.name, iconUrl: data.iconUrl },
+      data: {
+        portfolioId: portfolio.id,
+        name: data.name,
+        iconUrl: data.iconUrl,
+      },
     });
   }
 

@@ -1,7 +1,26 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { TemplateService } from './template.service';
-import { CreateDocumentTemplateDto, UpdateDocumentTemplateDto } from './dto/template.dto';
+import {
+  CreateDocumentTemplateDto,
+  UpdateDocumentTemplateDto,
+  IssueCertificateDto,
+} from './dto/template.dto';
+import { RequirePermissions } from '../auth/permissions.decorator';
 
+// Class-level MANAGE_ACADEMICS default (this is the backend for the
+// Certificate Designer / ID Card Templates screens, matching web-app's own
+// "reqModule: masterdata" grouping for both). Was undecorated (6 routes),
+// therefore blocked for every non-'*' role before this fix.
+@RequirePermissions('MANAGE_ACADEMICS')
 @Controller('templates')
 export class TemplateController {
   constructor(private readonly templateService: TemplateService) {}
@@ -19,7 +38,7 @@ export class TemplateController {
   @Get('render')
   render(
     @Query('templateId') templateId: string,
-    @Query('targetId') targetId: string
+    @Query('targetId') targetId: string,
   ) {
     return this.templateService.render(templateId, targetId);
   }
@@ -37,5 +56,20 @@ export class TemplateController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.templateService.remove(id);
+  }
+
+  @Post(':id/certificates')
+  issueCertificate(@Param('id') id: string, @Body() data: IssueCertificateDto) {
+    return this.templateService.issueCertificate(id, data);
+  }
+
+  @Get(':id/certificates')
+  getCertificatesForTemplate(@Param('id') id: string) {
+    return this.templateService.getCertificatesForTemplate(id);
+  }
+
+  @Get('certificates/all')
+  getCertificates(@Query('studentId') studentId?: string) {
+    return this.templateService.getCertificates(studentId);
   }
 }

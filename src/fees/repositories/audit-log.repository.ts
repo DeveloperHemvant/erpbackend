@@ -1,5 +1,5 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class ErpCoreAuditLogRepository {
@@ -7,7 +7,7 @@ export class ErpCoreAuditLogRepository {
 
   findRecent() {
     return this.prisma.auditLog.findMany({
-      orderBy: { timestamp: "desc" },
+      orderBy: { timestamp: 'desc' },
       take: 200,
     });
   }

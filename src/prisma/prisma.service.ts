@@ -1,5 +1,5 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
 import { AsyncLocalStorage } from 'async_hooks';
 
 export interface TenantContext {
@@ -12,7 +12,10 @@ export interface TenantContext {
 export const tenantContext = new AsyncLocalStorage<TenantContext>();
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   constructor() {
     super();
 
@@ -24,16 +27,34 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       const userAgent = context?.userAgent || 'unknown';
 
       // Tenant Scoping
-      const modelsWithCampusId = ['StudentEnrollment', 'FeeInvoice', 'AttendanceRecord', 'Class'];
+      const modelsWithCampusId = [
+        'StudentEnrollment',
+        'FeeInvoice',
+        'AttendanceRecord',
+        'Class',
+      ];
       if (campusId && modelsWithCampusId.includes(params.model as string)) {
-        if (params.action === 'findMany' || params.action === 'findFirst' || params.action === 'findUnique') {
+        if (
+          params.action === 'findMany' ||
+          params.action === 'findFirst' ||
+          params.action === 'findUnique'
+        ) {
           params.args.where = { ...params.args.where, campusId };
-        } else if (params.action === 'updateMany' || params.action === 'deleteMany') {
+        } else if (
+          params.action === 'updateMany' ||
+          params.action === 'deleteMany'
+        ) {
           params.args.where = { ...params.args.where, campusId };
-        } else if (params.action === 'create' || params.action === 'createMany') {
+        } else if (
+          params.action === 'create' ||
+          params.action === 'createMany'
+        ) {
           if (params.args.data) {
             if (Array.isArray(params.args.data)) {
-              params.args.data = params.args.data.map((d: any) => ({ ...d, campusId }));
+              params.args.data = params.args.data.map((d: any) => ({
+                ...d,
+                campusId,
+              }));
             } else {
               params.args.data = { ...params.args.data, campusId };
             }
@@ -42,24 +63,39 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       }
 
       // Global Audit Logging
-      const mutatingOps = ['create', 'update', 'delete', 'upsert', 'createMany', 'updateMany', 'deleteMany'];
+      const mutatingOps = [
+        'create',
+        'update',
+        'delete',
+        'upsert',
+        'createMany',
+        'updateMany',
+        'deleteMany',
+      ];
       if (params.model !== 'AuditLog' && mutatingOps.includes(params.action)) {
         let oldValue: any = undefined;
 
-        if ((params.action === 'update' || params.action === 'delete') && params.args.where) {
+        if (
+          (params.action === 'update' || params.action === 'delete') &&
+          params.args.where
+        ) {
           try {
-            oldValue = await (this as any)[params.model as string].findUnique({ where: params.args.where });
-          } catch (e) {}
+            oldValue = await (this as any)[params.model as string].findUnique({
+              where: params.args.where,
+            });
+          } catch {
+            // best-effort: audit log proceeds without the previous value
+          }
         }
 
         const result = await next(params);
 
         // Asynchronously write log
-        Promise.resolve().then(async () => {
+        void Promise.resolve().then(async () => {
           try {
             let recordId = 'n/a';
-            if (result && (result as any).id) {
-              recordId = (result as any).id;
+            if (result && result.id) {
+              recordId = result.id;
             } else if (params.args.where && params.args.where.id) {
               recordId = params.args.where.id;
             }
@@ -70,11 +106,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
                 action: String(params.action).toUpperCase(),
                 tableName: params.model as string,
                 recordId: String(recordId),
-                oldValue: oldValue ? JSON.parse(JSON.stringify(oldValue)) : undefined,
-                newValue: result ? JSON.parse(JSON.stringify(result)) : undefined,
+                oldValue: oldValue
+                  ? JSON.parse(JSON.stringify(oldValue))
+                  : undefined,
+                newValue: result
+                  ? JSON.parse(JSON.stringify(result))
+                  : undefined,
                 ipAddress,
-                userAgent
-              }
+                userAgent,
+              },
             });
           } catch (err) {
             console.error(`Audit log failed: ${err}`);

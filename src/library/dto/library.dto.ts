@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, IsUUID } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsInt,
+  IsUUID,
+} from 'class-validator';
 
 export class CreateLibraryBookDto {
   @IsString()
@@ -42,4 +48,30 @@ export class IssueBookDto {
   @IsString()
   @IsNotEmpty()
   dueDate: string;
+}
+
+export class CreateLibraryReservationDto {
+  @IsUUID()
+  @IsNotEmpty()
+  bookId: string;
+
+  @IsUUID()
+  @IsNotEmpty()
+  enrollmentId: string;
+
+  @IsString()
+  @IsOptional()
+  expiresAt?: string; // ISO date-time or YYYY-MM-DD
+}
+
+export class FulfillReservationDto {
+  @IsString()
+  @IsNotEmpty()
+  dueDate: string; // YYYY-MM-DD
+}
+
+export class UpdateFineStatusDto {
+  @IsString()
+  @IsNotEmpty()
+  status: string; // Paid | Waived
 }

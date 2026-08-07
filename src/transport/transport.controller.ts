@@ -1,6 +1,18 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, Put } from "@nestjs/common";
-import { TransportService } from "./transport.service";
-import { RequirePermissions } from "../auth/permissions.decorator";
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Patch,
+  Delete,
+  Put,
+  Query,
+} from '@nestjs/common';
+import { TransportService } from './transport.service';
+import { RequirePermissions } from '../auth/permissions.decorator';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import {
   CreateVehicleDto,
   UpdateVehicleDto,
@@ -20,177 +32,351 @@ import {
   ReportAccidentDto,
   CreateTransportVendorDto,
   CreateTransportExpenseDto,
-} from "./dto/transport.dto";
+  CreateOdometerLogDto,
+  UpdateOdometerLogDto,
+  CreateDailyCheckDto,
+  ResolveFuelLogDto,
+  ResolveTransportExpenseDto,
+  AcknowledgeIncidentDto,
+} from './dto/transport.dto';
 
-@Controller("transport")
+// Class-level MANAGE_TRANSPORT default. 30 of this controller's 45 routes had
+// no decorator at all, including logTripLocation (GPS tracking) and
+// getRouteRoster -- both routes the mobile Boarding/Driver screens (Phase 1)
+// depend on directly. Under the global PermissionsGuard's fallback, every one
+// of those 30 routes was blocked for Driver/Conductor/Transport Manager alike
+// -- the SOR audit's "Driver: 89%, GPS/pickup verified working" finding was
+// reading correct-looking code that was silently unreachable in practice.
+// The 13 routes already explicitly gated MANAGE_TRANSPORT_FLEET (vehicle/
+// asset CRUD, incident acknowledgement, vendor/expense resolution) keep that
+// stricter method-level requirement unchanged -- this default only fills the
+// gap for routes that had nothing at all.
+@RequirePermissions('MANAGE_TRANSPORT')
+@Controller('transport')
 export class TransportController {
   constructor(private readonly transportService: TransportService) {}
 
   // --- VEHICLES ---
-  @Post("vehicles")
+  @Post('vehicles')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
   createVehicle(@Body() data: CreateVehicleDto) {
     return this.transportService.createVehicle(data);
   }
 
-  @Get("vehicles")
+  @Get('vehicles')
   getVehicles() {
     return this.transportService.getVehicles();
   }
 
-  @Get("vehicles/:id/profile")
-  getVehicleProfile(@Param("id") id: string) {
+  @Get('vehicles/:id/profile')
+  getVehicleProfile(@Param('id') id: string) {
     return this.transportService.getVehicleProfile(id);
   }
 
-  @Patch("vehicles/:id")
-  updateVehicle(@Param("id") id: string, @Body() data: UpdateVehicleDto) {
+  @Patch('vehicles/:id')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  updateVehicle(@Param('id') id: string, @Body() data: UpdateVehicleDto) {
     return this.transportService.updateVehicle(id, data);
   }
 
-  @Delete("vehicles/:id")
-  deleteVehicle(@Param("id") id: string) {
+  @Delete('vehicles/:id')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  deleteVehicle(@Param('id') id: string) {
     return this.transportService.deleteVehicle(id);
   }
 
   // --- VEHICLE STAFF ---
-  @Post("vehicles/:id/staff")
-  assignStaff(@Param("id") id: string, @Body() data: AssignStaffDto) {
-    return this.transportService.assignStaffToVehicle(id, data.staffId, data.shift);
+  @Post('vehicles/:id/staff')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  assignStaff(@Param('id') id: string, @Body() data: AssignStaffDto) {
+    return this.transportService.assignStaffToVehicle(
+      id,
+      data.staffId,
+      data.shift,
+    );
   }
 
-  @Delete("vehicle-staff/:id")
-  removeStaff(@Param("id") id: string) {
+  @Delete('vehicle-staff/:id')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  removeStaff(@Param('id') id: string) {
     return this.transportService.removeStaffFromVehicle(id);
   }
 
   // --- ROUTES & STOPS ---
-  @Post("routes")
-  createRoute(@Body() data: CreateRouteDto) {
-    return this.transportService.createRoute(data);
+  @Post('routes')
+  createRoute(
+    @Body() data: CreateRouteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.createRoute(data, user);
   }
 
-  @Get("routes")
+  @Get('routes')
   getRoutes() {
     return this.transportService.getRoutes();
   }
 
-  @Post("routes/:id/stops")
-  addStop(@Param("id") id: string, @Body() data: AddRouteStopDto) {
-    return this.transportService.addStop(id, data);
+  @Post('routes/:id/stops')
+  addStop(
+    @Param('id') id: string,
+    @Body() data: AddRouteStopDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.addStop(id, data, user);
   }
 
-  @Delete("stops/:id")
-  removeStop(@Param("id") id: string) {
-    return this.transportService.removeStop(id);
+  @Delete('stops/:id')
+  removeStop(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.transportService.removeStop(id, user);
   }
 
   // --- STUDENT ASSIGNMENTS ---
-  @Post("student-assignments")
-  assignStudent(@Body() data: AssignStudentToStopDto) {
-    return this.transportService.assignStudentToStop(data.enrollmentId, data.stopId, data);
+  @Post('student-assignments')
+  assignStudent(
+    @Body() data: AssignStudentToStopDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.assignStudentToStop(
+      data.enrollmentId,
+      data.stopId,
+      data,
+      user,
+    );
   }
 
-  @Get("students/:enrollmentId")
-  getStudentTransport(@Param("enrollmentId") enrollmentId: string) {
+  @Get('students/:enrollmentId')
+  @RequirePermissions('MANAGE_TRANSPORT')
+  getStudentTransport(@Param('enrollmentId') enrollmentId: string) {
     return this.transportService.getStudentTransport(enrollmentId);
   }
 
-  @Get("routes/:id/roster")
-  getRouteRoster(@Param("id") id: string) {
+  @Get('routes/:id/roster')
+  getRouteRoster(@Param('id') id: string) {
     return this.transportService.getRouteRoster(id);
   }
 
   // --- TRIPS & GPS LOGS ---
-  @Post("trips")
-  createTrip(@Body() data: CreateTripDto) {
-    return this.transportService.createTrip(data);
+  @Post('trips')
+  createTrip(
+    @Body() data: CreateTripDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.createTrip(data, user);
   }
 
-  @Get("trips")
-  getTrips() {
-    return this.transportService.getTrips();
+  @Get('trips')
+  getTrips(@Query('routeId') routeId?: string, @Query('date') date?: string) {
+    return this.transportService.getTrips(routeId, date);
   }
 
-  @Put("trips/:id")
-  updateTrip(@Param("id") id: string, @Body() data: UpdateTripDto) {
-    return this.transportService.updateTrip(id, data);
+  @Put('trips/:id')
+  updateTrip(
+    @Param('id') id: string,
+    @Body() data: UpdateTripDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.updateTrip(id, data, user);
   }
 
-  @Post("trips/:id/logs")
-  logTripLocation(@Param("id") id: string, @Body() data: LogTripLocationDto) {
+  @Post('trips/:id/logs')
+  logTripLocation(@Param('id') id: string, @Body() data: LogTripLocationDto) {
     return this.transportService.logTripLocation(id, data);
   }
 
   // --- ATTENDANCE ---
-  @Post("attendance")
-  @RequirePermissions("MANAGE_TRANSPORT")
+  @Post('attendance')
+  @RequirePermissions('MANAGE_TRANSPORT')
   markAttendance(@Body() data: MarkTransportAttendanceDto) {
     return this.transportService.markAttendance(data);
   }
 
-  @Get("trips/:id/attendance")
-  getTripAttendance(@Param("id") id: string) {
+  @Get('trips/:id/attendance')
+  getTripAttendance(@Param('id') id: string) {
     return this.transportService.getTripAttendance(id);
   }
 
   // --- FUEL ---
-  @Post("fuel")
-  logFuel(@Body() data: LogFuelDto) {
-    return this.transportService.logFuel(data);
+  @Post('fuel')
+  logFuel(@Body() data: LogFuelDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.transportService.logFuel(data, user);
   }
 
-  @Get("fuel")
+  @Get('fuel')
   getFuelLogs() {
     return this.transportService.getFuelLogs();
   }
+
+  @Patch('fuel/:id/resolve')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  resolveFuelLog(
+    @Param('id') id: string,
+    @Body() dto: ResolveFuelLogDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.resolveFuelLog(id, dto, user.userId);
+  }
+
+  // --- ODOMETER LOGS ---
+  @Post('odometer-logs')
+  createOdometerLog(
+    @Body() data: CreateOdometerLogDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.createOdometerLog(data, user);
+  }
+
+  @Patch('odometer-logs/:id')
+  closeOdometerLog(
+    @Param('id') id: string,
+    @Body() data: UpdateOdometerLogDto,
+  ) {
+    return this.transportService.closeOdometerLog(id, data);
+  }
+
+  @Get('odometer-logs')
+  getOdometerLogs(
+    @Query('vehicleId') vehicleId?: string,
+    @Query('date') date?: string,
+  ) {
+    return this.transportService.getOdometerLogs(vehicleId, date);
+  }
+
+  // --- PRE-TRIP DAILY SAFETY CHECK ---
+  @Post('daily-checks')
+  createDailyCheck(
+    @Body() data: CreateDailyCheckDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.createDailyCheck(data, user);
+  }
+
+  @Get('daily-checks')
+  getDailyChecks(
+    @Query('vehicleId') vehicleId?: string,
+    @Query('date') date?: string,
+  ) {
+    return this.transportService.getDailyChecks(vehicleId, date);
+  }
+
   // ---------------------------------------------------------
   // MAINTENANCE & ASSETS (Phase 2)
   // ---------------------------------------------------------
-  @Post("services")
-  createService(@Body() data: CreateTransportServiceDto) { return this.transportService.createService(data); }
+  @Post('services')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  createService(@Body() data: CreateTransportServiceDto) {
+    return this.transportService.createService(data);
+  }
 
-  @Get("services")
-  getServices() { return this.transportService.getServices(); }
+  @Get('services')
+  getServices() {
+    return this.transportService.getServices();
+  }
 
-  @Post("tyres")
-  createTyre(@Body() data: CreateTyreDto) { return this.transportService.createTyre(data); }
+  @Post('tyres')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  createTyre(@Body() data: CreateTyreDto) {
+    return this.transportService.createTyre(data);
+  }
 
-  @Get("tyres")
-  getTyres() { return this.transportService.getTyres(); }
+  @Get('tyres')
+  getTyres() {
+    return this.transportService.getTyres();
+  }
 
-  @Post("batteries")
-  createBattery(@Body() data: CreateBatteryDto) { return this.transportService.createBattery(data); }
+  @Post('batteries')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  createBattery(@Body() data: CreateBatteryDto) {
+    return this.transportService.createBattery(data);
+  }
 
-  @Get("batteries")
-  getBatteries() { return this.transportService.getBatteries(); }
+  @Get('batteries')
+  getBatteries() {
+    return this.transportService.getBatteries();
+  }
 
   // ---------------------------------------------------------
   // INCIDENTS
   // ---------------------------------------------------------
-  @Post("breakdowns")
-  reportBreakdown(@Body() data: ReportBreakdownDto) { return this.transportService.reportBreakdown(data); }
+  @Post('breakdowns')
+  reportBreakdown(
+    @Body() data: ReportBreakdownDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.reportBreakdown(data, user);
+  }
 
-  @Get("breakdowns")
-  getBreakdowns() { return this.transportService.getBreakdowns(); }
+  @Get('breakdowns')
+  getBreakdowns() {
+    return this.transportService.getBreakdowns();
+  }
 
-  @Post("accidents")
-  reportAccident(@Body() data: ReportAccidentDto) { return this.transportService.reportAccident(data); }
+  @Patch('breakdowns/:id/acknowledge')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  acknowledgeBreakdown(
+    @Param('id') id: string,
+    @Body() _dto: AcknowledgeIncidentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.acknowledgeBreakdown(id, user.userId);
+  }
 
-  @Get("accidents")
-  getAccidents() { return this.transportService.getAccidents(); }
+  @Post('accidents')
+  reportAccident(
+    @Body() data: ReportAccidentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.reportAccident(data, user);
+  }
+
+  @Get('accidents')
+  getAccidents() {
+    return this.transportService.getAccidents();
+  }
+
+  @Patch('accidents/:id/acknowledge')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  acknowledgeAccident(
+    @Param('id') id: string,
+    @Body() _dto: AcknowledgeIncidentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.acknowledgeAccident(id, user.userId);
+  }
 
   // ---------------------------------------------------------
   // VENDORS & EXPENSES
   // ---------------------------------------------------------
-  @Post("vendors")
-  createVendor(@Body() data: CreateTransportVendorDto) { return this.transportService.createVendor(data); }
+  @Post('vendors')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  createVendor(@Body() data: CreateTransportVendorDto) {
+    return this.transportService.createVendor(data);
+  }
 
-  @Get("vendors")
-  getVendors() { return this.transportService.getVendors(); }
+  @Get('vendors')
+  getVendors() {
+    return this.transportService.getVendors();
+  }
 
-  @Post("expenses")
-  createExpense(@Body() data: CreateTransportExpenseDto) { return this.transportService.createExpense(data); }
+  @Post('expenses')
+  createExpense(
+    @Body() data: CreateTransportExpenseDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.createExpense(data, user);
+  }
 
-  @Get("expenses")
-  getExpenses() { return this.transportService.getExpenses(); }
+  @Get('expenses')
+  getExpenses(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.transportService.getExpenses(from, to);
+  }
+
+  @Patch('expenses/:id/resolve')
+  @RequirePermissions('MANAGE_TRANSPORT_FLEET')
+  resolveExpense(
+    @Param('id') id: string,
+    @Body() dto: ResolveTransportExpenseDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.transportService.resolveExpense(id, dto, user.userId);
+  }
 }

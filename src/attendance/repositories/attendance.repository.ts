@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class AttendanceRepository {
@@ -13,15 +13,47 @@ export class AttendanceRepository {
   create(data: Prisma.AttendanceRecordUncheckedCreateInput) {
     return this.prisma.attendanceRecord.create({
       data,
-      include: { enrollment: { include: { student: true, section: { include: { class: true } } } }, staff: true },
+      include: {
+        enrollment: {
+          include: { student: true, section: { include: { class: true } } },
+        },
+        staff: true,
+      },
     });
   }
 
   findMany(where: Prisma.AttendanceRecordWhereInput) {
     return this.prisma.attendanceRecord.findMany({
       where,
-      include: { enrollment: { include: { student: true, section: { include: { class: true } } } }, staff: true },
-      orderBy: { date: "desc" },
+      include: {
+        enrollment: {
+          include: { student: true, section: { include: { class: true } } },
+        },
+        staff: true,
+      },
+      orderBy: { date: 'desc' },
+    });
+  }
+
+  /** Class/Section 360 Attendance Summary tab (IA §4) — count by status for one section. */
+  summaryBySection(sectionId: string) {
+    return this.prisma.attendanceRecord.groupBy({
+      by: ['status'],
+      where: { enrollment: { sectionId } },
+      _count: { _all: true },
+    });
+  }
+
+  update(id: string, data: Prisma.AttendanceRecordUncheckedUpdateInput) {
+    return this.prisma.attendanceRecord.update({
+      where: { id },
+      data,
+      include: {
+        enrollment: {
+          include: { student: true, section: { include: { class: true } } },
+        },
+        staff: true,
+      },
     });
   }
 

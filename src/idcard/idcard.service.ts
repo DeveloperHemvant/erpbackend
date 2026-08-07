@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateIdCardTemplateDto, UpdateIdCardTemplateDto } from './dto/idcard-template.dto';
+import {
+  CreateIdCardTemplateDto,
+  UpdateIdCardTemplateDto,
+} from './dto/idcard-template.dto';
 
 @Injectable()
 export class IdCardService {
@@ -13,12 +16,13 @@ export class IdCardService {
         template: true,
         student: {
           include: {
-            enrollments: { include: { section: { include: { class: true } } } }
-          }
-        }
-      }
+            enrollments: { include: { section: { include: { class: true } } } },
+          },
+        },
+      },
     });
-    if (!card) throw new NotFoundException('ID Card not found for this student');
+    if (!card)
+      throw new NotFoundException('ID Card not found for this student');
     return card;
   }
 
@@ -28,11 +32,12 @@ export class IdCardService {
       include: {
         template: true,
         staff: {
-          include: { role: true }
-        }
-      }
+          include: { role: true },
+        },
+      },
     });
-    if (!card) throw new NotFoundException('ID Card not found for this staff member');
+    if (!card)
+      throw new NotFoundException('ID Card not found for this staff member');
     return card;
   }
 
@@ -40,7 +45,7 @@ export class IdCardService {
 
   async getTemplates() {
     return this.prisma.idCardTemplate.findMany({
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -54,13 +59,15 @@ export class IdCardService {
         schoolName: data.schoolName || 'Aetheria Academy',
         logoUrl: data.logoUrl || null,
         backgroundUrl: data.backgroundUrl || null,
-        isActive: data.isActive !== undefined ? data.isActive : true
-      }
+        isActive: data.isActive !== undefined ? data.isActive : true,
+      },
     });
   }
 
   async updateTemplate(id: string, data: UpdateIdCardTemplateDto) {
-    const template = await this.prisma.idCardTemplate.findUnique({ where: { id } });
+    const template = await this.prisma.idCardTemplate.findUnique({
+      where: { id },
+    });
     if (!template) throw new NotFoundException('Template not found');
 
     return this.prisma.idCardTemplate.update({
@@ -73,13 +80,15 @@ export class IdCardService {
         schoolName: data.schoolName,
         logoUrl: data.logoUrl,
         backgroundUrl: data.backgroundUrl,
-        isActive: data.isActive
-      }
+        isActive: data.isActive,
+      },
     });
   }
 
   async deleteTemplate(id: string) {
-    const template = await this.prisma.idCardTemplate.findUnique({ where: { id } });
+    const template = await this.prisma.idCardTemplate.findUnique({
+      where: { id },
+    });
     if (!template) throw new NotFoundException('Template not found');
     return this.prisma.idCardTemplate.delete({ where: { id } });
   }

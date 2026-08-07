@@ -1,13 +1,27 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
-import { PreviewPromotionDto, CommitPromotionDto } from "./dto/promotion.dto";
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { PreviewPromotionDto, CommitPromotionDto } from './dto/promotion.dto';
 
 const GRADE_ORDER = [
-  "Nursery", "LKG", "UKG",
-  "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5",
-  "Grade 6", "Grade 7", "Grade 8",
-  "Grade 9", "Grade 10",
-  "Grade 11", "Grade 12",
+  'Nursery',
+  'LKG',
+  'UKG',
+  'Grade 1',
+  'Grade 2',
+  'Grade 3',
+  'Grade 4',
+  'Grade 5',
+  'Grade 6',
+  'Grade 7',
+  'Grade 8',
+  'Grade 9',
+  'Grade 10',
+  'Grade 11',
+  'Grade 12',
 ];
 
 const DEFAULT_PASS_THRESHOLD = 40;
@@ -22,10 +36,14 @@ function nextGradeOf(grade: string): string | null {
 export class PromotionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async computePassStatus(enrollmentId: string, sessionId: string, threshold: number): Promise<{ passed: boolean; percentage: number | null }> {
+  private async computePassStatus(
+    enrollmentId: string,
+    sessionId: string,
+    threshold: number,
+  ): Promise<{ passed: boolean; percentage: number | null }> {
     const reportCard = await this.prisma.reportCard.findFirst({
       where: { enrollmentId, exam: { sessionId } },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
     if (!reportCard) return { passed: true, percentage: null }; // no record — default to promote, admin can override
 
@@ -36,22 +54,26 @@ export class PromotionsService {
     } else if (reportCard.gpa) {
       percentage = parseFloat(reportCard.gpa) * 10;
     }
-    if (percentage == null || isNaN(percentage)) return { passed: true, percentage: null };
+    if (percentage == null || isNaN(percentage))
+      return { passed: true, percentage: null };
     return { passed: percentage >= threshold, percentage };
   }
 
   async preview(dto: PreviewPromotionDto) {
     const threshold = dto.passThreshold ?? DEFAULT_PASS_THRESHOLD;
     const classes = await this.prisma.class.findMany({
-      where: { sessionId: dto.fromSessionId, status: "Active" },
+      where: { sessionId: dto.fromSessionId, status: 'Active' },
       include: {
         sections: {
           include: {
-            enrollments: { where: { status: "Enrolled" }, include: { student: true } },
+            enrollments: {
+              where: { status: 'Enrolled' },
+              include: { student: true },
+            },
           },
         },
       },
-      orderBy: { grade: "asc" },
+      orderBy: { grade: 'asc' },
     });
 
     const results: {
@@ -62,19 +84,38 @@ export class PromotionsService {
       totalStudents: number;
       passing: number;
       failing: number;
-      failingStudents: { studentId: string; enrollmentId: string; fullName: string; percentage: number | null }[];
+      failingStudents: {
+        studentId: string;
+        enrollmentId: string;
+        fullName: string;
+        percentage: number | null;
+      }[];
     }[] = [];
     for (const cls of classes) {
       const enrollments = cls.sections.flatMap((s) => s.enrollments);
       let passing = 0;
       let failing = 0;
-      const failingStudents: { studentId: string; enrollmentId: string; fullName: string; percentage: number | null }[] = [];
+      const failingStudents: {
+        studentId: string;
+        enrollmentId: string;
+        fullName: string;
+        percentage: number | null;
+      }[] = [];
       for (const enr of enrollments) {
-        const { passed, percentage } = await this.computePassStatus(enr.id, dto.fromSessionId, threshold);
+        const { passed, percentage } = await this.computePassStatus(
+          enr.id,
+          dto.fromSessionId,
+          threshold,
+        );
         if (passed) passing++;
         else {
           failing++;
-          failingStudents.push({ studentId: enr.studentId, enrollmentId: enr.id, fullName: enr.student.fullName, percentage });
+          failingStudents.push({
+            studentId: enr.studentId,
+            enrollmentId: enr.id,
+            fullName: enr.student.fullName,
+            percentage,
+          });
         }
       }
       results.push({
@@ -89,14 +130,29 @@ export class PromotionsService {
       });
     }
 
-    return { fromSessionId: dto.fromSessionId, passThreshold: threshold, classes: results };
+    return {
+      fromSessionId: dto.fromSessionId,
+      passThreshold: threshold,
+      classes: results,
+    };
   }
 
-  private async getOrCreateClass(grade: string, campusId: string, sessionId: string) {
-    const existing = await this.prisma.class.findFirst({ where: { grade, campusId, sessionId } });
+  private async getOrCreateClass(
+    grade: string,
+    campusId: string,
+    sessionId: string,
+  ) {
+    const existing = await this.prisma.class.findFirst({
+      where: { grade, campusId, sessionId },
+    });
     if (existing) return existing;
     return this.prisma.class.create({
-      data: { grade, campusId, sessionId, sections: { create: [{ name: "A" }, { name: "B" }] } },
+      data: {
+        grade,
+        campusId,
+        sessionId,
+        sections: { create: [{ name: 'A' }, { name: 'B' }] },
+      },
       include: { sections: true },
     });
   }
@@ -106,44 +162,79 @@ export class PromotionsService {
     const holdBack = new Set(dto.holdBackStudentIds || []);
     const forcePromote = new Set(dto.forcePromoteStudentIds || []);
 
-    const fromSession = await this.prisma.academicSession.findUnique({ where: { id: dto.fromSessionId } });
-    if (!fromSession) throw new NotFoundException("Source session not found");
+    const fromSession = await this.prisma.academicSession.findUnique({
+      where: { id: dto.fromSessionId },
+    });
+    if (!fromSession) throw new NotFoundException('Source session not found');
 
-    let toSession = dto.toSessionId ? await this.prisma.academicSession.findUnique({ where: { id: dto.toSessionId } }) : null;
+    let toSession = dto.toSessionId
+      ? await this.prisma.academicSession.findUnique({
+          where: { id: dto.toSessionId },
+        })
+      : null;
     if (!toSession) {
-      if (!dto.toSessionName) throw new BadRequestException("Provide toSessionId or toSessionName");
-      toSession = await this.prisma.academicSession.findFirst({ where: { name: dto.toSessionName } });
+      if (!dto.toSessionName)
+        throw new BadRequestException('Provide toSessionId or toSessionName');
+      toSession = await this.prisma.academicSession.findFirst({
+        where: { name: dto.toSessionName },
+      });
       if (!toSession) {
-        toSession = await this.prisma.academicSession.create({ data: { name: dto.toSessionName, isActive: false, status: "Active" } });
+        toSession = await this.prisma.academicSession.create({
+          data: { name: dto.toSessionName, isActive: false, status: 'Active' },
+        });
       }
     }
-    if (toSession.id === fromSession.id) throw new BadRequestException("Target session must be different from source session");
+    if (toSession.id === fromSession.id)
+      throw new BadRequestException(
+        'Target session must be different from source session',
+      );
 
     const classes = await this.prisma.class.findMany({
-      where: { sessionId: dto.fromSessionId, status: "Active" },
+      where: { sessionId: dto.fromSessionId, status: 'Active' },
       include: {
         sections: {
           include: {
-            enrollments: { where: { status: "Enrolled" }, include: { student: true } },
+            enrollments: {
+              where: { status: 'Enrolled' },
+              include: { student: true },
+            },
           },
         },
       },
-      orderBy: { grade: "asc" },
+      orderBy: { grade: 'asc' },
     });
 
     // Track section fill counts for balanced round-robin assignment into target classes.
     const sectionCounts = new Map<string, number>(); // classId -> section index cursor
-    const targetClassCache = new Map<string, { id: string; sections: { id: string }[] }>();
+    const targetClassCache = new Map<
+      string,
+      { id: string; sections: { id: string }[] }
+    >();
 
     const getBalancedSection = async (grade: string, campusId: string) => {
       const key = `${grade}_${campusId}`;
       let cls = targetClassCache.get(key);
       if (!cls) {
-        const created = await this.getOrCreateClass(grade, campusId, toSession.id);
-        cls = { id: created.id, sections: (created as any).sections ?? (await this.prisma.section.findMany({ where: { classId: created.id } })) };
+        const created = await this.getOrCreateClass(
+          grade,
+          campusId,
+          toSession.id,
+        );
+        cls = {
+          id: created.id,
+          sections:
+            (created as any).sections ??
+            (await this.prisma.section.findMany({
+              where: { classId: created.id },
+            })),
+        };
         targetClassCache.set(key, cls);
         const counts = await Promise.all(
-          cls.sections.map((s) => this.prisma.studentEnrollment.count({ where: { sectionId: s.id, sessionId: toSession.id } }))
+          cls.sections.map((s) =>
+            this.prisma.studentEnrollment.count({
+              where: { sectionId: s.id, sessionId: toSession.id },
+            }),
+          ),
         );
         cls.sections.forEach((s, i) => sectionCounts.set(s.id, counts[i]));
       }
@@ -173,7 +264,10 @@ export class PromotionsService {
         let passed: boolean;
         if (forcePromote.has(enr.studentId)) passed = true;
         else if (holdBack.has(enr.studentId)) passed = false;
-        else passed = (await this.computePassStatus(enr.id, dto.fromSessionId, threshold)).passed;
+        else
+          passed = (
+            await this.computePassStatus(enr.id, dto.fromSessionId, threshold)
+          ).passed;
 
         if (passed && nextGrade) {
           const section = await getBalancedSection(nextGrade, cls.campusId);
@@ -183,15 +277,24 @@ export class PromotionsService {
               sessionId: toSession.id,
               sectionId: section.id,
               rollNumber: enr.rollNumber,
-              status: "Enrolled",
+              status: 'Enrolled',
               campusId: enr.campusId,
             },
           });
-          await this.prisma.studentEnrollment.update({ where: { id: enr.id }, data: { status: "Promoted" } });
+          await this.prisma.studentEnrollment.update({
+            where: { id: enr.id },
+            data: { status: 'Promoted' },
+          });
           promotedCount++;
         } else if (passed && !nextGrade) {
-          await this.prisma.studentEnrollment.update({ where: { id: enr.id }, data: { status: "Graduated" } });
-          await this.prisma.student.update({ where: { id: enr.studentId }, data: { status: "Alumni" } });
+          await this.prisma.studentEnrollment.update({
+            where: { id: enr.id },
+            data: { status: 'Graduated' },
+          });
+          await this.prisma.student.update({
+            where: { id: enr.studentId },
+            data: { status: 'Alumni' },
+          });
           graduatedCount++;
         } else {
           // Held back — repeats the same grade next session.
@@ -202,11 +305,14 @@ export class PromotionsService {
               sessionId: toSession.id,
               sectionId: section.id,
               rollNumber: enr.rollNumber,
-              status: "Enrolled",
+              status: 'Enrolled',
               campusId: enr.campusId,
             },
           });
-          await this.prisma.studentEnrollment.update({ where: { id: enr.id }, data: { status: "Repeated" } });
+          await this.prisma.studentEnrollment.update({
+            where: { id: enr.id },
+            data: { status: 'Repeated' },
+          });
           repeatedCount++;
         }
       }

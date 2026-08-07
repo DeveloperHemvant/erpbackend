@@ -1,4 +1,24 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsInt, IsBoolean } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  IsInt,
+  IsBoolean,
+  IsIn,
+} from 'class-validator';
+
+export const ACMS_EVENT_TYPES = [
+  'ACADEMIC',
+  'SPORTS',
+  'CULTURAL',
+  'TRIP',
+  'COMPETITION',
+  'EXHIBITION',
+  'OLYMPIAD',
+  'SEMINAR',
+  'TOUR',
+] as const;
 
 export class CreateAcademicTermDto {
   @IsUUID()
@@ -63,6 +83,10 @@ export class CreateAcmsEventDto {
   @IsNotEmpty()
   sessionId: string;
 
+  @IsUUID()
+  @IsOptional()
+  campusId?: string;
+
   @IsString()
   @IsNotEmpty()
   title: string;
@@ -79,13 +103,55 @@ export class CreateAcmsEventDto {
   @IsNotEmpty()
   endDate: string;
 
-  @IsString()
+  @IsIn(ACMS_EVENT_TYPES)
   @IsNotEmpty()
   type: string;
 
   @IsString()
   @IsOptional()
   organizer?: string;
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
+}
+
+export class UpdateAcmsEventDto {
+  @IsUUID()
+  @IsOptional()
+  sessionId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  campusId?: string;
+
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
+  @IsOptional()
+  startDate?: string;
+
+  @IsString()
+  @IsOptional()
+  endDate?: string;
+
+  @IsIn(ACMS_EVENT_TYPES)
+  @IsOptional()
+  type?: string;
+
+  @IsString()
+  @IsOptional()
+  organizer?: string;
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
 }
 
 export class CreateResourceBookingDto {
