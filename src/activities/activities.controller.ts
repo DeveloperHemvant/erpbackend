@@ -55,7 +55,7 @@ export class ActivitiesController {
   // School events/competitions live in the ACMS module now (POST/GET /acms/events,
   // PUT/DELETE /acms/events/:id) — this used to duplicate that as a separate
   // SchoolEvent model; consolidated so there's one event system feeding the
-  // unified calendar instead of two out-of-sync ones..
+  // unified calendar instead of two out-of-sync ones...
 
   @RequirePermissions('MANAGE_ACTIVITIES')
   @Post('houses')
