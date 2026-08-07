@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  atom_dev_backend:
-    image: 793938076396.dkr.ecr.ap-south-1.amazonaws.com/ecr:latest
-    container_name: atom_dev_backend
+  ecr-backend:
+    image: 463064778855.dkr.ecr.ap-south-1.amazonaws.com/ecr-backend:latest
+    container_name: ecr-backend
     ports:
       - "3000:3000"
     env_file:

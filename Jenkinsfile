@@ -29,7 +29,7 @@ pipeline {
                     $class: 'GitSCM',
                     branches: [[name: '*/main']],
                     userRemoteConfigs: [[
-                        credentialsId: 'testing',
+                        credentialsId: 'github-creds',
                         url: 'https://github.com/DeveloperHemvant/erpbackend.git'
                     ]]
                 ])
@@ -66,8 +66,8 @@ pipeline {
             steps {
                 script {
                     sh """
-                        docker-compose down
-                        docker-compose up -d --force-recreate
+                        docker compose down
+                        docker compose up -d --force-recreate
                     """
                 }
             }
