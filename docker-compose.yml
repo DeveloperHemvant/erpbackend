@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  ecr-backend:
+    image: 463064778855.dkr.ecr.ap-south-1.amazonaws.com/ecr-backend:latest
+    container_name: ecr-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - backend_network
+
+networks:
+  backend_network:
+    driver: bridge

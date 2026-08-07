@@ -2,52 +2,93 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = 'school-erp-backend'
-        REGISTRY = 'my-registry:5000'
+        AWS_ACCOUNT_ID = credentials('ACCOUNT_ID')
+        AWS_DEFAULT_REGION = "ap-south-1"
+        IMAGE_REPO_NAME = "ecr-backend"
+        IMAGE_TAG = "latest"
+        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}"
+        IMAGE_NAME = "${REPOSITORY_URI}:${IMAGE_TAG}"
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Logging into AWS ECR') {
             steps {
-                checkout scm
+                script {
+                    sh """
+                        aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | \
+                        docker login --username AWS --password-stdin ${REPOSITORY_URI}
+                    """
+                }
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Cloning Git') {
             steps {
-                sh 'npm ci'
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        credentialsId: 'github-creds',
+                        url: 'https://github.com/DeveloperHemvant/erpbackend.git'
+                    ]]
+                ])
             }
         }
 
-        stage('Lints & Type Checks') {
+        stage('Copy env file') {
             steps {
-                sh 'npx tsc --noEmit'
+                sh 'rm -f .env'
+                withCredentials([file(credentialsId: 'BACKEND_ENV_FILE', variable: 'ENV_FILE')]) {
+                    sh '''
+                        cp "$ENV_FILE" .env
+                    '''
+                }
             }
         }
 
-        stage('Unit Testing') {
+        stage('Build Docker Image') {
             steps {
-                sh 'npm run test'
+                sh 'docker build -t ${IMAGE_REPO_NAME}:${IMAGE_TAG} .'
             }
         }
 
-        stage('Integration & E2E') {
+        stage('Tag & Push to ECR') {
             steps {
-                sh 'npm run test:e2e'
+                sh '''
+                    docker tag ${IMAGE_REPO_NAME}:${IMAGE_TAG} ${IMAGE_NAME}
+                    docker push ${IMAGE_NAME}
+                '''
             }
         }
 
-        stage('Build & Push Docker Image') {
+        stage('Start Container') {
             steps {
-                sh "docker build -t ${REGISTRY}/${DOCKER_IMAGE}:${BUILD_NUMBER} ."
-                sh "docker push ${REGISTRY}/${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                script {
+                    sh """
+                        docker compose down
+                        docker compose up -d --force-recreate
+                    """
+                }
             }
         }
 
-        stage('Deploy') {
+        stage('Clean up workspace') {
             steps {
-                sh "docker compose up -d --no-deps --build backend"
+                script {
+                    echo 'Cleaning up Docker images...'
+                    sh 'docker image prune -f'
+                }
             }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline run succeeded.'
+        }
+        failure {
+            echo 'Pipeline run failed.'
         }
     }
 }
