@@ -4,9 +4,9 @@ pipeline {
     environment {
         AWS_ACCOUNT_ID = credentials('ACCOUNT_ID')
         AWS_DEFAULT_REGION = "ap-south-1"
-        IMAGE_REPO_NAME = "ecr"
+        IMAGE_REPO_NAME = "ecr-backend"
         IMAGE_TAG = "latest"
-        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}"
+        REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr-backend.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}"
         IMAGE_NAME = "${REPOSITORY_URI}:${IMAGE_TAG}"
     }
 
@@ -16,7 +16,7 @@ pipeline {
             steps {
                 script {
                     sh """
-                        aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | \
+                        aws ecr-backend get-login-password --region ${AWS_DEFAULT_REGION} | \
                         docker login --username AWS --password-stdin ${REPOSITORY_URI}
                     """
                 }
