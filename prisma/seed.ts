@@ -253,16 +253,35 @@ async function main() {
   const roleDefinitions = [
     { name: 'Super Admin', permissions: ['*'] },
     { name: 'Principal', permissions: ['*'] },
-    { name: 'Vice Principal', permissions: ['VIEW_STUDENTS', 'MANAGE_USERS', 'MANAGE_ACADEMICS', 'MARK_ATTENDANCE', 'MANAGE_EXAMS', 'MANAGE_FEES', 'VIEW_REPORTS', 'MANAGE_TRANSPORT', 'MANAGE_TRANSPORT_FLEET', 'MANAGE_LMS'] },
+    // MANAGE_DISCIPLINE added here: Vice Principal is who actually handles
+    // student discipline day to day; previously no seeded role held this
+    // permission at all, so the Discipline Desk (mobile tile a9, web
+    // dashboard/admin/discipline) was reachable by nobody but Super Admin.
+    { name: 'Vice Principal', permissions: ['VIEW_STUDENTS', 'MANAGE_USERS', 'MANAGE_ACADEMICS', 'MARK_ATTENDANCE', 'MANAGE_EXAMS', 'MANAGE_FEES', 'VIEW_REPORTS', 'MANAGE_TRANSPORT', 'MANAGE_TRANSPORT_FLEET', 'MANAGE_LMS', 'MANAGE_DISCIPLINE'] },
     { name: 'Academic Coordinator', permissions: ['VIEW_STUDENTS', 'MANAGE_ACADEMICS', 'MANAGE_EXAMS', 'VIEW_REPORTS', 'MANAGE_ACTIVITIES'] },
-    { name: 'Teacher', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'VIEW_STUDENTS', 'MARK_ATTENDANCE', 'MANAGE_GRADES', 'MANAGE_LMS', 'VIEW_REPORTS', 'MANAGE_ACTIVITIES'] },
+    // MANAGE_EXAMS added here: the Exams Desk (mobile tile t3) does real
+    // invigilation/evaluation/online-test-monitoring work against /ems/*,
+    // which requires MANAGE_EXAMS — Teacher previously only held
+    // MANAGE_GRADES, so the tile was visible but every action 403'd.
+    { name: 'Teacher', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'VIEW_STUDENTS', 'MARK_ATTENDANCE', 'MANAGE_GRADES', 'MANAGE_EXAMS', 'MANAGE_LMS', 'VIEW_REPORTS', 'MANAGE_ACTIVITIES'] },
     { name: 'Accountant', permissions: ['MANAGE_FEES', 'VIEW_REPORTS'] },
     { name: 'Librarian', permissions: ['MANAGE_ACADEMICS', 'VIEW_REPORTS'] },
     { name: 'Warden', permissions: ['MANAGE_HOSTEL', 'VIEW_REPORTS'] },
     { name: 'Transport Manager', permissions: ['MANAGE_TRANSPORT', 'MANAGE_TRANSPORT_FLEET', 'VIEW_REPORTS'] },
     { name: 'Driver', permissions: ['MANAGE_TRANSPORT', 'VIEW_REPORTS'] },
     { name: 'Conductor', permissions: ['MANAGE_TRANSPORT'] },
-    { name: 'Admin Staff', permissions: ['MANAGE_USERS', 'MANAGE_COMMUNICATION', 'VIEW_REPORTS'] },
+    // MANAGE_ADMISSIONS_PIPELINE added here: Admin Staff already manages
+    // admissions conversion (MANAGE_USERS covers PATCH /erp-core/students);
+    // the pipeline view is the same registrar job, but no role held this
+    // permission before, so the Admissions Pipeline desk was unreachable.
+    { name: 'Admin Staff', permissions: ['MANAGE_USERS', 'MANAGE_COMMUNICATION', 'VIEW_REPORTS', 'MANAGE_ADMISSIONS_PIPELINE'] },
+    // New role: the 'Nurse' staff designation existed (STAFF_ROLES above)
+    // but had no matching Role — it silently fell back to Admin Staff, which
+    // lacks MANAGE_HEALTH_RECORDS, so the school nurse could never open the
+    // Health Centre Desk. Split out its own role instead of over-granting
+    // health-records access to the rest of the Admin Staff bucket (HR
+    // Manager, Peon, Cleaner, ...).
+    { name: 'Nurse', permissions: ['MANAGE_HEALTH_RECORDS', 'VIEW_REPORTS'] },
     // Front-desk and gate operations share MANAGE_VISITORS — same permission
     // already gates the one shared Visitor & Gate Pass desk screen (mobile
     // tile a12) both roles use, so there's no separate permission to invent
@@ -400,7 +419,7 @@ async function main() {
       resolvedRoleName = 'Reception';
     } else if (roleName === 'Security Guard') {
       resolvedRoleName = 'Security';
-    } else if (['Administrative Officer', 'HR Manager', 'Nurse', 'Mess Supervisor', 'Peon', 'Cleaner'].includes(roleName)) {
+    } else if (['Administrative Officer', 'HR Manager', 'Mess Supervisor', 'Peon', 'Cleaner'].includes(roleName)) {
       resolvedRoleName = 'Admin Staff';
     } else if (['PET Teacher', 'Music Teacher', 'Art Teacher', 'Computer Teacher', 'Lab Assistant'].includes(roleName)) {
       resolvedRoleName = 'Teacher';

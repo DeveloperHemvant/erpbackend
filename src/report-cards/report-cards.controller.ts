@@ -38,13 +38,18 @@ export class ReportCardsController {
   }
 
   @Patch('report-cards/:id/approve')
-  @ApiOperation({ summary: 'Toggle review seal approval' })
+  @ApiOperation({ summary: 'Toggle review seal approval and save remarks' })
   @ApiParam({ name: 'id', format: 'uuid' })
   updateReportCardApproval(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('isApproved') isApproved: boolean,
+    @Body('remarks') remarks?: string,
   ) {
-    return this.reportCardsService.updateReportCardApproval(id, isApproved);
+    return this.reportCardsService.updateReportCardApproval(
+      id,
+      isApproved,
+      remarks,
+    );
   }
 
   @Delete('report-cards/:id')

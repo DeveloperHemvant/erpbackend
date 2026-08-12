@@ -297,10 +297,13 @@ export class PortalService {
 
     // 3. Admin/Basic Stats Widget (For Super Admin or specific roles)
     if (staff.role?.name === 'Super Admin' || staff.role?.name === 'Admin') {
+      const revenueAgg = await this.prisma.feePayment.aggregate({
+        _sum: { amountPaid: true },
+      });
       widgets.adminStatsWidget = {
         totalStudents: await this.prisma.student.count(),
         totalStaff: await this.prisma.staff.count(),
-        totalRevenue: 245000, // Mock value for Phase 3
+        totalRevenue: Number(revenueAgg._sum.amountPaid ?? 0),
       };
     }
 

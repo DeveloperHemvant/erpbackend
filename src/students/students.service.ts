@@ -93,17 +93,22 @@ export class StudentsService {
     };
   }
 
-  async getStudents(page?: number, limit?: number, sectionId?: string) {
+  async getStudents(
+    page?: number,
+    limit?: number,
+    sectionId?: string,
+    search?: string,
+  ) {
     if (page && limit) {
       const skip = (page - 1) * limit;
       const [data, totalCount] = await Promise.all([
-        this.studentRepository.findPage(skip, limit, sectionId),
-        this.studentRepository.count(sectionId),
+        this.studentRepository.findPage(skip, limit, sectionId, search),
+        this.studentRepository.count(sectionId, search),
       ]);
       return { data, totalCount, page, limit };
     }
 
-    const data = await this.studentRepository.findAll(sectionId);
+    const data = await this.studentRepository.findAll(sectionId, search);
     return { data, totalCount: data.length, page: 1, limit: data.length };
   }
 

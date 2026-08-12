@@ -14,9 +14,26 @@ export class StudentRepository {
     return this.prisma.student.create({ data });
   }
 
-  findAll(sectionId?: string) {
+  private buildWhere(
+    sectionId?: string,
+    search?: string,
+  ): Prisma.StudentWhereInput | undefined {
+    const clauses: Prisma.StudentWhereInput[] = [];
+    if (sectionId) clauses.push({ enrollments: { some: { sectionId } } });
+    if (search) {
+      clauses.push({
+        OR: [
+          { fullName: { contains: search, mode: 'insensitive' } },
+          { admissionNumber: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+    return clauses.length ? { AND: clauses } : undefined;
+  }
+
+  findAll(sectionId?: string, search?: string) {
     return this.prisma.student.findMany({
-      where: sectionId ? { enrollments: { some: { sectionId } } } : undefined,
+      where: this.buildWhere(sectionId, search),
       orderBy: { fullName: 'asc' },
       include: {
         enrollments: { include: { section: { include: { class: true } } } },
@@ -25,9 +42,9 @@ export class StudentRepository {
     });
   }
 
-  findPage(skip: number, take: number, sectionId?: string) {
+  findPage(skip: number, take: number, sectionId?: string, search?: string) {
     return this.prisma.student.findMany({
-      where: sectionId ? { enrollments: { some: { sectionId } } } : undefined,
+      where: this.buildWhere(sectionId, search),
       skip,
       take,
       orderBy: { fullName: 'asc' },
@@ -38,9 +55,9 @@ export class StudentRepository {
     });
   }
 
-  count(sectionId?: string) {
+  count(sectionId?: string, search?: string) {
     return this.prisma.student.count({
-      where: sectionId ? { enrollments: { some: { sectionId } } } : undefined,
+      where: this.buildWhere(sectionId, search),
     });
   }
 

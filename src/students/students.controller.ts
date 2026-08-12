@@ -47,14 +47,25 @@ export class StudentsController {
     description:
       'Filter to students enrolled in this section (Class/Section 360 roster)',
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Filter by full name or admission number (case-insensitive)',
+  })
   getStudents(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('sectionId') sectionId?: string,
+    @Query('search') search?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : undefined;
     const limitNum = limit ? parseInt(limit, 10) : undefined;
-    return this.studentsService.getStudents(pageNum, limitNum, sectionId);
+    return this.studentsService.getStudents(
+      pageNum,
+      limitNum,
+      sectionId,
+      search,
+    );
   }
 
   @Patch('students/:id')

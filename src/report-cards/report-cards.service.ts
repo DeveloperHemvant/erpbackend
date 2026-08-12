@@ -31,11 +31,15 @@ export class ReportCardsService {
     return this.reportCardRepository.findAll();
   }
 
-  async updateReportCardApproval(id: string, isApproved: boolean) {
+  async updateReportCardApproval(
+    id: string,
+    isApproved: boolean,
+    remarks?: string,
+  ) {
     const card = await this.reportCardRepository.findById(id);
     if (!card) throw new NotFoundException('Report card not found.');
 
-    return this.reportCardRepository.updateApproval(id, isApproved);
+    return this.reportCardRepository.updateApproval(id, isApproved, remarks);
   }
 
   async deleteReportCard(id: string) {

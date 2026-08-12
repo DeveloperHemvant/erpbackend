@@ -32,10 +32,10 @@ export class ReportCardRepository {
     return this.prisma.reportCard.findUnique({ where: { id } });
   }
 
-  updateApproval(id: string, isApproved: boolean) {
+  updateApproval(id: string, isApproved: boolean, remarks?: string) {
     return this.prisma.reportCard.update({
       where: { id },
-      data: { isApproved },
+      data: { isApproved, ...(remarks !== undefined && { remarks }) },
       include: {
         enrollment: {
           include: { student: true, section: { include: { class: true } } },
