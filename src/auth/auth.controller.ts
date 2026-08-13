@@ -1,4 +1,5 @@
 import { Controller, Post, Body } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -13,7 +14,11 @@ import type { AuthenticatedUser } from './current-user.decorator';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Tighter than the global default (100/min) — login is the one endpoint
+  // that's both unauthenticated and a brute-force target, so it gets its
+  // own stricter throttle instead of relying on the general API limit.
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
   @ApiOperation({
     summary: 'Authenticate credentials and get user profile scopes',

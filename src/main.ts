@@ -5,8 +5,20 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as express from 'express';
 import { join } from 'path';
+import * as Sentry from '@sentry/node';
 
 async function bootstrap() {
+  // Same configured/not_configured pattern as Razorpay/S3/Twilio — no DSN
+  // means this is a no-op and AllExceptionsFilter's captureException calls
+  // go nowhere; set SENTRY_DSN in the environment to activate it live.
+  if (process.env.SENTRY_DSN) {
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'development',
+      tracesSampleRate: 0.1,
+    });
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Increase request body size limit. verify: stashes the exact raw bytes

@@ -32,6 +32,61 @@ export class IdCardService {
     return card;
   }
 
+  /** Resolves a scanned QR/barcode (IdCard.barcodeData, falling back to
+   * idNumber for cards issued before barcodeData was populated) to the
+   * student or staff identity it belongs to — the gate-desk/library/visitor
+   * "scan an ID" flows all key off this instead of a manual name search. */
+  async lookupByCode(code: string) {
+    const card = await this.prisma.idCard.findFirst({
+      where: {
+        status: 'Active',
+        OR: [{ barcodeData: code }, { idNumber: code }],
+      },
+      include: {
+        student: {
+          include: {
+            enrollments: {
+              where: { status: 'Enrolled' },
+              include: { section: { include: { class: true } } },
+              take: 1,
+            },
+          },
+        },
+        staff: { include: { role: true } },
+      },
+    });
+    if (!card) throw new NotFoundException('No active ID card matches this code');
+
+    if (card.studentId && card.student) {
+      const enrollment = (card.student as any).enrollments?.[0];
+      return {
+        type: 'student' as const,
+        studentId: card.studentId,
+        enrollmentId: enrollment?.id ?? null,
+        fullName: card.student.fullName,
+        admissionNumber: card.student.admissionNumber,
+        className: enrollment
+          ? `${enrollment.section?.class?.grade ?? ''} - ${enrollment.section?.name ?? ''}`
+          : null,
+        photoUrl: card.student.photoUrl,
+      };
+    }
+
+    if (card.staffId && card.staff) {
+      return {
+        type: 'staff' as const,
+        staffId: card.staffId,
+        fullName: card.staff.fullName,
+        role: (card.staff as any).role?.name ?? null,
+        photoUrl: card.staff.photoUrl,
+      };
+    }
+
+    throw new NotFoundException(
+      'This ID card is not linked to a student or staff record',
+    );
+  }
+
   async getStaffIdCard(staffId: string) {
     const card = await this.prisma.idCard.findFirst({
       where: { staffId },
@@ -65,6 +120,7 @@ export class IdCardService {
       expiryDate: card.expiryDate
         ? new Date(card.expiryDate).toLocaleDateString('en-IN')
         : undefined,
+      qrData: card.barcodeData,
     });
 
     const { url } = await this.storage.uploadFile(
@@ -88,6 +144,7 @@ export class IdCardService {
       expiryDate: card.expiryDate
         ? new Date(card.expiryDate).toLocaleDateString('en-IN')
         : undefined,
+      qrData: card.barcodeData,
     });
 
     const { url } = await this.storage.uploadFile(

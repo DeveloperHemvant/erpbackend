@@ -11,6 +11,7 @@ import {
 } from '@react-pdf/renderer';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as QRCode from 'qrcode';
 
 const SCHOOL_NAME = 'Aetheria Academy';
 
@@ -162,11 +163,17 @@ export class DocumentRenderingService {
       idNumber: string;
       photoUrl?: string | null;
       expiryDate?: string;
+      /** Encoded into the on-card QR — a gate/library scan resolves this via
+       * IdCardService.lookupByCode. Defaults to idNumber when a card has no
+       * separate barcodeData (e.g. templates created before that field was
+       * populated by seeding). */
+      qrData?: string | null;
     },
   ): Promise<Buffer> {
-    const [photoSrc, logoSrc] = await Promise.all([
+    const [photoSrc, logoSrc, qrSrc] = await Promise.all([
       this.resolveImageSource(ctx.photoUrl),
       this.resolveImageSource(template.logoUrl),
+      QRCode.toBuffer(ctx.qrData || ctx.idNumber, { margin: 0, width: 200 }),
     ]);
     const primary = template.primaryColor || '#3b82f6';
     const secondary = template.secondaryColor || '#1e40af';
@@ -194,6 +201,7 @@ export class DocumentRenderingService {
       name: { fontSize: 13, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
       role: { fontSize: 9, color: secondary, marginBottom: 8, textTransform: 'uppercase' },
       idNumber: { fontSize: 10, color: '#374151', marginBottom: 2 },
+      qrCode: { width: 46, height: 46, marginLeft: 8, alignSelf: 'flex-end' },
       footer: {
         position: 'absolute',
         bottom: 0,
@@ -235,6 +243,7 @@ export class DocumentRenderingService {
                 ? this.h(Text, { style: styles.idNumber }, `Valid until: ${ctx.expiryDate}`)
                 : null,
             ),
+            this.h(Image, { src: qrSrc, style: styles.qrCode }),
           ),
           this.h(View, { style: styles.footer }),
         ),

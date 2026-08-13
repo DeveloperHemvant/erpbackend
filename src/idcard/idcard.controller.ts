@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { IdCardService } from './idcard.service';
 import {
@@ -16,6 +17,8 @@ import {
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireSelfOrPermission } from '../auth/self-or-permission.decorator';
 import { SelfOrPermissionGuard } from '../auth/self-or-permission.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
 // Class-level MANAGE_ACADEMICS default (matches web-app's "reqModule:
 // masterdata" grouping for ID Card Templates). All 6 routes were undecorated
@@ -59,6 +62,24 @@ export class IdCardController {
   @RequirePermissions()
   downloadStaffIdCardPdf(@Param('id') id: string) {
     return this.idCardService.renderStaffIdCardPdf(id);
+  }
+
+  // Gate/library/visitor "scan an ID" flows — any staff account needs this
+  // (librarian, reception, warden), not just MANAGE_ACADEMICS holders, so it
+  // overrides the class default with a plain staff-vs-family check instead
+  // of a specific permission. A student/parent scanning someone else's card
+  // has no legitimate use for this, so it's staff-only, not self-or-staff.
+  @Get('lookup/:code')
+  @RequirePermissions()
+  lookupByCode(
+    @Param('code') code: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = (user.role || '').toLowerCase();
+    if (role === 'student' || role === 'parent') {
+      throw new ForbiddenException('You do not have access to this lookup.');
+    }
+    return this.idCardService.lookupByCode(code);
   }
 
   // --- TEMPLATE MANAGEMENT ---

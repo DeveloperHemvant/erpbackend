@@ -31,8 +31,9 @@ import { HealthRecordsModule } from './health-records/health-records.module';
 import { DisciplineModule } from './discipline/discipline.module';
 import { AdmissionInquiryModule } from './admission-inquiry/admission-inquiry.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { PermissionsGuard } from './auth/permissions.guard';
 import { SelfAccessGuard } from './auth/self-access.guard';
@@ -158,6 +159,10 @@ import { PTMModule } from './ptm/ptm.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditLogInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
     },
   ],
 })

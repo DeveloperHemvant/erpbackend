@@ -86,4 +86,51 @@ describe('IdCardService', () => {
       expect(result).toEqual({ url: '/uploads/id-cards/staff/staff-1/x.pdf' });
     });
   });
+
+  describe('lookupByCode', () => {
+    it('throws NotFound when no active card matches the code', async () => {
+      mockPrisma.idCard.findFirst.mockResolvedValue(null);
+      await expect(service.lookupByCode('SCH-9999')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('resolves a student card', async () => {
+      mockPrisma.idCard.findFirst.mockResolvedValue({
+        studentId: 'stu-1',
+        staffId: null,
+        student: {
+          fullName: 'Test Student',
+          admissionNumber: 'A-001',
+          photoUrl: null,
+          enrollments: [{ id: 'enr-1', section: { name: 'B', class: { grade: 'Grade 8' } } }],
+        },
+      });
+
+      const result = await service.lookupByCode('A-001');
+
+      expect(result).toMatchObject({
+        type: 'student',
+        studentId: 'stu-1',
+        enrollmentId: 'enr-1',
+        className: 'Grade 8 - B',
+      });
+    });
+
+    it('resolves a staff card', async () => {
+      mockPrisma.idCard.findFirst.mockResolvedValue({
+        studentId: null,
+        staffId: 'staff-1',
+        staff: { fullName: 'Test Teacher', photoUrl: null, role: { name: 'Teacher' } },
+      });
+
+      const result = await service.lookupByCode('S-1');
+
+      expect(result).toMatchObject({
+        type: 'staff',
+        staffId: 'staff-1',
+        role: 'Teacher',
+      });
+    });
+  });
 });
