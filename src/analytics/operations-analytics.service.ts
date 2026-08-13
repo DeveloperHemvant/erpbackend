@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AnalyticsRepository } from './repositories/analytics.repository';
+import type { TenantContext } from '../prisma/tenant-context';
 import type {
   FleetStatusDto,
   FuelUsageDto,
@@ -44,12 +45,14 @@ const RECENT_MEDICAL_TAKE = 5;
 export class OperationsAnalyticsService {
   constructor(private readonly repo: AnalyticsRepository) {}
 
-  async getFleetStatus(): Promise<FleetStatusDto> {
+  async getFleetStatus(
+    tenantContext: TenantContext,
+  ): Promise<FleetStatusDto> {
     const today = todayStr();
     const [trips, vehicles, openBreakdowns] = await Promise.all([
-      this.repo.findTripStatusesToday(today),
-      this.repo.findVehicleStatuses(),
-      this.repo.countOpenBreakdowns(),
+      this.repo.findTripStatusesToday(today, tenantContext),
+      this.repo.findVehicleStatuses(tenantContext),
+      this.repo.countOpenBreakdowns(tenantContext),
     ]);
 
     return {
@@ -59,8 +62,11 @@ export class OperationsAnalyticsService {
     };
   }
 
-  async getFuelUsage(): Promise<FuelUsageDto> {
-    const logs = await this.repo.findApprovedFuelLogs(daysAgo(FUEL_USAGE_WINDOW_DAYS));
+  async getFuelUsage(tenantContext: TenantContext): Promise<FuelUsageDto> {
+    const logs = await this.repo.findApprovedFuelLogs(
+      daysAgo(FUEL_USAGE_WINDOW_DAYS),
+      tenantContext,
+    );
 
     const totalLitres = logs.reduce((s, l) => s + l.litres, 0);
     const totalCost = logs.reduce((s, l) => s + l.totalCost, 0);
@@ -73,10 +79,12 @@ export class OperationsAnalyticsService {
     return { totalLitres, totalCost, avgMileage, logCount: logs.length };
   }
 
-  async getDisciplineBreakdown(): Promise<DisciplineBreakdownDto> {
+  async getDisciplineBreakdown(
+    tenantContext: TenantContext,
+  ): Promise<DisciplineBreakdownDto> {
     const [openIncidents, recent] = await Promise.all([
-      this.repo.findOpenDisciplineIncidents(),
-      this.repo.findRecentDisciplineIncidents(RECENT_DISCIPLINE_TAKE),
+      this.repo.findOpenDisciplineIncidents(tenantContext),
+      this.repo.findRecentDisciplineIncidents(RECENT_DISCIPLINE_TAKE, tenantContext),
     ]);
 
     return {
@@ -94,8 +102,10 @@ export class OperationsAnalyticsService {
     };
   }
 
-  async getHostelOccupancy(): Promise<HostelOccupancyDto> {
-    const rooms = await this.repo.findHostelRoomsWithActiveAllocations();
+  async getHostelOccupancy(
+    tenantContext: TenantContext,
+  ): Promise<HostelOccupancyDto> {
+    const rooms = await this.repo.findHostelRoomsWithActiveAllocations(tenantContext);
 
     const byHostelMap = new Map<string, { name: string; capacity: number; occupied: number }>();
     for (const room of rooms) {
@@ -125,8 +135,8 @@ export class OperationsAnalyticsService {
     };
   }
 
-  async getGatePasses(): Promise<GatePassesDto> {
-    const passes = await this.repo.findGatePasses(todayRangeUtc());
+  async getGatePasses(tenantContext: TenantContext): Promise<GatePassesDto> {
+    const passes = await this.repo.findGatePasses(todayRangeUtc(), tenantContext);
     const today = todayRangeUtc();
 
     const issuedToday = passes.filter(
@@ -139,10 +149,10 @@ export class OperationsAnalyticsService {
     return { issuedToday, currentlyOut };
   }
 
-  async getMedicalRoom(): Promise<MedicalRoomDto> {
+  async getMedicalRoom(tenantContext: TenantContext): Promise<MedicalRoomDto> {
     const [visitsToday, recent] = await Promise.all([
-      this.repo.countMedicalVisitsToday(todayRangeUtc()),
-      this.repo.findRecentMedicalVisits(RECENT_MEDICAL_TAKE),
+      this.repo.countMedicalVisitsToday(todayRangeUtc(), tenantContext),
+      this.repo.findRecentMedicalVisits(RECENT_MEDICAL_TAKE, tenantContext),
     ]);
 
     return {

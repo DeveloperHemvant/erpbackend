@@ -12,10 +12,35 @@ import {
   UpdateParentCredentialsDto,
   SetupParentPortalDto,
 } from './dto/student.dto';
+import type { TenantContext } from '../prisma/tenant-context';
 
 @Injectable()
 export class StudentsService {
   constructor(private readonly studentRepository: StudentRepository) {}
+
+  // Campus Isolation Phase 3, Milestone 5 — cross-tenant direct-by-id
+  // access throws the same NotFoundException a genuinely-missing id
+  // already throws, not a new 403 branch (same reasoning as staff.service.ts).
+  // A Draft (never-enrolled) student has zero enrollments and therefore no
+  // campus signal at all — restricting on an empty array would 404 the
+  // very admin who just admitted them, before they've been assigned a
+  // class/section. Left accessible in that state (matches today's status
+  // quo, not a new gap this milestone introduces); the check only takes
+  // effect once at least one enrollment — and therefore a real campus —
+  // exists.
+  private assertStudentAccessible(
+    enrollmentCampusIds: (string | null)[],
+    tenantContext: TenantContext,
+    id: string,
+  ) {
+    if (
+      enrollmentCampusIds.length > 0 &&
+      !tenantContext.canAccessAllCampuses &&
+      !enrollmentCampusIds.includes(tenantContext.campusId)
+    ) {
+      throw new NotFoundException(`Student record not found.`);
+    }
+  }
 
   // ==========================================
   // STUDENT ADMISSIONS (FULL CRUD)
@@ -94,6 +119,7 @@ export class StudentsService {
   }
 
   async getStudents(
+    tenantContext: TenantContext,
     page?: number,
     limit?: number,
     sectionId?: string,
@@ -102,19 +128,36 @@ export class StudentsService {
     if (page && limit) {
       const skip = (page - 1) * limit;
       const [data, totalCount] = await Promise.all([
-        this.studentRepository.findPage(skip, limit, sectionId, search),
-        this.studentRepository.count(sectionId, search),
+        this.studentRepository.findPage(
+          skip,
+          limit,
+          tenantContext,
+          sectionId,
+          search,
+        ),
+        this.studentRepository.count(tenantContext, sectionId, search),
       ]);
       return { data, totalCount, page, limit };
     }
 
-    const data = await this.studentRepository.findAll(sectionId, search);
+    const data = await this.studentRepository.findAll(
+      tenantContext,
+      sectionId,
+      search,
+    );
     return { data, totalCount: data.length, page: 1, limit: data.length };
   }
 
-  async updateStudent(id: string, dto: UpdateStudentDto) {
+  async updateStudent(
+    id: string,
+    dto: UpdateStudentDto,
+    tenantContext: TenantContext,
+  ) {
     const student = await this.studentRepository.findById(id);
     if (!student) throw new NotFoundException(`Student record not found.`);
+    const enrollmentCampusIds =
+      await this.studentRepository.findEnrollmentCampusIds(id);
+    this.assertStudentAccessible(enrollmentCampusIds, tenantContext, id);
 
     const { classId, sectionId, ...rest } = dto;
 
@@ -174,6 +217,13 @@ export class StudentsService {
       : 'ROLL';
     const rollNumber = `${prefix}-${String(count + 1).padStart(3, '0')}`;
 
+    // Campus Isolation Phase 3, Milestone 5 — explicit, not ambient. This
+    // used to rely entirely on the legacy Prisma middleware's AsyncLocalStorage
+    // injection, which is undefined (no campusId gets set at all) for any
+    // canAccessAllCampuses caller, and otherwise fills in the ACTING STAFF's
+    // own campus rather than the campus the enrolled Class actually belongs
+    // to. The section (and its class) was already fetched above — its
+    // campusId is the actually-correct source of truth regardless of caller.
     await this.studentRepository.createEnrollment({
       studentId,
       sessionId: activeSession.id,
@@ -181,12 +231,18 @@ export class StudentsService {
       rollNumber,
       status: 'Enrolled',
       createdBy: 'SYSTEM',
+      campusId: section?.class.campusId,
     });
   }
 
-  async getStudentProfile(id: string) {
+  async getStudentProfile(id: string, tenantContext: TenantContext) {
     const student = await this.studentRepository.findProfileById(id);
     if (!student) throw new NotFoundException(`Student record not found.`);
+    this.assertStudentAccessible(
+      student.enrollments.map((e) => e.campusId),
+      tenantContext,
+      id,
+    );
     return student;
   }
 
@@ -289,7 +345,10 @@ export class StudentsService {
     return { success: true, message: 'Parent portal setup successfully.' };
   }
 
-  async deleteStudent(id: string) {
+  async deleteStudent(id: string, tenantContext: TenantContext) {
+    const enrollmentCampusIds =
+      await this.studentRepository.findEnrollmentCampusIds(id);
+    this.assertStudentAccessible(enrollmentCampusIds, tenantContext, id);
     return this.studentRepository.delete(id);
   }
 

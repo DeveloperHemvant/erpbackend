@@ -3,9 +3,19 @@ import { AcademicAnalyticsService } from './academic-analytics.service';
 import { AnalyticsRepository } from './repositories/analytics.repository';
 import { StudentRepository } from '../students/repositories/student.repository';
 import { PromotionsService } from '../promotions/promotions.service';
+import type { TenantContext } from '../prisma/tenant-context';
 
 describe('AcademicAnalyticsService', () => {
   let service: AcademicAnalyticsService;
+
+  const unrestrictedTenant: TenantContext = {
+    userId: 'admin-1',
+    role: 'Super Admin',
+    permissions: ['*'],
+    campusId: null,
+    canAccessAllCampuses: true,
+    academicSessionId: 'session-1',
+  };
 
   const mockRepo = {
     countGradebooks: jest.fn(),
@@ -39,7 +49,7 @@ describe('AcademicAnalyticsService', () => {
           Promise.resolve(published ? 31 : 42),
       );
 
-      const result = await service.getExamCompletion();
+      const result = await service.getExamCompletion(unrestrictedTenant);
 
       expect(result.totalGradebooks).toBe(42);
       expect(result.publishedGradebooks).toBe(31);
@@ -48,14 +58,24 @@ describe('AcademicAnalyticsService', () => {
 
     it('scopes both counts to the active exam session', async () => {
       mockRepo.countGradebooks.mockResolvedValue(0);
-      await service.getExamCompletion();
-      expect(mockRepo.countGradebooks).toHaveBeenNthCalledWith(1, true);
-      expect(mockRepo.countGradebooks).toHaveBeenNthCalledWith(2, true, true);
+      await service.getExamCompletion(unrestrictedTenant);
+      expect(mockRepo.countGradebooks).toHaveBeenNthCalledWith(
+        1,
+        true,
+        undefined,
+        unrestrictedTenant,
+      );
+      expect(mockRepo.countGradebooks).toHaveBeenNthCalledWith(
+        2,
+        true,
+        true,
+        unrestrictedTenant,
+      );
     });
 
     it('returns 0% rather than dividing by zero when there are no gradebooks yet', async () => {
       mockRepo.countGradebooks.mockResolvedValue(0);
-      const result = await service.getExamCompletion();
+      const result = await service.getExamCompletion(unrestrictedTenant);
       expect(result.completionRate).toBe(0);
     });
   });
@@ -69,7 +89,7 @@ describe('AcademicAnalyticsService', () => {
         { staffId: 't2', hoursPerWeek: 4, subjectId: 's1', sectionId: 'sec1', staff: { fullName: 'Ravi Kumar' } },
       ]);
 
-      const result = await service.getTeacherWorkload();
+      const result = await service.getTeacherWorkload(unrestrictedTenant);
 
       expect(result.teachers).toEqual([
         { staffId: 't1', staffName: 'Priya Nair', assignmentCount: 2, hoursPerWeek: 16 },
@@ -88,7 +108,7 @@ describe('AcademicAnalyticsService', () => {
       }));
       mockRepo.findActiveTeacherAssignments.mockResolvedValue(assignments);
 
-      const result = await service.getTeacherWorkload();
+      const result = await service.getTeacherWorkload(unrestrictedTenant);
 
       expect(result.teachers).toHaveLength(10);
       expect(result.teachers[0].staffId).toBe('t14');
@@ -101,13 +121,13 @@ describe('AcademicAnalyticsService', () => {
         { staffId: 't1', hoursPerWeek: null, subjectId: 's1', sectionId: 'sec1', staff: { fullName: 'Priya Nair' } },
       ]);
 
-      const result = await service.getTeacherWorkload();
+      const result = await service.getTeacherWorkload(unrestrictedTenant);
       expect(result.teachers[0].hoursPerWeek).toBe(0);
     });
 
     it('returns an empty list rather than throwing when there is no active session', async () => {
       mockStudentRepository.findActiveAcademicSession.mockResolvedValue(null);
-      const result = await service.getTeacherWorkload();
+      const result = await service.getTeacherWorkload(unrestrictedTenant);
       expect(result.teachers).toEqual([]);
       expect(mockRepo.findActiveTeacherAssignments).not.toHaveBeenCalled();
     });
@@ -180,6 +200,46 @@ describe('AcademicAnalyticsService', () => {
       const result = await service.getPromotionReadiness();
       expect(result.readinessRate).toBe(0);
       expect(result.available).toBe(true);
+    });
+  });
+
+  describe('Campus Isolation Phase 3 — tenantContext threading', () => {
+    const restrictedTenant: TenantContext = {
+      userId: 'staff-1',
+      role: 'Teacher',
+      permissions: ['VIEW_REPORTS'],
+      campusId: 'campus-a',
+      canAccessAllCampuses: false,
+      academicSessionId: 'session-1',
+    };
+
+    it('getExamCompletion passes tenantContext through to both countGradebooks calls', async () => {
+      mockRepo.countGradebooks.mockResolvedValue(0);
+      await service.getExamCompletion(restrictedTenant);
+      expect(mockRepo.countGradebooks).toHaveBeenNthCalledWith(
+        1,
+        true,
+        undefined,
+        restrictedTenant,
+      );
+      expect(mockRepo.countGradebooks).toHaveBeenNthCalledWith(
+        2,
+        true,
+        true,
+        restrictedTenant,
+      );
+    });
+
+    it('getTeacherWorkload passes tenantContext through to findActiveTeacherAssignments', async () => {
+      mockStudentRepository.findActiveAcademicSession.mockResolvedValue({ id: 'sess-1', name: '2026-2027' });
+      mockRepo.findActiveTeacherAssignments.mockResolvedValue([]);
+
+      await service.getTeacherWorkload(restrictedTenant);
+
+      expect(mockRepo.findActiveTeacherAssignments).toHaveBeenCalledWith(
+        'sess-1',
+        restrictedTenant,
+      );
     });
   });
 });

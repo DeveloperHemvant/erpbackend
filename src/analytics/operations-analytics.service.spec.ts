@@ -1,9 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OperationsAnalyticsService } from './operations-analytics.service';
 import { AnalyticsRepository } from './repositories/analytics.repository';
+import type { TenantContext } from '../prisma/tenant-context';
 
 describe('OperationsAnalyticsService', () => {
   let service: OperationsAnalyticsService;
+
+  const unrestrictedTenant: TenantContext = {
+    userId: 'admin-1',
+    role: 'Super Admin',
+    permissions: ['*'],
+    campusId: null,
+    canAccessAllCampuses: true,
+    academicSessionId: 'session-1',
+  };
 
   const mockRepo = {
     findTripStatusesToday: jest.fn(),
@@ -40,7 +50,7 @@ describe('OperationsAnalyticsService', () => {
       ]);
       mockRepo.countOpenBreakdowns.mockResolvedValue(1);
 
-      const result = await service.getFleetStatus();
+      const result = await service.getFleetStatus(unrestrictedTenant);
 
       expect(result.tripsToday).toEqual(
         expect.arrayContaining([
@@ -62,7 +72,7 @@ describe('OperationsAnalyticsService', () => {
       mockRepo.findVehicleStatuses.mockResolvedValue([]);
       mockRepo.countOpenBreakdowns.mockResolvedValue(0);
 
-      const result = await service.getFleetStatus();
+      const result = await service.getFleetStatus(unrestrictedTenant);
       expect(result.tripsToday).toEqual([]);
       expect(result.vehiclesByStatus).toEqual([]);
     });
@@ -76,7 +86,7 @@ describe('OperationsAnalyticsService', () => {
         { litres: 20, totalCost: 2000, mileage: null }, // no mileage computed yet — excluded from avg
       ]);
 
-      const result = await service.getFuelUsage();
+      const result = await service.getFuelUsage(unrestrictedTenant);
 
       expect(result.totalLitres).toBe(95);
       expect(result.totalCost).toBe(9500);
@@ -88,13 +98,13 @@ describe('OperationsAnalyticsService', () => {
       mockRepo.findApprovedFuelLogs.mockResolvedValue([
         { litres: 40, totalCost: 4000, mileage: null },
       ]);
-      const result = await service.getFuelUsage();
+      const result = await service.getFuelUsage(unrestrictedTenant);
       expect(result.avgMileage).toBeNull();
     });
 
     it('returns all zeros rather than throwing on an empty window', async () => {
       mockRepo.findApprovedFuelLogs.mockResolvedValue([]);
-      const result = await service.getFuelUsage();
+      const result = await service.getFuelUsage(unrestrictedTenant);
       expect(result).toEqual({ totalLitres: 0, totalCost: 0, avgMileage: null, logCount: 0 });
     });
   });
@@ -108,7 +118,7 @@ describe('OperationsAnalyticsService', () => {
       ]);
       mockRepo.findRecentDisciplineIncidents.mockResolvedValue([]);
 
-      const result = await service.getDisciplineBreakdown();
+      const result = await service.getDisciplineBreakdown(unrestrictedTenant);
 
       expect(result.openCount).toBe(3);
       expect(result.bySeverity).toEqual(
@@ -132,7 +142,7 @@ describe('OperationsAnalyticsService', () => {
         },
       ]);
 
-      const result = await service.getDisciplineBreakdown();
+      const result = await service.getDisciplineBreakdown(unrestrictedTenant);
       expect(result.recent[0]).toEqual({
         id: 'd1',
         studentName: 'Aarav Sharma',
@@ -152,7 +162,7 @@ describe('OperationsAnalyticsService', () => {
         { id: 'r3', capacity: 6, hostel: { id: 'h2', name: 'Girls A' }, allocations: [] },
       ]);
 
-      const result = await service.getHostelOccupancy();
+      const result = await service.getHostelOccupancy(unrestrictedTenant);
 
       expect(result.totalCapacity).toBe(14);
       expect(result.totalOccupied).toBe(3);
@@ -167,7 +177,7 @@ describe('OperationsAnalyticsService', () => {
 
     it('returns 0% rather than dividing by zero when there are no rooms', async () => {
       mockRepo.findHostelRoomsWithActiveAllocations.mockResolvedValue([]);
-      const result = await service.getHostelOccupancy();
+      const result = await service.getHostelOccupancy(unrestrictedTenant);
       expect(result.occupancyRate).toBe(0);
       expect(result.byHostel).toEqual([]);
     });
@@ -184,7 +194,7 @@ describe('OperationsAnalyticsService', () => {
         { status: 'Approved', exitTime: yesterday, returnTime: null }, // still out from yesterday, not "issued today"
       ]);
 
-      const result = await service.getGatePasses();
+      const result = await service.getGatePasses(unrestrictedTenant);
 
       expect(result.issuedToday).toBe(2);
       expect(result.currentlyOut).toBe(2);
@@ -192,7 +202,7 @@ describe('OperationsAnalyticsService', () => {
 
     it('returns zero counts rather than throwing when there are no passes', async () => {
       mockRepo.findGatePasses.mockResolvedValue([]);
-      const result = await service.getGatePasses();
+      const result = await service.getGatePasses(unrestrictedTenant);
       expect(result).toEqual({ issuedToday: 0, currentlyOut: 0 });
     });
   });
@@ -210,7 +220,7 @@ describe('OperationsAnalyticsService', () => {
         },
       ]);
 
-      const result = await service.getMedicalRoom();
+      const result = await service.getMedicalRoom(unrestrictedTenant);
 
       expect(result.visitsToday).toBe(3);
       expect(result.recent[0]).toEqual({
@@ -220,6 +230,82 @@ describe('OperationsAnalyticsService', () => {
         actionTaken: 'Observed and Released',
         visitDate: '2026-08-07T09:00:00.000Z',
       });
+    });
+  });
+
+  describe('Campus Isolation Phase 3 — tenantContext threading', () => {
+    const restrictedTenant: TenantContext = {
+      userId: 'staff-1',
+      role: 'Teacher',
+      permissions: ['VIEW_REPORTS'],
+      campusId: 'campus-a',
+      canAccessAllCampuses: false,
+      academicSessionId: 'session-1',
+    };
+
+    beforeEach(() => {
+      mockRepo.findTripStatusesToday.mockResolvedValue([]);
+      mockRepo.findVehicleStatuses.mockResolvedValue([]);
+      mockRepo.countOpenBreakdowns.mockResolvedValue(0);
+      mockRepo.findApprovedFuelLogs.mockResolvedValue([]);
+      mockRepo.findOpenDisciplineIncidents.mockResolvedValue([]);
+      mockRepo.findRecentDisciplineIncidents.mockResolvedValue([]);
+      mockRepo.findHostelRoomsWithActiveAllocations.mockResolvedValue([]);
+      mockRepo.findGatePasses.mockResolvedValue([]);
+      mockRepo.countMedicalVisitsToday.mockResolvedValue(0);
+      mockRepo.findRecentMedicalVisits.mockResolvedValue([]);
+    });
+
+    it('getFleetStatus passes tenantContext through to all 3 repo calls', async () => {
+      await service.getFleetStatus(restrictedTenant);
+      expect(mockRepo.findTripStatusesToday).toHaveBeenCalledWith(
+        expect.any(String),
+        restrictedTenant,
+      );
+      expect(mockRepo.findVehicleStatuses).toHaveBeenCalledWith(restrictedTenant);
+      expect(mockRepo.countOpenBreakdowns).toHaveBeenCalledWith(restrictedTenant);
+    });
+
+    it('getFuelUsage passes tenantContext through to findApprovedFuelLogs', async () => {
+      await service.getFuelUsage(restrictedTenant);
+      expect(mockRepo.findApprovedFuelLogs).toHaveBeenCalledWith(
+        expect.any(String),
+        restrictedTenant,
+      );
+    });
+
+    it('getDisciplineBreakdown passes tenantContext through to both repo calls', async () => {
+      await service.getDisciplineBreakdown(restrictedTenant);
+      expect(mockRepo.findOpenDisciplineIncidents).toHaveBeenCalledWith(restrictedTenant);
+      expect(mockRepo.findRecentDisciplineIncidents).toHaveBeenCalledWith(
+        expect.any(Number),
+        restrictedTenant,
+      );
+    });
+
+    it('getHostelOccupancy passes tenantContext through to findHostelRoomsWithActiveAllocations', async () => {
+      await service.getHostelOccupancy(restrictedTenant);
+      expect(mockRepo.findHostelRoomsWithActiveAllocations).toHaveBeenCalledWith(restrictedTenant);
+    });
+
+    it('getGatePasses passes tenantContext through to findGatePasses', async () => {
+      await service.getGatePasses(restrictedTenant);
+      expect(mockRepo.findGatePasses).toHaveBeenCalledWith(
+        expect.any(Object),
+        restrictedTenant,
+      );
+    });
+
+    it('getMedicalRoom passes tenantContext through to both repo calls', async () => {
+      await service.getMedicalRoom(restrictedTenant);
+      expect(mockRepo.countMedicalVisitsToday).toHaveBeenCalledWith(
+        expect.any(Object),
+        restrictedTenant,
+      );
+      expect(mockRepo.findRecentMedicalVisits).toHaveBeenCalledWith(
+        expect.any(Number),
+        restrictedTenant,
+      );
     });
   });
 });

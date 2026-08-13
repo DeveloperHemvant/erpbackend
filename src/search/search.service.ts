@@ -5,24 +5,37 @@ import {
 } from './repositories/search.repository';
 import { canAccessEntityType } from '../common/entity-permissions';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import type { TenantContext } from '../prisma/tenant-context';
 
 const SEARCHERS: Record<
   string,
-  (repo: SearchRepository, q: string, limit: number) => Promise<SearchResult[]>
+  (
+    repo: SearchRepository,
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ) => Promise<SearchResult[]>
 > = {
-  student: (repo, q, limit) => repo.searchStudents(q, limit),
-  staff: (repo, q, limit) => repo.searchStaff(q, limit),
-  vehicle: (repo, q, limit) => repo.searchVehicles(q, limit),
-  route: (repo, q, limit) => repo.searchRoutes(q, limit),
-  invoice: (repo, q, limit) => repo.searchInvoices(q, limit),
-  applicant: (repo, q, limit) => repo.searchApplicants(q, limit),
-  'discipline-case': (repo, q, limit) => repo.searchDisciplineCases(q, limit),
-  'class-section': (repo, q, limit) => repo.searchClassSections(q, limit),
+  student: (repo, q, limit, tc) => repo.searchStudents(q, limit, tc),
+  staff: (repo, q, limit, tc) => repo.searchStaff(q, limit, tc),
+  vehicle: (repo, q, limit, tc) => repo.searchVehicles(q, limit, tc),
+  route: (repo, q, limit, tc) => repo.searchRoutes(q, limit, tc),
+  invoice: (repo, q, limit, tc) => repo.searchInvoices(q, limit, tc),
+  applicant: (repo, q, limit, tc) => repo.searchApplicants(q, limit, tc),
+  'discipline-case': (repo, q, limit, tc) =>
+    repo.searchDisciplineCases(q, limit, tc),
+  'class-section': (repo, q, limit, tc) =>
+    repo.searchClassSections(q, limit, tc),
+  // Never campus-filtered — a parent's children can be at different
+  // campuses, so there is no single campusId to filter by (same ambiguity
+  // D2 already named for JWTs; CAMPUS_AUDIT.md §5 names it for
+  // communication/notifications too). Not an oversight.
   parent: (repo, q, limit) => repo.searchParents(q, limit),
-  announcement: (repo, q, limit) => repo.searchAnnouncements(q, limit),
-  event: (repo, q, limit) => repo.searchEvents(q, limit),
-  house: (repo, q, limit) => repo.searchHouses(q, limit),
-  'library-book': (repo, q, limit) => repo.searchLibraryBooks(q, limit),
+  announcement: (repo, q, limit, tc) => repo.searchAnnouncements(q, limit, tc),
+  event: (repo, q, limit, tc) => repo.searchEvents(q, limit, tc),
+  house: (repo, q, limit, tc) => repo.searchHouses(q, limit, tc),
+  'library-book': (repo, q, limit, tc) =>
+    repo.searchLibraryBooks(q, limit, tc),
 };
 
 /**
@@ -31,6 +44,10 @@ const SEARCHERS: Record<
  * caller lacks its view permission, not filtered out after the fact),
  * recency-sorted. Command Palette (IA §7) is this same endpoint consumed by
  * the Omnibox alongside its existing client-side navigation results.
+ *
+ * Campus Isolation Phase 3, Milestone 1 — tenantContext now threads through
+ * to every searcher; each repository method decides for itself how (or
+ * whether, per CAMPUS_AUDIT.md §2/§6) to apply it. See search.repository.ts.
  */
 @Injectable()
 export class SearchService {
@@ -39,6 +56,7 @@ export class SearchService {
   async search(
     q: string,
     user: AuthenticatedUser,
+    tenantContext: TenantContext,
     limit = 20,
   ): Promise<SearchResult[]> {
     if (!q || q.trim().length < 2) return [];
@@ -53,7 +71,9 @@ export class SearchService {
     );
     const results = await Promise.all(
       allowedTypes.map((type) =>
-        SEARCHERS[type](this.repository, q, perTypeLimit).catch(() => []),
+        SEARCHERS[type](this.repository, q, perTypeLimit, tenantContext).catch(
+          () => [],
+        ),
       ),
     );
 

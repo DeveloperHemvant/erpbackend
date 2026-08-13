@@ -2,13 +2,22 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
-import { resolveSingleCampusIdOrThrow } from '../common/utils/campus-resolution';
 import { StorageService } from '../storage/storage.service';
+import type { TenantContext } from '../prisma/tenant-context';
+import { requireCampusId } from '../prisma/tenant-context';
 import * as bcrypt from 'bcrypt';
+
+function campusFilter(tenantContext: TenantContext): { campusId: string } | {} {
+  return tenantContext.canAccessAllCampuses
+    ? {}
+    : { campusId: requireCampusId(tenantContext) };
+}
 
 @Injectable()
 export class StaffService {
@@ -17,7 +26,7 @@ export class StaffService {
     private readonly storage: StorageService,
   ) {}
 
-  async create(createStaffDto: CreateStaffDto) {
+  async create(createStaffDto: CreateStaffDto, tenantContext: TenantContext) {
     // Verify email uniqueness
     const existing = await this.prisma.staff.findUnique({
       where: { email: createStaffDto.email },
@@ -47,9 +56,29 @@ export class StaffService {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(generatedPassword, saltRounds);
 
-    const campusId =
-      createStaffDto.campusId ??
-      (await resolveSingleCampusIdOrThrow(this.prisma));
+    // Campus Isolation Phase 3, Milestone 5 — campusId no longer falls back
+    // to resolveSingleCampusIdOrThrow's "exactly one campus exists" shim.
+    // Restricted callers default to their own campus and can't onboard
+    // staff directly into a different one; unrestricted (HQ) callers must
+    // say explicitly which campus, since there's no ambient default for
+    // them (D3 — never silently guess).
+    let campusId: string;
+    if (tenantContext.canAccessAllCampuses) {
+      if (!createStaffDto.campusId) {
+        throw new BadRequestException(
+          'campusId is required when creating staff as a cross-campus admin — there is no default campus to assume.',
+        );
+      }
+      campusId = createStaffDto.campusId;
+    } else {
+      const ownCampusId = requireCampusId(tenantContext);
+      if (createStaffDto.campusId && createStaffDto.campusId !== ownCampusId) {
+        throw new ForbiddenException(
+          'Cannot onboard staff into a different campus than your own.',
+        );
+      }
+      campusId = ownCampusId;
+    }
 
     const staff = await this.prisma.staff.create({
       data: {
@@ -75,11 +104,13 @@ export class StaffService {
     return { ...staff, generatedPassword };
   }
 
-  async findAll(page?: number, limit?: number) {
+  async findAll(tenantContext: TenantContext, page?: number, limit?: number) {
+    const where = campusFilter(tenantContext);
     if (page && limit) {
       const skip = (page - 1) * limit;
       const [data, totalCount] = await Promise.all([
         this.prisma.staff.findMany({
+          where,
           skip,
           take: limit,
           select: {
@@ -93,12 +124,13 @@ export class StaffService {
           },
           orderBy: { fullName: 'asc' },
         }),
-        this.prisma.staff.count(),
+        this.prisma.staff.count({ where }),
       ]);
       return { data, totalCount, page, limit };
     }
 
     const data = await this.prisma.staff.findMany({
+      where,
       select: {
         id: true,
         email: true,
@@ -113,7 +145,25 @@ export class StaffService {
     return { data, totalCount: data.length, page: 1, limit: data.length };
   }
 
-  async findOne(id: string) {
+  // Campus Isolation Phase 3, Milestone 5 — cross-tenant direct-by-id access
+  // throws the SAME NotFoundException a genuinely-missing id already throws,
+  // not a new 403 branch: don't confirm a record exists in a campus the
+  // caller can't see. Self-access always passes for free (a staff member's
+  // own record trivially has their own campusId).
+  private assertAccessible(
+    staff: { campusId: string },
+    tenantContext: TenantContext,
+    id: string,
+  ) {
+    if (
+      !tenantContext.canAccessAllCampuses &&
+      staff.campusId !== tenantContext.campusId
+    ) {
+      throw new NotFoundException(`Staff record with ID "${id}" not found.`);
+    }
+  }
+
+  async findOne(id: string, tenantContext: TenantContext) {
     const staff = await this.prisma.staff.findUnique({
       where: { id },
       select: {
@@ -127,6 +177,7 @@ export class StaffService {
         photoUrl: true,
         details: true,
         roleId: true,
+        campusId: true,
         role: { select: { id: true, name: true, permissions: true } },
         createdAt: true,
         updatedAt: true,
@@ -156,11 +207,16 @@ export class StaffService {
     if (!staff) {
       throw new NotFoundException(`Staff record with ID "${id}" not found.`);
     }
+    this.assertAccessible(staff, tenantContext, id);
     return staff;
   }
 
-  async update(id: string, updateStaffDto: UpdateStaffDto) {
-    await this.findOne(id); // Throws 404 if not found
+  async update(
+    id: string,
+    updateStaffDto: UpdateStaffDto,
+    tenantContext: TenantContext,
+  ) {
+    await this.findOne(id, tenantContext); // Throws 404 if not found or not accessible
 
     if (updateStaffDto.email) {
       const existing = await this.prisma.staff.findFirst({
@@ -249,6 +305,12 @@ export class StaffService {
     });
   }
 
+  // Campus Isolation Phase 3, Milestone 5 — found, not fixed here: staffId
+  // comes from the request body/route param, not @CurrentUser(), so any
+  // authenticated staff member can currently mark/read another staffId's
+  // attendance. That's a pre-existing authorization gap unrelated to campus
+  // isolation (identical bug regardless of campus count) — out of scope for
+  // this milestone, flagged for a future auth-hardening pass.
   async getSelfAttendance(staffId: string, dateStr?: string) {
     const queryDate = dateStr
       ? dateStr.split('T')[0]
@@ -306,7 +368,29 @@ export class StaffService {
     });
   }
 
-  async getAttendanceLogs(staffId: string, month?: string) {
+  // Shared by every method below that mutates/reads a specific staffId
+  // without already going through findOne()'s full fetch — cheap lookup of
+  // just campusId, same 404-on-mismatch behavior.
+  private async assertStaffAccessibleById(
+    id: string,
+    tenantContext: TenantContext,
+  ) {
+    const staff = await this.prisma.staff.findUnique({
+      where: { id },
+      select: { campusId: true },
+    });
+    if (!staff) {
+      throw new NotFoundException(`Staff record with ID "${id}" not found.`);
+    }
+    this.assertAccessible(staff, tenantContext, id);
+  }
+
+  async getAttendanceLogs(
+    staffId: string,
+    tenantContext: TenantContext,
+    month?: string,
+  ) {
+    await this.assertStaffAccessibleById(staffId, tenantContext);
     if (month) {
       return this.prisma.attendanceRecord.findMany({
         where: { staffId, date: { startsWith: month } },
@@ -334,7 +418,9 @@ export class StaffService {
       endDate: string;
       reason?: string;
     },
+    tenantContext: TenantContext,
   ) {
+    await this.assertStaffAccessibleById(staffId, tenantContext);
     return this.prisma.leaveApplication.create({
       data: {
         staffId,
@@ -346,7 +432,12 @@ export class StaffService {
     });
   }
 
-  async updateTeacherAssignments(id: string, assignments: any[]) {
+  async updateTeacherAssignments(
+    id: string,
+    assignments: any[],
+    tenantContext: TenantContext,
+  ) {
+    await this.assertStaffAccessibleById(id, tenantContext);
     // Delete existing
     await this.prisma.teacherAssignment.deleteMany({ where: { staffId: id } });
 
@@ -374,7 +465,12 @@ export class StaffService {
     return { success: true };
   }
 
-  async updateTransportAssignments(id: string, assignments: any[]) {
+  async updateTransportAssignments(
+    id: string,
+    assignments: any[],
+    tenantContext: TenantContext,
+  ) {
+    await this.assertStaffAccessibleById(id, tenantContext);
     // We only support creating one vehicle staff relation and one trip for now per submission
     // First clear existing if they want a clean slate, or just append.
     // The user wants to "assign their bus with bus route". Let's clear and re-assign.
@@ -415,8 +511,8 @@ export class StaffService {
     return { success: true };
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, tenantContext: TenantContext) {
+    await this.findOne(id, tenantContext);
     return this.prisma.staff.delete({
       where: { id },
     });
@@ -425,8 +521,9 @@ export class StaffService {
   async uploadPhoto(
     id: string,
     file: { originalname: string; buffer: Buffer; mimetype?: string },
+    tenantContext: TenantContext,
   ) {
-    await this.findOne(id);
+    await this.findOne(id, tenantContext);
     const { url } = await this.storage.uploadFile(
       file.buffer,
       `staff/${id}`,

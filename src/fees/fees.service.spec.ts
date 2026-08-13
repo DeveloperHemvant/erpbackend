@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
@@ -12,9 +13,19 @@ import { FeeRepository } from './repositories/fee.repository';
 import { ErpCoreAuditLogRepository } from './repositories/audit-log.repository';
 import { DocumentRenderingService } from '../documents/document-rendering.service';
 import { StorageService } from '../storage/storage.service';
+import type { TenantContext } from '../prisma/tenant-context';
 
 describe('FeesService', () => {
   let service: FeesService;
+
+  const unrestrictedTenant: TenantContext = {
+    userId: 'admin-1',
+    role: 'Super Admin',
+    permissions: ['*'],
+    campusId: null,
+    canAccessAllCampuses: true,
+    academicSessionId: 'session-1',
+  };
 
   const mockFeeRepository = {
     findInvoiceWithPayments: jest.fn(),
@@ -34,6 +45,15 @@ describe('FeesService', () => {
     findPaymentByGatewayId: jest.fn(),
     createWebhookPayment: jest.fn(),
     findPaymentWithContext: jest.fn(),
+    createStructure: jest.fn(),
+    findAllStructures: jest.fn(),
+    findAllInvoices: jest.fn(),
+    findAllPayments: jest.fn(),
+    findEnrollmentsBySessionEnrolled: jest.fn(),
+    findStructuresBySession: jest.fn(),
+    findOverdueInvoices: jest.fn(),
+    createInvoiceRaw: jest.fn(),
+    deleteInvoice: jest.fn(),
   };
   const mockStudentRepository = {
     findActiveAcademicSession: jest.fn(),
@@ -172,7 +192,7 @@ describe('FeesService', () => {
           amount: '1000',
           dueDate: '2026-09-01',
           status: 'Unpaid',
-        } as any),
+        } as any, unrestrictedTenant),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -190,7 +210,7 @@ describe('FeesService', () => {
           amount: '1000',
           dueDate: '2026-09-01',
           status: 'Unpaid',
-        } as any),
+        } as any, unrestrictedTenant),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -199,19 +219,22 @@ describe('FeesService', () => {
         id: 'sess-1',
       });
       mockStudentRepository.findEnrollmentByStudentAndSession.mockResolvedValue(
-        { id: 'enr-1', studentId: 's1' },
+        { id: 'enr-1', studentId: 's1', campusId: 'campus-a' },
       );
       mockFeeRepository.createInvoiceFromDto.mockResolvedValue({
         id: 'inv-1',
         enrollment: null,
       });
 
-      await service.createFeeInvoice({
-        studentId: 's1',
-        amount: '1000',
-        dueDate: '2026-09-01',
-        status: 'Unpaid',
-      });
+      await service.createFeeInvoice(
+        {
+          studentId: 's1',
+          amount: '1000',
+          dueDate: '2026-09-01',
+          status: 'Unpaid',
+        },
+        unrestrictedTenant,
+      );
 
       expect(mockFeeRepository.createInvoiceFromDto).toHaveBeenCalledWith(
         expect.objectContaining({ enrollmentId: 'enr-1', amount: '1000' }),
@@ -224,7 +247,7 @@ describe('FeesService', () => {
       mockFeeRepository.findInvoiceById.mockResolvedValue(null);
 
       await expect(
-        service.updateFeeInvoiceStatus('missing', 'Paid'),
+        service.updateFeeInvoiceStatus('missing', 'Paid', unrestrictedTenant),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -252,7 +275,10 @@ describe('FeesService', () => {
         },
       ]);
 
-      const report = await service.getFinancialReports('sess-1');
+      const report = await service.getFinancialReports(
+        'sess-1',
+        unrestrictedTenant,
+      );
 
       expect(report.totalExpected).toBe(1500);
       expect(report.totalCollected).toBe(1000);
@@ -267,10 +293,11 @@ describe('FeesService', () => {
       mockFeeRepository.findPaymentWithRefunds.mockResolvedValue(null);
 
       await expect(
-        service.requestRefund('missing-payment', {
-          amount: '100',
-          reason: 'test',
-        } as any),
+        service.requestRefund(
+          'missing-payment',
+          { amount: '100', reason: 'test' } as any,
+          unrestrictedTenant,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -280,10 +307,15 @@ describe('FeesService', () => {
         amountPaid: '1000',
         paymentMode: 'UPI',
         refunds: [],
+        invoice: { campusId: null },
       });
 
       await expect(
-        service.requestRefund('pay-1', { amount: '0', reason: 'test' } as any),
+        service.requestRefund(
+          'pay-1',
+          { amount: '0', reason: 'test' } as any,
+          unrestrictedTenant,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -293,13 +325,15 @@ describe('FeesService', () => {
         amountPaid: '1000',
         paymentMode: 'UPI',
         refunds: [{ amount: '600', status: 'Approved' }],
+        invoice: { campusId: null },
       });
 
       await expect(
-        service.requestRefund('pay-1', {
-          amount: '500',
-          reason: 'test',
-        } as any),
+        service.requestRefund(
+          'pay-1',
+          { amount: '500', reason: 'test' } as any,
+          unrestrictedTenant,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -309,13 +343,15 @@ describe('FeesService', () => {
         amountPaid: '1000',
         paymentMode: 'UPI',
         refunds: [{ amount: '900', status: 'Rejected' }],
+        invoice: { campusId: null },
       });
       mockFeeRepository.createRefund.mockResolvedValue({ id: 'ref-1' });
 
-      await service.requestRefund('pay-1', {
-        amount: '900',
-        reason: 'test',
-      });
+      await service.requestRefund(
+        'pay-1',
+        { amount: '900', reason: 'test' } as any,
+        unrestrictedTenant,
+      );
 
       expect(mockFeeRepository.createRefund).toHaveBeenCalledWith(
         expect.objectContaining({ paymentId: 'pay-1', amount: '900' }),
@@ -328,13 +364,15 @@ describe('FeesService', () => {
         amountPaid: '1000',
         paymentMode: 'Cheque',
         refunds: [],
+        invoice: { campusId: null },
       });
       mockFeeRepository.createRefund.mockResolvedValue({ id: 'ref-1' });
 
-      await service.requestRefund('pay-1', {
-        amount: '100',
-        reason: 'test',
-      });
+      await service.requestRefund(
+        'pay-1',
+        { amount: '100', reason: 'test' } as any,
+        unrestrictedTenant,
+      );
 
       expect(mockFeeRepository.createRefund).toHaveBeenCalledWith(
         expect.objectContaining({ refundMode: 'Cheque' }),
@@ -347,7 +385,11 @@ describe('FeesService', () => {
       mockFeeRepository.findRefundById.mockResolvedValue(null);
 
       await expect(
-        service.resolveRefund('missing', { status: 'Approved' } as any),
+        service.resolveRefund(
+          'missing',
+          { status: 'Approved' } as any,
+          unrestrictedTenant,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -355,11 +397,15 @@ describe('FeesService', () => {
       mockFeeRepository.findRefundById.mockResolvedValue({
         id: 'ref-1',
         status: 'Approved',
-        payment: { invoiceId: 'inv-1' },
+        payment: { invoiceId: 'inv-1', invoice: { campusId: null } },
       });
 
       await expect(
-        service.resolveRefund('ref-1', { status: 'Rejected' } as any),
+        service.resolveRefund(
+          'ref-1',
+          { status: 'Rejected' } as any,
+          unrestrictedTenant,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -367,14 +413,18 @@ describe('FeesService', () => {
       mockFeeRepository.findRefundById.mockResolvedValue({
         id: 'ref-1',
         status: 'Requested',
-        payment: { invoiceId: 'inv-1' },
+        payment: { invoiceId: 'inv-1', invoice: { campusId: null } },
       });
       mockFeeRepository.updateRefundStatus.mockResolvedValue({
         id: 'ref-1',
         status: 'Rejected',
       });
 
-      await service.resolveRefund('ref-1', { status: 'Rejected' });
+      await service.resolveRefund(
+        'ref-1',
+        { status: 'Rejected' } as any,
+        unrestrictedTenant,
+      );
 
       expect(
         mockFeeRepository.findInvoiceWithPaymentsAndRefunds,
@@ -388,7 +438,7 @@ describe('FeesService', () => {
       mockFeeRepository.findRefundById.mockResolvedValue({
         id: 'ref-1',
         status: 'Requested',
-        payment: { invoiceId: 'inv-1' },
+        payment: { invoiceId: 'inv-1', invoice: { campusId: null } },
       });
       mockFeeRepository.updateRefundStatus.mockResolvedValue({
         id: 'ref-1',
@@ -406,7 +456,11 @@ describe('FeesService', () => {
         ],
       });
 
-      await service.resolveRefund('ref-1', { status: 'Approved' });
+      await service.resolveRefund(
+        'ref-1',
+        { status: 'Approved' } as any,
+        unrestrictedTenant,
+      );
 
       expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith(
         'inv-1',
@@ -418,7 +472,7 @@ describe('FeesService', () => {
       mockFeeRepository.findRefundById.mockResolvedValue({
         id: 'ref-1',
         status: 'Requested',
-        payment: { invoiceId: 'inv-1' },
+        payment: { invoiceId: 'inv-1', invoice: { campusId: null } },
       });
       mockFeeRepository.updateRefundStatus.mockResolvedValue({
         id: 'ref-1',
@@ -437,13 +491,271 @@ describe('FeesService', () => {
         ],
       });
 
-      await service.resolveRefund('ref-1', { status: 'Approved' });
+      await service.resolveRefund(
+        'ref-1',
+        { status: 'Approved' } as any,
+        unrestrictedTenant,
+      );
 
       // net paid = (1000 - 100) + 200 = 1100 >= 1000
       expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith(
         'inv-1',
         'Paid',
       );
+    });
+  });
+
+  describe('Campus Isolation Phase 3, Milestone 6 — ownership checks', () => {
+    const restrictedTenant: TenantContext = {
+      userId: 'staff-1',
+      role: 'Fee Manager',
+      permissions: ['MANAGE_FEES'],
+      campusId: 'campus-a',
+      canAccessAllCampuses: false,
+      academicSessionId: 'session-1',
+    };
+
+    describe('createFeeStructure', () => {
+      it('defaults to the caller own campus when restricted and DTO omits campusId', async () => {
+        mockFeeRepository.createStructure.mockResolvedValue({ id: 'fs-1' });
+        await service.createFeeStructure(
+          { name: 'A', amount: '100', cycle: 'Monthly', sessionId: 's1' } as any,
+          restrictedTenant,
+        );
+        expect(mockFeeRepository.createStructure).toHaveBeenCalledWith(
+          expect.objectContaining({ campusId: 'campus-a' }),
+        );
+      });
+
+      it('rejects a restricted caller naming a different campus', async () => {
+        await expect(
+          service.createFeeStructure(
+            {
+              name: 'A',
+              amount: '100',
+              cycle: 'Monthly',
+              sessionId: 's1',
+              campusId: 'campus-b',
+            } as any,
+            restrictedTenant,
+          ),
+        ).rejects.toThrow(ForbiddenException);
+        expect(mockFeeRepository.createStructure).not.toHaveBeenCalled();
+      });
+
+      it('allows an unrestricted caller to leave campusId unset (school-wide)', async () => {
+        mockFeeRepository.createStructure.mockResolvedValue({ id: 'fs-1' });
+        await service.createFeeStructure(
+          { name: 'A', amount: '100', cycle: 'Monthly', sessionId: 's1' } as any,
+          unrestrictedTenant,
+        );
+        expect(mockFeeRepository.createStructure).toHaveBeenCalledWith(
+          expect.objectContaining({ campusId: undefined }),
+        );
+      });
+    });
+
+    describe('createFeeInvoice — cross-campus rejection', () => {
+      it('rejects a restricted caller creating an invoice for a student outside their campus', async () => {
+        mockStudentRepository.findActiveAcademicSession.mockResolvedValue({
+          id: 'sess-1',
+        });
+        mockStudentRepository.findEnrollmentByStudentAndSession.mockResolvedValue(
+          { id: 'enr-1', studentId: 's1', campusId: 'campus-b' },
+        );
+
+        await expect(
+          service.createFeeInvoice(
+            {
+              studentId: 's1',
+              amount: '1000',
+              dueDate: '2026-09-01',
+              status: 'Unpaid',
+            } as any,
+            restrictedTenant,
+          ),
+        ).rejects.toThrow(ForbiddenException);
+        expect(mockFeeRepository.createInvoiceFromDto).not.toHaveBeenCalled();
+      });
+
+      it('explicitly sets campusId from the enrollment, not left to ambient middleware', async () => {
+        mockStudentRepository.findActiveAcademicSession.mockResolvedValue({
+          id: 'sess-1',
+        });
+        mockStudentRepository.findEnrollmentByStudentAndSession.mockResolvedValue(
+          { id: 'enr-1', studentId: 's1', campusId: 'campus-a' },
+        );
+        mockFeeRepository.createInvoiceFromDto.mockResolvedValue({
+          id: 'inv-1',
+          enrollment: null,
+        });
+
+        await service.createFeeInvoice(
+          {
+            studentId: 's1',
+            amount: '1000',
+            dueDate: '2026-09-01',
+            status: 'Unpaid',
+          },
+          restrictedTenant,
+        );
+
+        expect(mockFeeRepository.createInvoiceFromDto).toHaveBeenCalledWith(
+          expect.objectContaining({ campusId: 'campus-a' }),
+        );
+      });
+    });
+
+    describe('by-id ownership checks (404, not 403, for cross-campus)', () => {
+      it('updateFeeInvoiceStatus 404s when the invoice belongs to a different campus', async () => {
+        mockFeeRepository.findInvoiceById.mockResolvedValue({
+          id: 'inv-1',
+          campusId: 'campus-b',
+        });
+        await expect(
+          service.updateFeeInvoiceStatus('inv-1', 'Paid', restrictedTenant),
+        ).rejects.toThrow(NotFoundException);
+        expect(mockFeeRepository.updateInvoiceStatus).not.toHaveBeenCalled();
+      });
+
+      it('deleteFeeInvoice 404s when the invoice belongs to a different campus', async () => {
+        mockFeeRepository.findInvoiceById.mockResolvedValue({
+          id: 'inv-1',
+          campusId: 'campus-b',
+        });
+        await expect(
+          service.deleteFeeInvoice('inv-1', restrictedTenant),
+        ).rejects.toThrow(NotFoundException);
+        expect(mockFeeRepository.deleteInvoice).not.toHaveBeenCalled();
+      });
+
+      it('deleteFeeInvoice 404s for a genuinely missing id (unchanged behavior)', async () => {
+        mockFeeRepository.findInvoiceById.mockResolvedValue(null);
+        await expect(
+          service.deleteFeeInvoice('missing', unrestrictedTenant),
+        ).rejects.toThrow(NotFoundException);
+        expect(mockFeeRepository.deleteInvoice).not.toHaveBeenCalled();
+      });
+
+      it('requestRefund 404s when the payment belongs to a different campus', async () => {
+        mockFeeRepository.findPaymentWithRefunds.mockResolvedValue({
+          id: 'pay-1',
+          amountPaid: '1000',
+          paymentMode: 'UPI',
+          refunds: [],
+          invoice: { campusId: 'campus-b' },
+        });
+        await expect(
+          service.requestRefund(
+            'pay-1',
+            { amount: '100', reason: 'test' } as any,
+            restrictedTenant,
+          ),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('resolveRefund 404s when the refund belongs to a different campus', async () => {
+        mockFeeRepository.findRefundById.mockResolvedValue({
+          id: 'ref-1',
+          status: 'Requested',
+          payment: { invoiceId: 'inv-1', invoice: { campusId: 'campus-b' } },
+        });
+        await expect(
+          service.resolveRefund(
+            'ref-1',
+            { status: 'Approved' } as any,
+            restrictedTenant,
+          ),
+        ).rejects.toThrow(NotFoundException);
+        expect(mockFeeRepository.updateRefundStatus).not.toHaveBeenCalled();
+      });
+
+      it('getRefundsForPayment 404s when the payment belongs to a different campus', async () => {
+        mockFeeRepository.findPaymentWithRefunds.mockResolvedValue({
+          id: 'pay-1',
+          invoice: { campusId: 'campus-b' },
+        });
+        await expect(
+          service.getRefundsForPayment('pay-1', restrictedTenant),
+        ).rejects.toThrow(NotFoundException);
+        expect(mockFeeRepository.findRefundsForPayment).not.toHaveBeenCalled();
+      });
+
+      it('getRefundsForPayment succeeds for a same-campus restricted caller', async () => {
+        mockFeeRepository.findPaymentWithRefunds.mockResolvedValue({
+          id: 'pay-1',
+          invoice: { campusId: 'campus-a' },
+        });
+        mockFeeRepository.findRefundsForPayment.mockResolvedValue([]);
+        await expect(
+          service.getRefundsForPayment('pay-1', restrictedTenant),
+        ).resolves.toEqual([]);
+      });
+    });
+
+    describe('threading', () => {
+      it('getFeeStructures threads tenantContext to the repository', async () => {
+        mockFeeRepository.findAllStructures.mockResolvedValue([]);
+        await service.getFeeStructures(restrictedTenant);
+        expect(mockFeeRepository.findAllStructures).toHaveBeenCalledWith(
+          restrictedTenant,
+        );
+      });
+
+      it('getFeeInvoices threads tenantContext to the repository', async () => {
+        mockFeeRepository.findAllInvoices.mockResolvedValue([]);
+        await service.getFeeInvoices(restrictedTenant);
+        expect(mockFeeRepository.findAllInvoices).toHaveBeenCalledWith(
+          restrictedTenant,
+        );
+      });
+
+      it('getFeePayments threads tenantContext to the repository', async () => {
+        mockFeeRepository.findAllPayments.mockResolvedValue([]);
+        await service.getFeePayments(restrictedTenant);
+        expect(mockFeeRepository.findAllPayments).toHaveBeenCalledWith(
+          restrictedTenant,
+        );
+      });
+
+      it('getRefunds threads tenantContext to the repository', async () => {
+        mockFeeRepository.findAllRefunds.mockResolvedValue([]);
+        await service.getRefunds(restrictedTenant);
+        expect(mockFeeRepository.findAllRefunds).toHaveBeenCalledWith(
+          restrictedTenant,
+        );
+      });
+
+      it('generateInvoicesJob threads tenantContext to both repository calls', async () => {
+        mockFeeRepository.findEnrollmentsBySessionEnrolled.mockResolvedValue([]);
+        mockFeeRepository.findStructuresBySession.mockResolvedValue([]);
+        await service.generateInvoicesJob('sess-1', restrictedTenant);
+        expect(
+          mockFeeRepository.findEnrollmentsBySessionEnrolled,
+        ).toHaveBeenCalledWith('sess-1', restrictedTenant);
+        expect(mockFeeRepository.findStructuresBySession).toHaveBeenCalledWith(
+          'sess-1',
+          restrictedTenant,
+        );
+      });
+
+      it('applyLateFeesJob threads tenantContext to the repository', async () => {
+        mockFeeRepository.findOverdueInvoices.mockResolvedValue([]);
+        await service.applyLateFeesJob(restrictedTenant);
+        expect(mockFeeRepository.findOverdueInvoices).toHaveBeenCalledWith(
+          expect.any(String),
+          restrictedTenant,
+        );
+      });
+
+      it('getFinancialReports threads tenantContext to the repository', async () => {
+        mockFeeRepository.findInvoicesBySession.mockResolvedValue([]);
+        await service.getFinancialReports('sess-1', restrictedTenant);
+        expect(mockFeeRepository.findInvoicesBySession).toHaveBeenCalledWith(
+          'sess-1',
+          restrictedTenant,
+        );
+      });
     });
   });
 

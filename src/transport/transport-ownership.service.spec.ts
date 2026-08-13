@@ -19,18 +19,24 @@ describe('TransportOwnershipService', () => {
     identifier: 'driver@school.test',
     role: 'Driver',
     permissions: ['MANAGE_TRANSPORT'],
+    campusId: 'campus-1',
+    canAccessAllCampuses: false,
   };
   const fleetManager: AuthenticatedUser = {
     userId: 'mgr-1',
     identifier: 'mgr@school.test',
     role: 'Transport Manager',
     permissions: ['MANAGE_TRANSPORT', 'MANAGE_TRANSPORT_FLEET'],
+    campusId: 'campus-1',
+    canAccessAllCampuses: false,
   };
   const superAdmin: AuthenticatedUser = {
     userId: 'admin-1',
     identifier: 'admin@school.test',
     role: 'Super Admin',
     permissions: ['*'],
+    campusId: null,
+    canAccessAllCampuses: true,
   };
 
   beforeEach(async () => {

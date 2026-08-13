@@ -1,9 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FinanceAnalyticsService } from './finance-analytics.service';
 import { AnalyticsRepository } from './repositories/analytics.repository';
+import type { TenantContext } from '../prisma/tenant-context';
 
 describe('FinanceAnalyticsService', () => {
   let service: FinanceAnalyticsService;
+
+  const unrestrictedTenant: TenantContext = {
+    userId: 'admin-1',
+    role: 'Super Admin',
+    permissions: ['*'],
+    campusId: null,
+    canAccessAllCampuses: true,
+    academicSessionId: 'session-1',
+  };
 
   const mockRepo = {
     findInvoiceFinancials: jest.fn(),
@@ -38,7 +48,7 @@ describe('FinanceAnalyticsService', () => {
       mockRepo.findPaymentFinancials.mockResolvedValue([]);
       mockRepo.findRefundFinancials.mockResolvedValue([]);
 
-      const result = await service.getFinanceSummary();
+      const result = await service.getFinanceSummary(unrestrictedTenant);
 
       expect(result.totalInvoiced).toBe(150000);
       expect(result.totalCollected).toBe(100000);
@@ -53,7 +63,7 @@ describe('FinanceAnalyticsService', () => {
       mockRepo.findPaymentFinancials.mockResolvedValue([]);
       mockRepo.findRefundFinancials.mockResolvedValue([]);
 
-      const result = await service.getFinanceSummary();
+      const result = await service.getFinanceSummary(unrestrictedTenant);
       expect(result.totalInvoiced).toBe(1200);
     });
 
@@ -67,7 +77,7 @@ describe('FinanceAnalyticsService', () => {
       mockRepo.findPaymentFinancials.mockResolvedValue([]);
       mockRepo.findRefundFinancials.mockResolvedValue([]);
 
-      const result = await service.getFinanceSummary();
+      const result = await service.getFinanceSummary(unrestrictedTenant);
       expect(result.overdueAmount).toBe(8000); // 5000 + 3000
     });
 
@@ -80,7 +90,7 @@ describe('FinanceAnalyticsService', () => {
       ]);
       mockRepo.findRefundFinancials.mockResolvedValue([]);
 
-      const result = await service.getFinanceSummary();
+      const result = await service.getFinanceSummary(unrestrictedTenant);
       expect(result.todaysCollection).toBe(3000);
     });
 
@@ -94,7 +104,7 @@ describe('FinanceAnalyticsService', () => {
         { amount: 300, status: 'Rejected' },
       ]);
 
-      const result = await service.getFinanceSummary();
+      const result = await service.getFinanceSummary(unrestrictedTenant);
       expect(result.refundsApprovedCount).toBe(2);
       expect(result.refundsApprovedAmount).toBe(3000);
     });
@@ -104,7 +114,7 @@ describe('FinanceAnalyticsService', () => {
       mockRepo.findPaymentFinancials.mockResolvedValue([]);
       mockRepo.findRefundFinancials.mockResolvedValue([]);
 
-      const result = await service.getFinanceSummary();
+      const result = await service.getFinanceSummary(unrestrictedTenant);
       expect(result.activeScholarshipsDiscounts).toBeNull();
     });
 
@@ -113,7 +123,7 @@ describe('FinanceAnalyticsService', () => {
       mockRepo.findPaymentFinancials.mockResolvedValue([]);
       mockRepo.findRefundFinancials.mockResolvedValue([]);
 
-      const result = await service.getFinanceSummary();
+      const result = await service.getFinanceSummary(unrestrictedTenant);
       expect(result.collectionRate).toBe(0);
       expect(result.totalInvoiced).toBe(0);
       expect(result.totalOutstanding).toBe(0);
@@ -128,7 +138,7 @@ describe('FinanceAnalyticsService', () => {
         { amountPaid: 500, paymentDate: '2026-05-01', paymentMode: 'Cash' },
       ]);
 
-      const result = await service.getCollectionTrend();
+      const result = await service.getCollectionTrend(unrestrictedTenant);
 
       expect(result.months).toEqual([
         { month: '2026-05', collected: 500 },
@@ -141,13 +151,13 @@ describe('FinanceAnalyticsService', () => {
         { amountPaid: 1000, paymentDate: '2026-06-15', paymentMode: 'Cash' },
       ]);
 
-      const result = await service.getCollectionTrend();
+      const result = await service.getCollectionTrend(unrestrictedTenant);
       expect(result.months).toHaveLength(1);
     });
 
     it('returns an empty list rather than throwing on an empty dataset', async () => {
       mockRepo.findPaymentFinancials.mockResolvedValue([]);
-      const result = await service.getCollectionTrend();
+      const result = await service.getCollectionTrend(unrestrictedTenant);
       expect(result.months).toEqual([]);
     });
 
@@ -162,7 +172,7 @@ describe('FinanceAnalyticsService', () => {
         distinctMonths.map((m) => ({ amountPaid: 100, paymentDate: `${m}-01`, paymentMode: 'Cash' })),
       );
 
-      const result = await service.getCollectionTrend();
+      const result = await service.getCollectionTrend(unrestrictedTenant);
       expect(result.months).toHaveLength(12);
       // the most recent 12 should be kept, i.e. the earliest 3 dropped
       expect(result.months[0].month).toBe(distinctMonths[3]);
@@ -184,7 +194,7 @@ describe('FinanceAnalyticsService', () => {
       ]);
       mockRepo.findClassRevenueBreakdown.mockResolvedValue([]);
 
-      const result = await service.getOutstandingBreakdown();
+      const result = await service.getOutstandingBreakdown(unrestrictedTenant);
 
       expect(result.dueToday).toBe(1000);
       expect(result.dueThisWeek).toBe(2000);
@@ -213,7 +223,7 @@ describe('FinanceAnalyticsService', () => {
         },
       ]);
 
-      const result = await service.getOutstandingBreakdown();
+      const result = await service.getOutstandingBreakdown(unrestrictedTenant);
 
       expect(result.byClass).toEqual([{ name: 'Grade 5', outstanding: 1000 }]);
       expect(result.bySection).toEqual([{ name: 'Grade 5 — Section A', outstanding: 1000 }]);
@@ -223,7 +233,7 @@ describe('FinanceAnalyticsService', () => {
       mockRepo.findInvoiceFinancials.mockResolvedValue([]);
       mockRepo.findClassRevenueBreakdown.mockResolvedValue([]);
 
-      const result = await service.getOutstandingBreakdown();
+      const result = await service.getOutstandingBreakdown(unrestrictedTenant);
       expect(result).toEqual({ dueToday: 0, dueThisWeek: 0, overdue: 0, byClass: [], bySection: [] });
     });
   });
@@ -236,7 +246,7 @@ describe('FinanceAnalyticsService', () => {
         { amountPaid: 2000, paymentDate: TODAY, paymentMode: 'UPI' },
       ]);
 
-      const result = await service.getPaymentModeBreakdown();
+      const result = await service.getPaymentModeBreakdown(unrestrictedTenant);
 
       expect(result.modes).toEqual([
         { mode: 'UPI', count: 2, amount: 7000 },
@@ -254,7 +264,7 @@ describe('FinanceAnalyticsService', () => {
         { amount: 400, status: 'Rejected' },
       ]);
 
-      const result = await service.getRefundDashboard();
+      const result = await service.getRefundDashboard(unrestrictedTenant);
 
       expect(result.pending).toEqual({ count: 2, amount: 300 });
       expect(result.approved).toEqual({ count: 1, amount: 300 });
@@ -263,7 +273,7 @@ describe('FinanceAnalyticsService', () => {
 
     it('returns zeroed buckets rather than throwing on an empty dataset', async () => {
       mockRepo.findRefundFinancials.mockResolvedValue([]);
-      const result = await service.getRefundDashboard();
+      const result = await service.getRefundDashboard(unrestrictedTenant);
       expect(result.pending).toEqual({ count: 0, amount: 0 });
       expect(result.approved).toEqual({ count: 0, amount: 0 });
       expect(result.rejected).toEqual({ count: 0, amount: 0 });
@@ -302,7 +312,7 @@ describe('FinanceAnalyticsService', () => {
         },
       ]);
 
-      const result = await service.getRecentTransactions();
+      const result = await service.getRecentTransactions(unrestrictedTenant);
 
       expect(result.payments[0]).toEqual({ id: 'p1', studentName: 'Aarav Sharma', amount: 1000, mode: 'Cash', date: TODAY });
       expect(result.invoices[0]).toEqual({ id: 'i1', studentName: 'Diya Patel', amount: 2000, status: 'Unpaid', dueDate: '2026-09-01' });
@@ -322,8 +332,47 @@ describe('FinanceAnalyticsService', () => {
       mockRepo.findRecentInvoices.mockResolvedValue([]);
       mockRepo.findRecentRefunds.mockResolvedValue([]);
 
-      const result = await service.getRecentTransactions();
+      const result = await service.getRecentTransactions(unrestrictedTenant);
       expect(result.payments[0].studentName).toBe('Unknown');
+    });
+  });
+
+  describe('Campus Isolation Phase 3 — tenantContext threading', () => {
+    const restrictedTenant: TenantContext = {
+      userId: 'staff-1',
+      role: 'Teacher',
+      permissions: ['MANAGE_FEES'],
+      campusId: 'campus-a',
+      canAccessAllCampuses: false,
+      academicSessionId: 'session-1',
+    };
+
+    beforeEach(() => {
+      mockRepo.findInvoiceFinancials.mockResolvedValue([]);
+      mockRepo.findPaymentFinancials.mockResolvedValue([]);
+      mockRepo.findRefundFinancials.mockResolvedValue([]);
+      mockRepo.findClassRevenueBreakdown.mockResolvedValue([]);
+      mockRepo.findRecentPayments.mockResolvedValue([]);
+      mockRepo.findRecentInvoices.mockResolvedValue([]);
+      mockRepo.findRecentRefunds.mockResolvedValue([]);
+    });
+
+    it('every public method passes tenantContext straight through to the repository', async () => {
+      await service.getFinanceSummary(restrictedTenant);
+      expect(mockRepo.findInvoiceFinancials).toHaveBeenCalledWith(restrictedTenant);
+      expect(mockRepo.findPaymentFinancials).toHaveBeenCalledWith(restrictedTenant);
+      expect(mockRepo.findRefundFinancials).toHaveBeenCalledWith(restrictedTenant);
+
+      await service.getCollectionTrend(restrictedTenant);
+      expect(mockRepo.findPaymentFinancials).toHaveBeenCalledWith(restrictedTenant);
+
+      await service.getOutstandingBreakdown(restrictedTenant);
+      expect(mockRepo.findClassRevenueBreakdown).toHaveBeenCalledWith(restrictedTenant);
+
+      await service.getRecentTransactions(restrictedTenant);
+      expect(mockRepo.findRecentPayments).toHaveBeenCalledWith(5, restrictedTenant);
+      expect(mockRepo.findRecentInvoices).toHaveBeenCalledWith(5, restrictedTenant);
+      expect(mockRepo.findRecentRefunds).toHaveBeenCalledWith(5, restrictedTenant);
     });
   });
 });

@@ -11,6 +11,7 @@ import {
   Headers,
   ParseUUIDPipe,
   UseGuards,
+  UseInterceptors,
   ForbiddenException,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -30,6 +31,9 @@ import { Public } from '../auth/public.decorator';
 import { OwnershipService } from '../auth/ownership.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import { CurrentTenant } from '../auth/current-tenant.decorator';
+import { TenantContextInterceptor } from '../prisma/tenant-context.interceptor';
+import type { TenantContext } from '../prisma/tenant-context';
 
 @ApiTags('ERP Core Features')
 @Controller('erp-core')
@@ -41,64 +45,85 @@ export class FeesController {
 
   @Post('fees/structures')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Create a new fee structure' })
-  createFeeStructure(@Body() dto: CreateFeeStructureDto) {
-    return this.feesService.createFeeStructure(dto);
+  createFeeStructure(
+    @Body() dto: CreateFeeStructureDto,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.feesService.createFeeStructure(dto, tenantContext);
   }
 
   @Get('fees/structures')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'List fee structures' })
-  getFeeStructures() {
-    return this.feesService.getFeeStructures();
+  getFeeStructures(@CurrentTenant() tenantContext: TenantContext) {
+    return this.feesService.getFeeStructures(tenantContext);
   }
 
   @Post('fees/generate-invoices')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({
     summary: 'Job: Generate invoices for active enrollments in a session',
   })
-  generateInvoicesJob(@Body('sessionId') sessionId: string) {
-    return this.feesService.generateInvoicesJob(sessionId);
+  generateInvoicesJob(
+    @Body('sessionId') sessionId: string,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.feesService.generateInvoicesJob(sessionId, tenantContext);
   }
 
   @Post('fees/apply-late-fees')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Job: Apply late fees to overdue invoices' })
-  applyLateFeesJob() {
-    return this.feesService.applyLateFeesJob();
+  applyLateFeesJob(@CurrentTenant() tenantContext: TenantContext) {
+    return this.feesService.applyLateFeesJob(tenantContext);
   }
 
   @Post('fees')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Generate individual fee invoice' })
-  createFeeInvoice(@Body() dto: CreateFeeInvoiceDto) {
-    return this.feesService.createFeeInvoice(dto);
+  createFeeInvoice(
+    @Body() dto: CreateFeeInvoiceDto,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.feesService.createFeeInvoice(dto, tenantContext);
   }
 
   @Get('fees')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'List fee ledger items' })
-  getFeeInvoices() {
-    return this.feesService.getFeeInvoices();
+  getFeeInvoices(@CurrentTenant() tenantContext: TenantContext) {
+    return this.feesService.getFeeInvoices(tenantContext);
   }
 
   @Patch('fees/:id/status')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Update payment status (Paid/Unpaid/Overdue)' })
   @ApiParam({ name: 'id', format: 'uuid' })
   updateFeeInvoiceStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('status') status: string,
+    @CurrentTenant() tenantContext: TenantContext,
   ) {
-    return this.feesService.updateFeeInvoiceStatus(id, status);
+    return this.feesService.updateFeeInvoiceStatus(id, status, tenantContext);
   }
 
   @Delete('fees/:id')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiParam({ name: 'id', format: 'uuid' })
-  deleteFeeInvoice(@Param('id', ParseUUIDPipe) id: string) {
-    return this.feesService.deleteFeeInvoice(id);
+  deleteFeeInvoice(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.feesService.deleteFeeInvoice(id, tenantContext);
   }
 
   @Post('fees/:id/payments/razorpay-order')
@@ -181,53 +206,67 @@ export class FeesController {
   @UseGuards(AnyPermissionGuard)
   @RequireAnyPermission('MANAGE_FEES', 'VIEW_REPORTS')
   @RequirePermissions()
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Get financial reports for a session' })
-  getFinancialReports(@Query('sessionId') sessionId: string) {
-    return this.feesService.getFinancialReports(sessionId);
+  getFinancialReports(
+    @Query('sessionId') sessionId: string,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.feesService.getFinancialReports(sessionId, tenantContext);
   }
 
   @Get('fees-payments')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'List all fee payment transactions' })
-  getFeePayments() {
-    return this.feesService.getFeePayments();
+  getFeePayments(@CurrentTenant() tenantContext: TenantContext) {
+    return this.feesService.getFeePayments(tenantContext);
   }
 
   @Post('fees/payments/:paymentId/refunds')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Request a refund against a recorded payment' })
   @ApiParam({ name: 'paymentId', format: 'uuid' })
   requestRefund(
     @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @Body() dto: RequestRefundDto,
+    @CurrentTenant() tenantContext: TenantContext,
   ) {
-    return this.feesService.requestRefund(paymentId, dto);
+    return this.feesService.requestRefund(paymentId, dto, tenantContext);
   }
 
   @Get('fees/payments/:paymentId/refunds')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'List refund requests for one payment' })
   @ApiParam({ name: 'paymentId', format: 'uuid' })
-  getRefundsForPayment(@Param('paymentId', ParseUUIDPipe) paymentId: string) {
-    return this.feesService.getRefundsForPayment(paymentId);
+  getRefundsForPayment(
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.feesService.getRefundsForPayment(paymentId, tenantContext);
   }
 
   @Patch('fees/refunds/:id/resolve')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Approve or reject a pending refund request' })
   @ApiParam({ name: 'id', format: 'uuid' })
   resolveRefund(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ResolveRefundDto,
+    @CurrentTenant() tenantContext: TenantContext,
   ) {
-    return this.feesService.resolveRefund(id, dto);
+    return this.feesService.resolveRefund(id, dto, tenantContext);
   }
 
   @Get('fees/refunds')
   @RequirePermissions('MANAGE_FEES')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'List all refund requests' })
-  getRefunds() {
-    return this.feesService.getRefunds();
+  getRefunds(@CurrentTenant() tenantContext: TenantContext) {
+    return this.feesService.getRefunds(tenantContext);
   }
 
   @Get('audit-logs')

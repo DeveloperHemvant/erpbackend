@@ -18,7 +18,6 @@ async function main() {
     return;
   }
 
-  const campusId = campuses[0].id;
   const sectionId = sections[0].id;
   const staffId = staff[0].id;
   const studentId = students[0].id;
@@ -140,14 +139,19 @@ async function main() {
     }
   });
 
+  // Campus Isolation Multi-Campus Demo Data Overhaul — Room has its own
+  // required campusId; this used to hardcode campuses[0], so campus 2 got
+  // zero master-data rooms. Looped per campus instead.
   await safeSeed('room', async () => {
     await prisma.room.createMany({
-      data: Array.from({ length: 5 }).map((_, idx) => ({
-        id: randomUUID(),
-        name: `Room ${100 + idx}`,
-        capacity: 40,
-        campusId,
-      })),
+      data: campuses.flatMap((c) =>
+        Array.from({ length: 5 }).map((_, idx) => ({
+          id: randomUUID(),
+          name: `Room ${100 + idx}`,
+          capacity: 40,
+          campusId: c.id,
+        })),
+      ),
       skipDuplicates: true,
     });
   });

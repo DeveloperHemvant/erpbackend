@@ -1,6 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { TenantContext } from '../../prisma/tenant-context';
+import { requireCampusId } from '../../prisma/tenant-context';
+
+function campusFilter(tenantContext: TenantContext): { campusId: string } | {} {
+  return tenantContext.canAccessAllCampuses
+    ? {}
+    : { campusId: requireCampusId(tenantContext) };
+}
+
+// FeeStructure's own campusId (Phase 0b/B3) is permanently optional by
+// design — null means "not campus-restricted," derive from classId's own
+// campus if set, otherwise genuinely school-wide. So a restricted caller
+// can see: their own campus's structures, class-derived structures for
+// their campus, AND structures with no campus concept at all either way.
+function feeStructureVisibility(
+  tenantContext: TenantContext,
+): Prisma.FeeStructureWhereInput {
+  if (tenantContext.canAccessAllCampuses) return {};
+  const campusId = requireCampusId(tenantContext);
+  return {
+    OR: [
+      { campusId },
+      { campusId: null, class: { campusId } },
+      { campusId: null, classId: null },
+    ],
+  };
+}
 
 @Injectable()
 export class FeeRepository {
@@ -10,33 +37,44 @@ export class FeeRepository {
     return this.prisma.feeStructure.create({ data });
   }
 
-  findAllStructures() {
+  findAllStructures(tenantContext: TenantContext) {
     return this.prisma.feeStructure.findMany({
+      where: feeStructureVisibility(tenantContext),
       include: { class: true },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  findEnrollmentsBySessionEnrolled(sessionId: string) {
+  findEnrollmentsBySessionEnrolled(
+    sessionId: string,
+    tenantContext: TenantContext,
+  ) {
     return this.prisma.studentEnrollment.findMany({
-      where: { sessionId, status: 'Enrolled' },
+      where: {
+        sessionId,
+        status: 'Enrolled',
+        ...campusFilter(tenantContext),
+      },
       include: { section: { include: { class: true } } },
     });
   }
 
-  findStructuresBySession(sessionId: string) {
-    return this.prisma.feeStructure.findMany({ where: { sessionId } });
+  findStructuresBySession(sessionId: string, tenantContext: TenantContext) {
+    return this.prisma.feeStructure.findMany({
+      where: { sessionId, ...feeStructureVisibility(tenantContext) },
+    });
   }
 
   createInvoiceRaw(data: Prisma.FeeInvoiceUncheckedCreateInput) {
     return this.prisma.feeInvoice.create({ data });
   }
 
-  findOverdueInvoices(today: string) {
+  findOverdueInvoices(today: string, tenantContext: TenantContext) {
     return this.prisma.feeInvoice.findMany({
       where: {
         status: { in: ['Unpaid', 'Overdue'] },
         dueDate: { lt: today },
+        ...campusFilter(tenantContext),
       },
     });
   }
@@ -60,8 +98,9 @@ export class FeeRepository {
     });
   }
 
-  findAllInvoices() {
+  findAllInvoices(tenantContext: TenantContext) {
     return this.prisma.feeInvoice.findMany({
+      where: campusFilter(tenantContext),
       include: {
         enrollment: {
           include: { student: true, section: { include: { class: true } } },
@@ -119,16 +158,19 @@ export class FeeRepository {
     return this.prisma.feePayment.findFirst({ where: { gatewayPaymentId } });
   }
 
-  findAllPayments() {
+  findAllPayments(tenantContext: TenantContext) {
     return this.prisma.feePayment.findMany({
+      where: tenantContext.canAccessAllCampuses
+        ? {}
+        : { invoice: { campusId: requireCampusId(tenantContext) } },
       include: { invoice: { include: { enrollment: true } } },
       orderBy: { paymentDate: 'desc' },
     });
   }
 
-  findInvoicesBySession(sessionId: string) {
+  findInvoicesBySession(sessionId: string, tenantContext: TenantContext) {
     return this.prisma.feeInvoice.findMany({
-      where: { enrollment: { sessionId } },
+      where: { enrollment: { sessionId }, ...campusFilter(tenantContext) },
       include: {
         enrollment: {
           include: { student: true, section: { include: { class: true } } },
@@ -177,8 +219,15 @@ export class FeeRepository {
     return this.prisma.feeRefund.update({ where: { id }, data });
   }
 
-  findAllRefunds() {
+  findAllRefunds(tenantContext: TenantContext) {
     return this.prisma.feeRefund.findMany({
+      where: tenantContext.canAccessAllCampuses
+        ? {}
+        : {
+            payment: {
+              invoice: { campusId: requireCampusId(tenantContext) },
+            },
+          },
       include: {
         payment: {
           include: {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AnalyticsRepository } from './repositories/analytics.repository';
 import { invoiceAmount } from './utils/fee-math';
+import type { TenantContext } from '../prisma/tenant-context';
 import type {
   DashboardSummaryDto,
   DashboardTrendsDto,
@@ -45,7 +46,9 @@ export class AnalyticsService {
   // DASHBOARD SUMMARY — composed from small, independently
   // reusable repository calls rather than inline aggregation.
   // ---------------------------------------------------------
-  async getDashboardSummary(): Promise<DashboardSummaryDto> {
+  async getDashboardSummary(
+    tenantContext: TenantContext,
+  ): Promise<DashboardSummaryDto> {
     const today = todayStr();
 
     const [
@@ -69,15 +72,26 @@ export class AnalyticsService {
       this.repo.countLateEntries(todayRangeUtc()),
       this.repo.countCurrentVisitors(),
       this.repo.countPendingVisitorApprovals(),
-      this.repo.sumFeePaymentsForDate(today),
+      // Campus Isolation Phase 3, Milestone 2 — this used to be a separate,
+      // unfiltered aggregate() while totalRevenue/totalOutstanding below
+      // were already (incidentally, via the legacy middleware) campus-
+      // scoped, so a campus-restricted principal saw two disagreeing scopes
+      // on the same screen. Both now honor the same tenantContext.
+      this.repo.sumFeePaymentsForDate(today, tenantContext),
       this.repo.countActiveTripsToday(today),
       this.repo.countActiveVehicles(),
-      this.repo.countOpenBreakdowns(),
+      // Campus Isolation Phase 3, Milestone 4 — shared with
+      // OperationsAnalyticsService.getFleetStatus(); hides to 0 for
+      // campus-restricted staff (TransportBreakdown has no reliable
+      // campus path), fixed here as a side effect of touching the same
+      // repository method, not separately re-scoping this dashboard's
+      // other transport metrics (those stay untouched, see Milestone 2).
+      this.repo.countOpenBreakdowns(tenantContext),
       this.repo.countPendingLeaveApplications(),
       this.repo.countRequestedRefunds(),
       this.repo.countPendingAdmissions(),
       this.repo.countOpenDisciplineCases(),
-      this.getInvoiceTotals(),
+      this.getInvoiceTotals(tenantContext),
       this.repo.countActiveStaff(),
       this.repo.countEnrolledStudents(),
     ]);
@@ -113,12 +127,12 @@ export class AnalyticsService {
    * Outstanding is needed (Executive Summary, Health Score's finance
    * sub-score, and FinanceAnalyticsService) so every section of the
    * dashboard derives the same numbers from the same rules. */
-  private async getInvoiceTotals(): Promise<{
+  private async getInvoiceTotals(tenantContext: TenantContext): Promise<{
     totalInvoiced: number;
     totalCollected: number;
     totalOutstanding: number;
   }> {
-    const invoices = await this.repo.findInvoiceFinancials();
+    const invoices = await this.repo.findInvoiceFinancials(tenantContext);
     let totalInvoiced = 0;
     let totalCollected = 0;
     for (const inv of invoices) {
@@ -165,7 +179,7 @@ export class AnalyticsService {
   // KPI_DEFINITIONS.md. Fixed weights; unmeasured categories score null,
   // never a fabricated number, and are never redistributed onto the rest.
   // ---------------------------------------------------------
-  async getHealthScore(): Promise<HealthScoreDto> {
+  async getHealthScore(tenantContext: TenantContext): Promise<HealthScoreDto> {
     const today = todayStr();
 
     const [attendance, transportScore, disciplineScore, financeScore] =
@@ -173,7 +187,7 @@ export class AnalyticsService {
         this.getAttendanceSnapshot(today),
         this.getTransportSubScore(today),
         this.getDisciplineSubScore(),
-        this.getFinanceSubScore(),
+        this.getFinanceSubScore(tenantContext),
       ]);
 
     const categories: Record<HealthScoreCategory, number | null> = {
@@ -248,14 +262,17 @@ export class AnalyticsService {
     );
   }
 
-  private async getFinanceSubScore(): Promise<number | null> {
-    const { totalInvoiced, totalCollected } = await this.getInvoiceTotals();
+  private async getFinanceSubScore(
+    tenantContext: TenantContext,
+  ): Promise<number | null> {
+    const { totalInvoiced, totalCollected } =
+      await this.getInvoiceTotals(tenantContext);
     if (totalInvoiced === 0) return null;
     return Math.round((totalCollected / totalInvoiced) * 100);
   }
 
-  async getTrends(): Promise<DashboardTrendsDto> {
-    const classes = await this.repo.findClassRevenueBreakdown();
+  async getTrends(tenantContext: TenantContext): Promise<DashboardTrendsDto> {
+    const classes = await this.repo.findClassRevenueBreakdown(tenantContext);
     const revenueByClass = classes.map((c) => {
       let collected = 0;
       let outstanding = 0;

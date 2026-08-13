@@ -2,14 +2,20 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { AsyncLocalStorage } from 'async_hooks';
 
-export interface TenantContext {
+// Renamed from `TenantContext` (Campus Isolation Phase 1) to avoid colliding
+// with the new, richer `TenantContext` in `./tenant-context.ts` (D4) — this
+// one is purely the AsyncLocalStorage payload for audit logging plus the
+// legacy campusId the tenant-scoping $use middleware below still reads;
+// the new TenantContext is what Phase 3's repositories will take as a
+// parameter. Different shapes, different purposes, same old name was a trap.
+export interface RequestAuditContext {
   campusId?: string;
   userEmail?: string;
   ipAddress?: string;
   userAgent?: string;
 }
 
-export const tenantContext = new AsyncLocalStorage<TenantContext>();
+export const tenantContext = new AsyncLocalStorage<RequestAuditContext>();
 
 @Injectable()
 export class PrismaService

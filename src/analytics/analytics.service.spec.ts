@@ -1,9 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsRepository } from './repositories/analytics.repository';
+import type { TenantContext } from '../prisma/tenant-context';
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
+
+  const unrestrictedTenant: TenantContext = {
+    userId: 'admin-1',
+    role: 'Super Admin',
+    permissions: ['*'],
+    campusId: null,
+    canAccessAllCampuses: true,
+    academicSessionId: 'session-1',
+  };
 
   const mockRepo = {
     countStudentAttendance: jest.fn(),
@@ -71,7 +81,7 @@ describe('AnalyticsService', () => {
       mockRepo.countActiveStaff.mockResolvedValue(214);
       mockRepo.countEnrolledStudents.mockResolvedValue(5011);
 
-      const result = await service.getDashboardSummary();
+      const result = await service.getDashboardSummary(unrestrictedTenant);
 
       expect(result.attendanceRate).toBe(90); // 180/200
       expect(result.staffAttendanceRate).toBe(90); // 45/50
@@ -100,7 +110,7 @@ describe('AnalyticsService', () => {
       mockRepo.countActiveStaff.mockResolvedValue(0);
       mockRepo.countEnrolledStudents.mockResolvedValue(0);
 
-      const result = await service.getDashboardSummary();
+      const result = await service.getDashboardSummary(unrestrictedTenant);
 
       expect(result.attendanceRate).toBe(0);
       expect(result.staffAttendanceRate).toBe(0);
@@ -132,14 +142,14 @@ describe('AnalyticsService', () => {
     });
 
     it('marks academics, parentEngagement, and infrastructure as null — never fabricated', async () => {
-      const result = await service.getHealthScore();
+      const result = await service.getHealthScore(unrestrictedTenant);
       expect(result.categories.academics).toBeNull();
       expect(result.categories.parentEngagement).toBeNull();
       expect(result.categories.infrastructure).toBeNull();
     });
 
     it('computes the 4 measurable category sub-scores correctly', async () => {
-      const result = await service.getHealthScore();
+      const result = await service.getHealthScore(unrestrictedTenant);
       expect(result.categories.attendance).toBe(90);
       expect(result.categories.transport).toBe(80);
       expect(result.categories.discipline).toBe(70);
@@ -147,7 +157,7 @@ describe('AnalyticsService', () => {
     });
 
     it('reports coverage as 4 of 7 and caps score at the measurable weight, never redistributing', async () => {
-      const result = await service.getHealthScore();
+      const result = await service.getHealthScore(unrestrictedTenant);
       expect(result.coverage).toEqual({
         measurable: 4,
         total: 7,
@@ -162,7 +172,7 @@ describe('AnalyticsService', () => {
     });
 
     it('never lets a measurable category score exceed 100 from inflating the total', async () => {
-      const result = await service.getHealthScore();
+      const result = await service.getHealthScore(unrestrictedTenant);
       const weights = result.weights;
       const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
       expect(totalWeight).toBe(100);
@@ -170,20 +180,20 @@ describe('AnalyticsService', () => {
 
     it('scores transport as null instead of dividing by zero when there is no active fleet', async () => {
       mockRepo.countActiveVehicles.mockResolvedValue(0);
-      const result = await service.getHealthScore();
+      const result = await service.getHealthScore(unrestrictedTenant);
       expect(result.categories.transport).toBeNull();
       expect(result.coverage.measurable).toBe(3);
     });
 
     it('scores discipline as null instead of dividing by zero when there are no enrolled students', async () => {
       mockRepo.countEnrolledStudents.mockResolvedValue(0);
-      const result = await service.getHealthScore();
+      const result = await service.getHealthScore(unrestrictedTenant);
       expect(result.categories.discipline).toBeNull();
     });
 
     it('scores finance as null instead of dividing by zero when nothing has been invoiced', async () => {
       mockRepo.findInvoiceFinancials.mockResolvedValue([]);
-      const result = await service.getHealthScore();
+      const result = await service.getHealthScore(unrestrictedTenant);
       expect(result.categories.finance).toBeNull();
     });
 
@@ -192,7 +202,7 @@ describe('AnalyticsService', () => {
         { amount: 1000, totalAmount: 1200, status: 'Paid', dueDate: '2026-01-01' }, // late fee applied
         { amount: 500, totalAmount: null, status: 'Unpaid', dueDate: '2026-01-01' },
       ]);
-      const result = await service.getHealthScore();
+      const result = await service.getHealthScore(unrestrictedTenant);
       // collected 1200 / invoiced (1200 + 500) = 70.58...% -> 71
       expect(result.categories.finance).toBe(71);
     });
@@ -200,7 +210,7 @@ describe('AnalyticsService', () => {
     it('floors the discipline penalty at 0 rather than going negative', async () => {
       // 100 open cases / 1000 enrolled = way past the 100-point penalty budget
       mockRepo.countOpenDisciplineCases.mockResolvedValue(100);
-      const result = await service.getHealthScore();
+      const result = await service.getHealthScore(unrestrictedTenant);
       expect(result.categories.discipline).toBe(0);
     });
   });
@@ -226,12 +236,75 @@ describe('AnalyticsService', () => {
       ]);
       mockRepo.countStudentAttendance.mockResolvedValue(0);
 
-      const result = await service.getTrends();
+      const result = await service.getTrends(unrestrictedTenant);
 
       expect(result.revenueByClass).toEqual([
         { name: 'Grade 5', collected: 5000, outstanding: 2000 },
       ]);
       expect(result.attendanceTrend).toHaveLength(7);
+    });
+  });
+
+  describe('Campus Isolation Phase 3 — tenantContext threading (finance-related calls only)', () => {
+    const restrictedTenant: TenantContext = {
+      userId: 'staff-1',
+      role: 'Teacher',
+      permissions: [],
+      campusId: 'campus-a',
+      canAccessAllCampuses: false,
+      academicSessionId: 'session-1',
+    };
+
+    beforeEach(() => {
+      mockRepo.countStudentAttendance.mockResolvedValue(0);
+      mockRepo.countStaffAttendance.mockResolvedValue(0);
+      mockRepo.countLateEntries.mockResolvedValue(0);
+      mockRepo.countCurrentVisitors.mockResolvedValue(0);
+      mockRepo.countPendingVisitorApprovals.mockResolvedValue(0);
+      mockRepo.sumFeePaymentsForDate.mockResolvedValue(0);
+      mockRepo.countActiveTripsToday.mockResolvedValue(0);
+      mockRepo.countActiveVehicles.mockResolvedValue(0);
+      mockRepo.countOpenBreakdowns.mockResolvedValue(0);
+      mockRepo.countPendingLeaveApplications.mockResolvedValue(0);
+      mockRepo.countRequestedRefunds.mockResolvedValue(0);
+      mockRepo.countPendingAdmissions.mockResolvedValue(0);
+      mockRepo.countOpenDisciplineCases.mockResolvedValue(0);
+      mockRepo.findInvoiceFinancials.mockResolvedValue([]);
+      mockRepo.countActiveStaff.mockResolvedValue(0);
+      mockRepo.countEnrolledStudents.mockResolvedValue(0);
+      mockRepo.findClassRevenueBreakdown.mockResolvedValue([]);
+    });
+
+    it('getDashboardSummary passes tenantContext to sumFeePaymentsForDate and findInvoiceFinancials, fixing the todaysRevenue/totalRevenue scope mismatch', async () => {
+      await service.getDashboardSummary(restrictedTenant);
+
+      expect(mockRepo.sumFeePaymentsForDate).toHaveBeenCalledWith(
+        expect.any(String),
+        restrictedTenant,
+      );
+      expect(mockRepo.findInvoiceFinancials).toHaveBeenCalledWith(restrictedTenant);
+    });
+
+    it('getHealthScore passes tenantContext through to the finance sub-score', async () => {
+      await service.getHealthScore(restrictedTenant);
+
+      expect(mockRepo.findInvoiceFinancials).toHaveBeenCalledWith(restrictedTenant);
+    });
+
+    it('getTrends passes tenantContext to findClassRevenueBreakdown', async () => {
+      await service.getTrends(restrictedTenant);
+
+      expect(mockRepo.findClassRevenueBreakdown).toHaveBeenCalledWith(restrictedTenant);
+    });
+
+    it('does NOT pass tenantContext to non-finance calls (attendance/transport/discipline) — out of scope this milestone', async () => {
+      await service.getDashboardSummary(restrictedTenant);
+
+      expect(mockRepo.countLateEntries).toHaveBeenCalledWith(expect.anything());
+      expect(mockRepo.countLateEntries).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+      );
     });
   });
 });

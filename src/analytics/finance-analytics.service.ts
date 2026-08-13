@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AnalyticsRepository } from './repositories/analytics.repository';
 import { invoiceAmount, isOverdue, daysFromToday } from './utils/fee-math';
+import type { TenantContext } from '../prisma/tenant-context';
 import type {
   FinanceSummaryDto,
   CollectionTrendDto,
@@ -24,12 +25,12 @@ const COLLECTION_TREND_MAX_MONTHS = 12;
 export class FinanceAnalyticsService {
   constructor(private readonly repo: AnalyticsRepository) {}
 
-  async getFinanceSummary(): Promise<FinanceSummaryDto> {
+  async getFinanceSummary(tenantContext: TenantContext): Promise<FinanceSummaryDto> {
     const today = todayStr();
     const [invoices, payments, refunds] = await Promise.all([
-      this.repo.findInvoiceFinancials(),
-      this.repo.findPaymentFinancials(),
-      this.repo.findRefundFinancials(),
+      this.repo.findInvoiceFinancials(tenantContext),
+      this.repo.findPaymentFinancials(tenantContext),
+      this.repo.findRefundFinancials(tenantContext),
     ]);
 
     let totalInvoiced = 0;
@@ -64,8 +65,8 @@ export class FinanceAnalyticsService {
     };
   }
 
-  async getCollectionTrend(): Promise<CollectionTrendDto> {
-    const payments = await this.repo.findPaymentFinancials();
+  async getCollectionTrend(tenantContext: TenantContext): Promise<CollectionTrendDto> {
+    const payments = await this.repo.findPaymentFinancials(tenantContext);
 
     const byMonth = new Map<string, number>();
     for (const p of payments) {
@@ -81,13 +82,15 @@ export class FinanceAnalyticsService {
     return { months };
   }
 
-  async getOutstandingBreakdown(): Promise<OutstandingBreakdownDto> {
+  async getOutstandingBreakdown(
+    tenantContext: TenantContext,
+  ): Promise<OutstandingBreakdownDto> {
     const today = todayStr();
     const weekAhead = daysFromToday(today, 7);
 
     const [invoices, classBreakdown] = await Promise.all([
-      this.repo.findInvoiceFinancials(),
-      this.repo.findClassRevenueBreakdown(),
+      this.repo.findInvoiceFinancials(tenantContext),
+      this.repo.findClassRevenueBreakdown(tenantContext),
     ]);
 
     let dueToday = 0;
@@ -131,8 +134,10 @@ export class FinanceAnalyticsService {
     return { dueToday, dueThisWeek, overdue, byClass, bySection };
   }
 
-  async getPaymentModeBreakdown(): Promise<PaymentModeBreakdownDto> {
-    const payments = await this.repo.findPaymentFinancials();
+  async getPaymentModeBreakdown(
+    tenantContext: TenantContext,
+  ): Promise<PaymentModeBreakdownDto> {
+    const payments = await this.repo.findPaymentFinancials(tenantContext);
 
     const byMode = new Map<string, { count: number; amount: number }>();
     for (const p of payments) {
@@ -149,8 +154,8 @@ export class FinanceAnalyticsService {
     return { modes };
   }
 
-  async getRefundDashboard(): Promise<RefundDashboardDto> {
-    const refunds = await this.repo.findRefundFinancials();
+  async getRefundDashboard(tenantContext: TenantContext): Promise<RefundDashboardDto> {
+    const refunds = await this.repo.findRefundFinancials(tenantContext);
 
     const bucket = (status: string) => {
       const rows = refunds.filter((r) => r.status === status);
@@ -164,12 +169,14 @@ export class FinanceAnalyticsService {
     };
   }
 
-  async getRecentTransactions(): Promise<RecentTransactionsDto> {
+  async getRecentTransactions(
+    tenantContext: TenantContext,
+  ): Promise<RecentTransactionsDto> {
     const TAKE = 5;
     const [payments, invoices, refunds] = await Promise.all([
-      this.repo.findRecentPayments(TAKE),
-      this.repo.findRecentInvoices(TAKE),
-      this.repo.findRecentRefunds(TAKE),
+      this.repo.findRecentPayments(TAKE, tenantContext),
+      this.repo.findRecentInvoices(TAKE, tenantContext),
+      this.repo.findRecentRefunds(TAKE, tenantContext),
     ]);
 
     return {

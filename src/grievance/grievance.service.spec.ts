@@ -27,6 +27,8 @@ describe('GrievanceService', () => {
     identifier: 'teacher@school.edu',
     role: 'Teacher',
     permissions: [],
+    campusId: 'campus-1',
+    canAccessAllCampuses: false,
   };
 
   const managerUser: AuthenticatedUser = {
@@ -34,6 +36,8 @@ describe('GrievanceService', () => {
     identifier: 'admin@school.edu',
     role: 'Vice Principal',
     permissions: ['MANAGE_GRIEVANCES'],
+    campusId: 'campus-1',
+    canAccessAllCampuses: false,
   };
 
   const studentUser: AuthenticatedUser = {
@@ -41,6 +45,8 @@ describe('GrievanceService', () => {
     identifier: 'student@school.edu',
     role: 'Student',
     permissions: [],
+    campusId: null,
+    canAccessAllCampuses: false,
   };
 
   const parentUser: AuthenticatedUser = {
@@ -48,6 +54,8 @@ describe('GrievanceService', () => {
     identifier: 'parent@school.edu',
     role: 'Parent',
     permissions: [],
+    campusId: null,
+    canAccessAllCampuses: false,
   };
 
   beforeEach(async () => {

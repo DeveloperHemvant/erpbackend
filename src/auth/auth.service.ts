@@ -40,7 +40,12 @@ export class AuthService {
       );
       if (!isMatch) throw new UnauthorizedException('Invalid credentials.');
 
-      user = { id: staff.id, email: staff.email, fullName: staff.fullName };
+      user = {
+        id: staff.id,
+        email: staff.email,
+        fullName: staff.fullName,
+        campusId: staff.campusId,
+      };
       roleName = staff.role.name;
       permissions = staff.role.permissions;
     } else {
@@ -73,16 +78,24 @@ export class AuthService {
         referenceId: portalUser.referenceId,
         username: portalUser.username,
         userType: portalUser.userType,
+        // Never campus-scoped (D2) — a parent's children, or a student's
+        // own enrollment, can be at any campus; there is no single
+        // well-defined campusId for a portal identity.
+        campusId: null,
       };
       roleName = role ? role.name : portalUser.userType;
       permissions = role ? role.permissions : [];
     }
+
+    const canAccessAllCampuses = permissions.includes('*');
 
     const payload = {
       sub: user.id,
       identifier: loginDto.identifier,
       role: roleName,
       permissions: permissions,
+      campusId: user.campusId ?? null,
+      canAccessAllCampuses,
     };
 
     // Log the successful login

@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
 import Razorpay from 'razorpay';
@@ -13,6 +14,8 @@ import { FeeRepository } from './repositories/fee.repository';
 import { ErpCoreAuditLogRepository } from './repositories/audit-log.repository';
 import { DocumentRenderingService } from '../documents/document-rendering.service';
 import { StorageService } from '../storage/storage.service';
+import type { TenantContext } from '../prisma/tenant-context';
+import { requireCampusId } from '../prisma/tenant-context';
 import {
   CreateFeeStructureDto,
   CreateFeeInvoiceDto,
@@ -76,23 +79,48 @@ export class FeesService {
   // ==========================================
   // FEES INVOICING & STRUCTURES
   // ==========================================
-  async createFeeStructure(dto: CreateFeeStructureDto) {
+  async createFeeStructure(
+    dto: CreateFeeStructureDto,
+    tenantContext: TenantContext,
+  ) {
+    // Campus Isolation Phase 3, Milestone 6 — same resolution shape as
+    // StaffService.create(), except an unrestricted caller may validly omit
+    // campusId here (stays school-wide, a real meaningful state per B3 —
+    // unlike Staff, where every record must belong to exactly one campus).
+    let campusId: string | undefined;
+    if (tenantContext.canAccessAllCampuses) {
+      campusId = dto.campusId;
+    } else {
+      const ownCampusId = requireCampusId(tenantContext);
+      if (dto.campusId && dto.campusId !== ownCampusId) {
+        throw new ForbiddenException(
+          'Cannot create a fee structure for a different campus than your own.',
+        );
+      }
+      campusId = ownCampusId;
+    }
+
     // FeeStructure has no createdBy column (unlike most other models here) - passing it
     // used to throw a Prisma "Unknown arg" error, hidden by this file's former @ts-nocheck.
-    return this.feeRepository.createStructure({ ...dto });
+    return this.feeRepository.createStructure({ ...dto, campusId });
   }
 
-  async getFeeStructures() {
-    return this.feeRepository.findAllStructures();
+  async getFeeStructures(tenantContext: TenantContext) {
+    return this.feeRepository.findAllStructures(tenantContext);
   }
 
-  async generateInvoicesJob(sessionId: string) {
+  async generateInvoicesJob(sessionId: string, tenantContext: TenantContext) {
     // Find all active enrollments for the session
     const enrollments =
-      await this.feeRepository.findEnrollmentsBySessionEnrolled(sessionId);
+      await this.feeRepository.findEnrollmentsBySessionEnrolled(
+        sessionId,
+        tenantContext,
+      );
 
-    const structures =
-      await this.feeRepository.findStructuresBySession(sessionId);
+    const structures = await this.feeRepository.findStructuresBySession(
+      sessionId,
+      tenantContext,
+    );
 
     let generatedCount = 0;
 
@@ -114,6 +142,9 @@ export class FeesService {
           .split('T')[0], // +15 days
         status: 'Unpaid',
         createdBy: 'SYSTEM',
+        // Campus Isolation Phase 3, Milestone 6 — explicit, not ambient
+        // (same bug shape as Milestone 5's enrollStudent() fix).
+        campusId: enr.campusId,
       });
       generatedCount++;
     }
@@ -121,11 +152,14 @@ export class FeesService {
     return { success: true, count: generatedCount };
   }
 
-  async applyLateFeesJob() {
+  async applyLateFeesJob(tenantContext: TenantContext) {
     // Find all Unpaid/Overdue invoices where dueDate has passed
     const today = new Date().toISOString().split('T')[0];
 
-    const overdueInvoices = await this.feeRepository.findOverdueInvoices(today);
+    const overdueInvoices = await this.feeRepository.findOverdueInvoices(
+      today,
+      tenantContext,
+    );
 
     let updatedCount = 0;
     for (const inv of overdueInvoices) {
@@ -156,7 +190,28 @@ export class FeesService {
     return { success: true, count: updatedCount };
   }
 
-  async createFeeInvoice(dto: CreateFeeInvoiceDto) {
+  // Campus Isolation Phase 3, Milestone 6 — cross-tenant direct-by-id access
+  // throws the same "not found" a genuinely-missing id already throws, not
+  // a new 403 (same reasoning as Milestone 5's Staff/Students checks).
+  // Staff-only helper — never call this on the payer-facing routes
+  // (createRazorpayOrder/recordFeePayment/downloadFeeReceipt), which are
+  // reachable by parent/student portal accounts whose TenantContext is
+  // never campus-scoped by design (D2); those keep their own separate
+  // OwnershipService identity check instead.
+  private assertCampusAccessible(
+    campusId: string | null,
+    tenantContext: TenantContext,
+    notFoundMessage: string,
+  ) {
+    if (
+      !tenantContext.canAccessAllCampuses &&
+      campusId !== tenantContext.campusId
+    ) {
+      throw new NotFoundException(notFoundMessage);
+    }
+  }
+
+  async createFeeInvoice(dto: CreateFeeInvoiceDto, tenantContext: TenantContext) {
     const activeSession =
       await this.studentRepository.findActiveAcademicSession();
     if (!activeSession)
@@ -172,6 +227,15 @@ export class FeesService {
         'Student is not enrolled in the active academic session.',
       );
 
+    if (
+      !tenantContext.canAccessAllCampuses &&
+      enrollment.campusId !== tenantContext.campusId
+    ) {
+      throw new ForbiddenException(
+        'Cannot create a fee invoice for a student outside your campus.',
+      );
+    }
+
     const invoice = await this.feeRepository.createInvoiceFromDto({
       enrollmentId: enrollment.id,
       amount: dto.amount,
@@ -179,25 +243,45 @@ export class FeesService {
       dueDate: dto.dueDate,
       status: dto.status,
       createdBy: 'SYSTEM',
+      // Campus Isolation Phase 3, Milestone 6 — explicit, not ambient (same
+      // bug shape as Milestone 5's enrollStudent() fix — the legacy
+      // middleware leaves this null for every canAccessAllCampuses caller).
+      campusId: enrollment.campusId,
     });
 
     return this.reshapeInvoice(invoice);
   }
 
-  async getFeeInvoices() {
-    const invoices = await this.feeRepository.findAllInvoices();
+  async getFeeInvoices(tenantContext: TenantContext) {
+    const invoices = await this.feeRepository.findAllInvoices(tenantContext);
     return invoices.map((inv) => this.reshapeInvoice(inv));
   }
 
-  async updateFeeInvoiceStatus(id: string, status: string) {
+  async updateFeeInvoiceStatus(
+    id: string,
+    status: string,
+    tenantContext: TenantContext,
+  ) {
     const invoice = await this.feeRepository.findInvoiceById(id);
     if (!invoice) throw new NotFoundException('Invoice not found.');
+    this.assertCampusAccessible(
+      invoice.campusId,
+      tenantContext,
+      'Invoice not found.',
+    );
 
     const updated = await this.feeRepository.updateInvoiceStatus(id, status);
     return this.reshapeInvoice(updated);
   }
 
-  async deleteFeeInvoice(id: string) {
+  async deleteFeeInvoice(id: string, tenantContext: TenantContext) {
+    const invoice = await this.feeRepository.findInvoiceById(id);
+    if (!invoice) throw new NotFoundException('Invoice not found.');
+    this.assertCampusAccessible(
+      invoice.campusId,
+      tenantContext,
+      'Invoice not found.',
+    );
     return this.feeRepository.deleteInvoice(id);
   }
 
@@ -377,8 +461,8 @@ export class FeesService {
     return { status: 'processed', paymentId: payment.id };
   }
 
-  async getFeePayments() {
-    return this.feeRepository.findAllPayments();
+  async getFeePayments(tenantContext: TenantContext) {
+    return this.feeRepository.findAllPayments(tenantContext);
   }
 
   /** Rendered fresh on every call, same as ReportCardsService.renderReportCardPdf
@@ -431,9 +515,18 @@ export class FeesService {
   // ==========================================
   // REFUNDS
   // ==========================================
-  async requestRefund(paymentId: string, dto: RequestRefundDto) {
+  async requestRefund(
+    paymentId: string,
+    dto: RequestRefundDto,
+    tenantContext: TenantContext,
+  ) {
     const payment = await this.feeRepository.findPaymentWithRefunds(paymentId);
     if (!payment) throw new NotFoundException('Payment not found.');
+    this.assertCampusAccessible(
+      payment.invoice.campusId,
+      tenantContext,
+      'Payment not found.',
+    );
 
     const requestedAmount = Number(dto.amount);
     if (!(requestedAmount > 0)) {
@@ -462,9 +555,18 @@ export class FeesService {
     });
   }
 
-  async resolveRefund(id: string, dto: ResolveRefundDto) {
+  async resolveRefund(
+    id: string,
+    dto: ResolveRefundDto,
+    tenantContext: TenantContext,
+  ) {
     const refund = await this.feeRepository.findRefundById(id);
     if (!refund) throw new NotFoundException('Refund request not found.');
+    this.assertCampusAccessible(
+      refund.payment.invoice.campusId,
+      tenantContext,
+      'Refund request not found.',
+    );
     if (refund.status !== 'Requested') {
       throw new BadRequestException(
         `Only pending requests can be resolved (current status: ${refund.status}).`,
@@ -504,11 +606,18 @@ export class FeesService {
     await this.feeRepository.updateInvoiceStatusSimple(invoiceId, newStatus);
   }
 
-  async getRefunds() {
-    return this.feeRepository.findAllRefunds();
+  async getRefunds(tenantContext: TenantContext) {
+    return this.feeRepository.findAllRefunds(tenantContext);
   }
 
-  async getRefundsForPayment(paymentId: string) {
+  async getRefundsForPayment(paymentId: string, tenantContext: TenantContext) {
+    const payment = await this.feeRepository.findPaymentWithRefunds(paymentId);
+    if (!payment) throw new NotFoundException('Payment not found.');
+    this.assertCampusAccessible(
+      payment.invoice.campusId,
+      tenantContext,
+      'Payment not found.',
+    );
     return this.feeRepository.findRefundsForPayment(paymentId);
   }
 
@@ -516,8 +625,11 @@ export class FeesService {
     return this.auditLogRepository.findRecent();
   }
 
-  async getFinancialReports(sessionId: string) {
-    const invoices = await this.feeRepository.findInvoicesBySession(sessionId);
+  async getFinancialReports(sessionId: string, tenantContext: TenantContext) {
+    const invoices = await this.feeRepository.findInvoicesBySession(
+      sessionId,
+      tenantContext,
+    );
 
     let totalExpected = 0;
     let totalCollected = 0;

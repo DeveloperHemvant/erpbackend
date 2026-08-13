@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { requireCampusId, type TenantContext } from '../../prisma/tenant-context';
 
 export interface SearchResult {
   id: string;
@@ -15,18 +16,37 @@ export interface SearchResult {
  * method is intentionally simple `contains` matching on that entity's
  * obvious name/number field; ranking is recency (updatedAt/createdAt desc)
  * per §6, since no Event Bus exists yet to do this "properly" (Appendix A.2).
+ *
+ * Campus Isolation Phase 3, Milestone 1 (CAMPUS_AUDIT.md §3's confirmed live
+ * leak, closed here). The one rule every method below follows:
+ *   if (!tenantContext.canAccessAllCampuses) filter by tenantContext.campusId
+ * — never applied when unrestricted (D3), and never a naive `?? undefined`
+ * fallback, since a portal-shaped caller with campusId: null and
+ * canAccessAllCampuses: false must never resolve to "no filter" (that would
+ * read null as unrestricted, the exact thing D3 forbids). Methods for
+ * entity types with no derivable campus path yet (vehicle/route/applicant/
+ * announcement/house/library-book — CAMPUS_AUDIT.md §2/§6) return []
+ * instead of guessing; searchParents takes no tenantContext at all, per D2's
+ * multi-child-campus ambiguity (see search.service.ts's SEARCHERS map).
  */
 @Injectable()
 export class SearchRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async searchStudents(q: string, limit: number): Promise<SearchResult[]> {
+  async searchStudents(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
     const rows = await this.prisma.student.findMany({
       where: {
         OR: [
           { fullName: { contains: q, mode: 'insensitive' } },
           { admissionNumber: { contains: q, mode: 'insensitive' } },
         ],
+        ...(tenantContext.canAccessAllCampuses
+          ? {}
+          : { enrollments: { some: { campusId: tenantContext.campusId } } }),
       },
       orderBy: { updatedAt: 'desc' },
       take: limit,
@@ -41,13 +61,20 @@ export class SearchRepository {
     }));
   }
 
-  async searchStaff(q: string, limit: number): Promise<SearchResult[]> {
+  async searchStaff(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
     const rows = await this.prisma.staff.findMany({
       where: {
         OR: [
           { fullName: { contains: q, mode: 'insensitive' } },
           { email: { contains: q, mode: 'insensitive' } },
         ],
+        ...(tenantContext.canAccessAllCampuses
+          ? {}
+          : { campusId: requireCampusId(tenantContext) }),
       },
       orderBy: { updatedAt: 'desc' },
       take: limit,
@@ -62,7 +89,15 @@ export class SearchRepository {
     }));
   }
 
-  async searchVehicles(q: string, limit: number): Promise<SearchResult[]> {
+  // TransportVehicle has no relation to Campus at all (CAMPUS_AUDIT.md §2) —
+  // hidden from campus-restricted staff until that gets a schema decision,
+  // rather than guessing or leaving it unfiltered.
+  async searchVehicles(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
+    if (!tenantContext.canAccessAllCampuses) return [];
     const rows = await this.prisma.transportVehicle.findMany({
       where: {
         OR: [
@@ -82,7 +117,13 @@ export class SearchRepository {
     }));
   }
 
-  async searchRoutes(q: string, limit: number): Promise<SearchResult[]> {
+  // TransportRoute — same no-path gap as searchVehicles, see comment above.
+  async searchRoutes(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
+    if (!tenantContext.canAccessAllCampuses) return [];
     const rows = await this.prisma.transportRoute.findMany({
       where: { routeName: { contains: q, mode: 'insensitive' } },
       take: limit,
@@ -96,12 +137,19 @@ export class SearchRepository {
     }));
   }
 
-  async searchInvoices(q: string, limit: number): Promise<SearchResult[]> {
+  async searchInvoices(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
     const rows = await this.prisma.feeInvoice.findMany({
       where: {
         enrollment: {
           student: { fullName: { contains: q, mode: 'insensitive' } },
         },
+        ...(tenantContext.canAccessAllCampuses
+          ? {}
+          : { campusId: tenantContext.campusId }),
       },
       include: { enrollment: { include: { student: true } } },
       orderBy: { updatedAt: 'desc' },
@@ -117,7 +165,14 @@ export class SearchRepository {
     }));
   }
 
-  async searchApplicants(q: string, limit: number): Promise<SearchResult[]> {
+  // AdmissionInquiry has no derivable campus path (CAMPUS_AUDIT.md §2) —
+  // hidden from campus-restricted staff, same treatment as Vehicle/Route.
+  async searchApplicants(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
+    if (!tenantContext.canAccessAllCampuses) return [];
     const rows = await this.prisma.admissionInquiry.findMany({
       where: { childName: { contains: q, mode: 'insensitive' } },
       orderBy: { updatedAt: 'desc' },
@@ -136,6 +191,7 @@ export class SearchRepository {
   async searchDisciplineCases(
     q: string,
     limit: number,
+    tenantContext: TenantContext,
   ): Promise<SearchResult[]> {
     const rows = await this.prisma.disciplineIncident.findMany({
       where: {
@@ -143,6 +199,13 @@ export class SearchRepository {
           { category: { contains: q, mode: 'insensitive' } },
           { student: { fullName: { contains: q, mode: 'insensitive' } } },
         ],
+        ...(tenantContext.canAccessAllCampuses
+          ? {}
+          : {
+              student: {
+                enrollments: { some: { campusId: tenantContext.campusId } },
+              },
+            }),
       },
       include: { student: true },
       orderBy: { updatedAt: 'desc' },
@@ -158,9 +221,18 @@ export class SearchRepository {
     }));
   }
 
-  async searchClassSections(q: string, limit: number): Promise<SearchResult[]> {
+  async searchClassSections(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
     const rows = await this.prisma.section.findMany({
-      where: { name: { contains: q, mode: 'insensitive' } },
+      where: {
+        name: { contains: q, mode: 'insensitive' },
+        ...(tenantContext.canAccessAllCampuses
+          ? {}
+          : { class: { campusId: requireCampusId(tenantContext) } }),
+      },
       include: { class: true },
       orderBy: { updatedAt: 'desc' },
       take: limit,
@@ -174,6 +246,10 @@ export class SearchRepository {
     }));
   }
 
+  // Deliberately takes no tenantContext — a parent's children can be at
+  // different campuses, so there is no single campusId to filter by (D2;
+  // CAMPUS_AUDIT.md §5 names the same ambiguity for communication/
+  // notifications). Not an oversight — see search.service.ts's SEARCHERS map.
   async searchParents(q: string, limit: number): Promise<SearchResult[]> {
     const rows = await this.prisma.parent.findMany({
       where: {
@@ -195,7 +271,16 @@ export class SearchRepository {
     }));
   }
 
-  async searchAnnouncements(q: string, limit: number): Promise<SearchResult[]> {
+  // Announcement has no campusId column at all — is it intentionally
+  // school-wide, or should some announcements be campus-specific?
+  // (CAMPUS_AUDIT.md §6, a product decision, not answered here.) Hidden
+  // from campus-restricted staff until that's decided.
+  async searchAnnouncements(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
+    if (!tenantContext.canAccessAllCampuses) return [];
     const rows = await this.prisma.announcement.findMany({
       where: {
         OR: [
@@ -216,13 +301,20 @@ export class SearchRepository {
     }));
   }
 
-  async searchEvents(q: string, limit: number): Promise<SearchResult[]> {
+  async searchEvents(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
     const rows = await this.prisma.aCMSEvent.findMany({
       where: {
         OR: [
           { title: { contains: q, mode: 'insensitive' } },
           { description: { contains: q, mode: 'insensitive' } },
         ],
+        ...(tenantContext.canAccessAllCampuses
+          ? {}
+          : { campusId: tenantContext.campusId }),
       },
       orderBy: { updatedAt: 'desc' },
       take: limit,
@@ -237,7 +329,16 @@ export class SearchRepository {
     }));
   }
 
-  async searchHouses(q: string, limit: number): Promise<SearchResult[]> {
+  // SchoolHouse has no campusId column, and no natural single-campus home
+  // (captain/vice-captain are individuals; the House concept itself isn't
+  // obviously per-campus) — product decision needed (CAMPUS_AUDIT.md §6).
+  // Hidden from campus-restricted staff until that's decided.
+  async searchHouses(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
+    if (!tenantContext.canAccessAllCampuses) return [];
     const rows = await this.prisma.schoolHouse.findMany({
       where: { name: { contains: q, mode: 'insensitive' } },
       orderBy: { updatedAt: 'desc' },
@@ -253,7 +354,15 @@ export class SearchRepository {
     }));
   }
 
-  async searchLibraryBooks(q: string, limit: number): Promise<SearchResult[]> {
+  // LibraryBook (the catalog entry) has no campusId — is the catalog shared
+  // across campuses, or per-campus? (CAMPUS_AUDIT.md §2/§6, a product
+  // decision.) Hidden from campus-restricted staff until that's decided.
+  async searchLibraryBooks(
+    q: string,
+    limit: number,
+    tenantContext: TenantContext,
+  ): Promise<SearchResult[]> {
+    if (!tenantContext.canAccessAllCampuses) return [];
     const rows = await this.prisma.libraryBook.findMany({
       where: {
         OR: [

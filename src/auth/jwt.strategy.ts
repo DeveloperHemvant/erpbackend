@@ -30,12 +30,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     identifier: string;
     role: string;
     permissions: string[];
+    campusId: string | null;
+    canAccessAllCampuses: boolean;
   }) {
     return {
       userId: payload.sub,
       identifier: payload.identifier,
       role: payload.role,
       permissions: payload.permissions,
+      campusId: payload.campusId,
+      canAccessAllCampuses: payload.canAccessAllCampuses,
     };
   }
 }

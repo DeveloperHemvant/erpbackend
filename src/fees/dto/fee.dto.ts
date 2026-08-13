@@ -35,6 +35,15 @@ export class CreateFeeStructureDto {
   @IsUUID()
   @IsOptional()
   classId?: string;
+
+  @ApiProperty({
+    description:
+      'Optional campus scope, independent of classId — omit for a school-wide structure (or one that derives its scope from classId), or for a campus-restricted caller to default to their own campus. Cross-campus callers must have canAccessAllCampuses.',
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  campusId?: string;
 }
 
 export class CreateFeeInvoiceDto {

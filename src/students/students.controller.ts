@@ -9,6 +9,7 @@ import {
   Query,
   ParseUUIDPipe,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { StudentsService } from './students.service';
@@ -21,6 +22,9 @@ import {
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireAnyPermission } from '../auth/any-permission.decorator';
 import { AnyPermissionGuard } from '../auth/any-permission.guard';
+import { CurrentTenant } from '../auth/current-tenant.decorator';
+import { TenantContextInterceptor } from '../prisma/tenant-context.interceptor';
+import type { TenantContext } from '../prisma/tenant-context';
 
 @ApiTags('ERP Core Features')
 @Controller('erp-core')
@@ -38,6 +42,7 @@ export class StudentsController {
   @UseGuards(AnyPermissionGuard)
   @RequireAnyPermission('VIEW_STUDENTS', 'MANAGE_TRANSPORT')
   @RequirePermissions()
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'List all students' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -53,6 +58,7 @@ export class StudentsController {
     description: 'Filter by full name or admission number (case-insensitive)',
   })
   getStudents(
+    @CurrentTenant() tenantContext: TenantContext,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('sectionId') sectionId?: string,
@@ -61,6 +67,7 @@ export class StudentsController {
     const pageNum = page ? parseInt(page, 10) : undefined;
     const limitNum = limit ? parseInt(limit, 10) : undefined;
     return this.studentsService.getStudents(
+      tenantContext,
       pageNum,
       limitNum,
       sectionId,
@@ -70,30 +77,40 @@ export class StudentsController {
 
   @Patch('students/:id')
   @RequirePermissions('MANAGE_USERS')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOperation({ summary: 'Update student details / status' })
   updateStudent(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateStudentDto,
+    @CurrentTenant() tenantContext: TenantContext,
   ) {
-    return this.studentsService.updateStudent(id, dto);
+    return this.studentsService.updateStudent(id, dto, tenantContext);
   }
 
   @Delete('students/:id')
   @RequirePermissions('MANAGE_USERS')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiParam({ name: 'id', format: 'uuid' })
-  deleteStudent(@Param('id', ParseUUIDPipe) id: string) {
-    return this.studentsService.deleteStudent(id);
+  deleteStudent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.studentsService.deleteStudent(id, tenantContext);
   }
 
   @Get('students/:id/profile')
   @UseGuards(AnyPermissionGuard)
   @RequireAnyPermission('VIEW_STUDENTS', 'MANAGE_TRANSPORT')
   @RequirePermissions()
+  @UseInterceptors(TenantContextInterceptor)
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOperation({ summary: 'Get detailed student profile' })
-  getStudentProfile(@Param('id', ParseUUIDPipe) id: string) {
-    return this.studentsService.getStudentProfile(id);
+  getStudentProfile(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.studentsService.getStudentProfile(id, tenantContext);
   }
 
   @Patch('parents/:id/credentials')

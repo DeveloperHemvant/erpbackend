@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { TenantContext } from '../../prisma/tenant-context';
+import { requireCampusId } from '../../prisma/tenant-context';
 
 @Injectable()
 export class StudentRepository {
@@ -14,7 +16,12 @@ export class StudentRepository {
     return this.prisma.student.create({ data });
   }
 
+  // Campus Isolation Phase 3, Milestone 5 — Student has no own campusId
+  // (correct: campus comes from the student's enrollment, which can change
+  // across sessions). Relation-derived filter, same pattern as search's
+  // `student` type and Operations analytics' student-side cases.
   private buildWhere(
+    tenantContext: TenantContext,
     sectionId?: string,
     search?: string,
   ): Prisma.StudentWhereInput | undefined {
@@ -28,12 +35,17 @@ export class StudentRepository {
         ],
       });
     }
+    if (!tenantContext.canAccessAllCampuses) {
+      clauses.push({
+        enrollments: { some: { campusId: requireCampusId(tenantContext) } },
+      });
+    }
     return clauses.length ? { AND: clauses } : undefined;
   }
 
-  findAll(sectionId?: string, search?: string) {
+  findAll(tenantContext: TenantContext, sectionId?: string, search?: string) {
     return this.prisma.student.findMany({
-      where: this.buildWhere(sectionId, search),
+      where: this.buildWhere(tenantContext, sectionId, search),
       orderBy: { fullName: 'asc' },
       include: {
         enrollments: { include: { section: { include: { class: true } } } },
@@ -42,9 +54,15 @@ export class StudentRepository {
     });
   }
 
-  findPage(skip: number, take: number, sectionId?: string, search?: string) {
+  findPage(
+    skip: number,
+    take: number,
+    tenantContext: TenantContext,
+    sectionId?: string,
+    search?: string,
+  ) {
     return this.prisma.student.findMany({
-      where: this.buildWhere(sectionId, search),
+      where: this.buildWhere(tenantContext, sectionId, search),
       skip,
       take,
       orderBy: { fullName: 'asc' },
@@ -55,14 +73,25 @@ export class StudentRepository {
     });
   }
 
-  count(sectionId?: string, search?: string) {
+  count(tenantContext: TenantContext, sectionId?: string, search?: string) {
     return this.prisma.student.count({
-      where: this.buildWhere(sectionId, search),
+      where: this.buildWhere(tenantContext, sectionId, search),
     });
   }
 
   findById(id: string) {
     return this.prisma.student.findUnique({ where: { id } });
+  }
+
+  // Ownership check helper for direct-by-id access — cheap, just the
+  // enrollment campusIds needed to decide accessibility.
+  findEnrollmentCampusIds(studentId: string) {
+    return this.prisma.studentEnrollment
+      .findMany({
+        where: { studentId },
+        select: { campusId: true },
+      })
+      .then((rows) => rows.map((r) => r.campusId));
   }
 
   update(id: string, data: Prisma.StudentUpdateInput) {

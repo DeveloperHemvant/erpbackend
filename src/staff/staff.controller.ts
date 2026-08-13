@@ -26,6 +26,9 @@ import { UpdateStaffDto } from './dto/update-staff.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireSelfOrPermission } from '../auth/self-or-permission.decorator';
 import { SelfOrPermissionGuard } from '../auth/self-or-permission.guard';
+import { CurrentTenant } from '../auth/current-tenant.decorator';
+import { TenantContextInterceptor } from '../prisma/tenant-context.interceptor';
+import type { TenantContext } from '../prisma/tenant-context';
 
 @ApiTags('Staff Onboarding')
 @Controller('staff')
@@ -34,15 +37,20 @@ export class StaffController {
 
   @Post()
   @RequirePermissions('MANAGE_USERS')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Onboard new staff member' })
   @ApiResponse({ status: 201, description: 'Staff onboarded successfully' })
   @ApiResponse({ status: 409, description: 'Email already exists in roster' })
-  create(@Body() createStaffDto: CreateStaffDto) {
-    return this.staffService.create(createStaffDto);
+  create(
+    @Body() createStaffDto: CreateStaffDto,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.staffService.create(createStaffDto, tenantContext);
   }
 
   @Get()
   @RequirePermissions('MANAGE_USERS')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'List all registered staff members' })
   @ApiResponse({
     status: 200,
@@ -50,16 +58,21 @@ export class StaffController {
   })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
-  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+  findAll(
+    @CurrentTenant() tenantContext: TenantContext,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     const pageNum = page ? parseInt(page, 10) : undefined;
     const limitNum = limit ? parseInt(limit, 10) : undefined;
-    return this.staffService.findAll(pageNum, limitNum);
+    return this.staffService.findAll(tenantContext, pageNum, limitNum);
   }
 
   @Get(':id')
   @UseGuards(SelfOrPermissionGuard)
   @RequireSelfOrPermission('id', 'MANAGE_USERS')
   @RequirePermissions()
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({
     summary:
       "Get staff profile by UUID — the staff member's own record, or any record for admins",
@@ -67,12 +80,16 @@ export class StaffController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Staff profile details found' })
   @ApiResponse({ status: 404, description: 'Staff record not found' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.staffService.findOne(id);
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.staffService.findOne(id, tenantContext);
   }
 
   @Patch(':id')
   @RequirePermissions('MANAGE_USERS')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Update staff details / roles link' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Staff updated successfully' })
@@ -80,32 +97,45 @@ export class StaffController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateStaffDto: UpdateStaffDto,
+    @CurrentTenant() tenantContext: TenantContext,
   ) {
-    return this.staffService.update(id, updateStaffDto);
+    return this.staffService.update(id, updateStaffDto, tenantContext);
   }
 
   @Post(':id/assignments')
   @RequirePermissions('MANAGE_USERS')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Update Teacher Assignments' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 201, description: 'Teacher assignments updated' })
   updateTeacherAssignments(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('assignments') assignments: any[],
+    @CurrentTenant() tenantContext: TenantContext,
   ) {
-    return this.staffService.updateTeacherAssignments(id, assignments);
+    return this.staffService.updateTeacherAssignments(
+      id,
+      assignments,
+      tenantContext,
+    );
   }
 
   @Post(':id/transport-assignments')
   @RequirePermissions('MANAGE_USERS')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Update Transport Assignments' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 201, description: 'Transport assignments updated' })
   updateTransportAssignments(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('assignments') assignments: any[],
+    @CurrentTenant() tenantContext: TenantContext,
   ) {
-    return this.staffService.updateTransportAssignments(id, assignments);
+    return this.staffService.updateTransportAssignments(
+      id,
+      assignments,
+      tenantContext,
+    );
   }
 
   @Post('self-attendance')
@@ -133,6 +163,7 @@ export class StaffController {
   @UseGuards(SelfOrPermissionGuard)
   @RequireSelfOrPermission('id', 'MANAGE_USERS')
   @RequirePermissions()
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Get staff attendance logs' })
   @ApiQuery({
     name: 'month',
@@ -141,15 +172,17 @@ export class StaffController {
   })
   getAttendanceLogs(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentTenant() tenantContext: TenantContext,
     @Query('month') month?: string,
   ) {
-    return this.staffService.getAttendanceLogs(id, month);
+    return this.staffService.getAttendanceLogs(id, tenantContext, month);
   }
 
   @Post(':id/leaves')
   @UseGuards(SelfOrPermissionGuard)
   @RequireSelfOrPermission('id', 'MANAGE_USERS')
   @RequirePermissions()
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Apply for a leave' })
   applyLeave(
     @Param('id', ParseUUIDPipe) id: string,
@@ -160,29 +193,35 @@ export class StaffController {
       endDate: string;
       reason?: string;
     },
+    @CurrentTenant() tenantContext: TenantContext,
   ) {
-    return this.staffService.applyLeave(id, data);
+    return this.staffService.applyLeave(id, data, tenantContext);
   }
 
   @Delete(':id')
   @RequirePermissions('MANAGE_USERS')
+  @UseInterceptors(TenantContextInterceptor)
   @ApiOperation({ summary: 'Delete staff member by UUID' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Staff deleted successfully' })
   @ApiResponse({ status: 404, description: 'Staff record not found' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.staffService.remove(id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.staffService.remove(id, tenantContext);
   }
 
   @Post(':id/upload')
   @RequirePermissions('MANAGE_USERS')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file'), TenantContextInterceptor)
   @ApiOperation({ summary: 'Upload file (photo/document) for staff' })
   @ApiParam({ name: 'id', format: 'uuid' })
   uploadFile(
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() file: any,
+    @CurrentTenant() tenantContext: TenantContext,
   ) {
-    return this.staffService.uploadPhoto(id, file);
+    return this.staffService.uploadPhoto(id, file, tenantContext);
   }
 }

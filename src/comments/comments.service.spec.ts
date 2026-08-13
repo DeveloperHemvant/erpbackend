@@ -16,12 +16,16 @@ describe('CommentsService', () => {
     identifier: 's',
     role: 'Teacher',
     permissions: ['VIEW_STUDENTS'],
+    campusId: 'campus-1',
+    canAccessAllCampuses: false,
   };
   const unprivilegedUser = {
     userId: 'staff-2',
     identifier: 'u',
     role: 'Driver',
     permissions: [],
+    campusId: 'campus-1',
+    canAccessAllCampuses: false,
   };
 
   beforeEach(async () => {

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AnalyticsRepository } from './repositories/analytics.repository';
 import { StudentRepository } from '../students/repositories/student.repository';
 import { PromotionsService } from '../promotions/promotions.service';
+import type { TenantContext } from '../prisma/tenant-context';
 import type {
   ExamCompletionDto,
   TeacherWorkloadDto,
@@ -19,10 +20,12 @@ export class AcademicAnalyticsService {
     private readonly promotionsService: PromotionsService,
   ) {}
 
-  async getExamCompletion(): Promise<ExamCompletionDto> {
+  async getExamCompletion(
+    tenantContext: TenantContext,
+  ): Promise<ExamCompletionDto> {
     const [totalGradebooks, publishedGradebooks] = await Promise.all([
-      this.repo.countGradebooks(true),
-      this.repo.countGradebooks(true, true),
+      this.repo.countGradebooks(true, undefined, tenantContext),
+      this.repo.countGradebooks(true, true, tenantContext),
     ]);
 
     return {
@@ -35,11 +38,16 @@ export class AcademicAnalyticsService {
     };
   }
 
-  async getTeacherWorkload(): Promise<TeacherWorkloadDto> {
+  async getTeacherWorkload(
+    tenantContext: TenantContext,
+  ): Promise<TeacherWorkloadDto> {
     const activeSession = await this.studentRepository.findActiveAcademicSession();
     if (!activeSession) return { teachers: [] };
 
-    const assignments = await this.repo.findActiveTeacherAssignments(activeSession.id);
+    const assignments = await this.repo.findActiveTeacherAssignments(
+      activeSession.id,
+      tenantContext,
+    );
 
     const byStaff = new Map<
       string,

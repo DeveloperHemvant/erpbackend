@@ -60,6 +60,18 @@ model Campus {
   staff             Staff[]
   staffCampusAccess StaffCampusAccess[]
 
+  // Campus Isolation Layer, Phase 0b (CAMPUS_ISOLATION_DECISIONS.md)
+  admissionInquiries AdmissionInquiry[]
+  emsExamSessions    EMSExamSession[]
+  visitorRecords     VisitorRecord[]
+  transportVehicles  TransportVehicle[]
+  transportRoutes    TransportRoute[]
+  hostels            Hostel[]
+  libraryBooks       LibraryBook[]
+  schoolHouses       SchoolHouse[]
+  announcements      Announcement[]
+  feeStructures      FeeStructure[]
+
   @@map("campuses")
 }
 
@@ -607,6 +619,16 @@ model Announcement {
   updatedAt      DateTime  @updatedAt
   createdBy      String?
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_DECISIONS.md, B2) — permanently
+  // optional by design, not a migration-transitional nullable: null means
+  // "school-wide" (reaches every campus), a set value means campus-specific
+  // (e.g. "Campus B pickup line closed today"). Existing rows stay NULL on
+  // backfill — they were school-wide before a second campus existed and
+  // must stay that way, not be silently narrowed to one campus.
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([campusId])
   @@map("announcements")
 }
 
@@ -705,6 +727,14 @@ model Hostel {
   grievances HostelGrievance[]
   menus      MessMenu[]
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_DECISIONS.md, A5) — nullable
+  // transitional: backfilled to the current campus now, becomes required
+  // once hostel's own Phase 3 milestone lands. HostelRoom/Allocation derive
+  // campus via this relation (1-hop) rather than carrying their own column.
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([campusId, status])
   @@map("hostels")
 }
 
@@ -880,6 +910,14 @@ model LibraryBook {
   issues       BookIssue[]
   reservations LibraryReservation[]
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_DECISIONS.md, A6) — nullable
+  // transitional: each campus maintains its own separate catalog, per
+  // decision. BookIssue/LibraryFine derive campus via this relation (1-hop)
+  // rather than carrying their own column.
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([campusId, status])
   @@map("library_books")
 }
 
@@ -1076,6 +1114,18 @@ model FeeStructure {
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_DECISIONS.md, B3) — permanently
+  // optional by design, independent of classId: allows a campus-wide fee
+  // structure (any class at Campus B costs more) without duplicating a
+  // structure per class. Null means "not campus-restricted" — derive scope
+  // from classId's own campus if set, otherwise school-wide. Existing rows
+  // stay NULL on backfill — their scope was already fully expressed via
+  // classId (or intentionally unscoped), this column adds a new capability,
+  // it doesn't reclassify old data.
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([campusId, status])
   @@map("fee_structures")
 }
 
@@ -1291,6 +1341,15 @@ model TransportVehicle {
   TransportRoute       TransportRoute[]
   TransportDailyCheck  TransportDailyCheck[]
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_DECISIONS.md, A4) — nullable
+  // transitional: each campus operates its own fleet, per decision.
+  // TransportTrip/FuelLog/Breakdown/etc. all derive campus via this
+  // relation (1-hop, vehicleId is required on each) rather than carrying
+  // their own column.
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([campusId, status])
   @@map("transport_vehicles")
 }
 
@@ -1378,6 +1437,14 @@ model TransportRoute {
   TransportTrip      TransportTrip[]
   studentAssignments TransportStudentAssignment[]
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_DECISIONS.md, A4) — nullable
+  // transitional. Own column rather than deriving via vehicleId: that FK is
+  // optional (a route can exist before a vehicle is assigned to it), too
+  // fragile to filter by.
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([campusId, status])
   @@map("transport_routes")
 }
 
@@ -2068,6 +2135,14 @@ model EMSExamSession {
   EMSGradebook  EMSGradebook[]
   EMSReportCard EMSReportCard[]
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_DECISIONS.md, A2) — nullable
+  // transitional: each campus runs its own exam terms independently, per
+  // decision. EMSExamSchedule derives campus via this relation (1-hop,
+  // sessionId is required) rather than carrying its own column.
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([campusId, isActive])
   @@map("ems_exam_sessions")
 }
 
@@ -2628,6 +2703,14 @@ model AdmissionInquiry {
 
   followUps AdmissionInquiryFollowUp[]
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_DECISIONS.md, A1) — nullable
+  // transitional: backfilled to the current campus now, becomes required
+  // once admission-inquiry's own Phase 3 milestone updates every create
+  // path (form submission) to always set it.
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([campusId, status])
   @@map("admission_inquiries")
 }
 
@@ -2730,6 +2813,14 @@ model VisitorRecord {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_DECISIONS.md, A3) — nullable
+  // transitional: backfilled to the current campus now, becomes required
+  // once visitor's own Phase 3 milestone updates check-in to always set it
+  // (sourced from the checking-in staff member's own campus).
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@index([campusId, status])
   @@map("visitor_records")
 }
 
@@ -2822,7 +2913,7 @@ model Meeting {
 
 model SchoolHouse {
   id                String   @id @default(uuid()) @db.Uuid
-  name              String   @unique
+  name              String
   captainId         String?  @db.Uuid
   captain           Student? @relation("HouseCaptain", fields: [captainId], references: [id])
   viceCaptainId     String?  @db.Uuid
@@ -2835,6 +2926,14 @@ model SchoolHouse {
 
   members Student[] @relation("HouseMembers")
 
+  // Campus Isolation Layer (CAMPUS_ISOLATION_DECISIONS.md, B1) — nullable
+  // transitional: each campus runs its own independent house system, per
+  // decision. `name` was previously globally unique; now unique per campus
+  // instead, since two campuses may legitimately both have a "Red House."
+  campusId String? @db.Uuid
+  campus   Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@unique([name, campusId])
   @@map("school_houses")
 }
 
