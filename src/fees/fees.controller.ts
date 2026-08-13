@@ -11,6 +11,7 @@ import {
   Headers,
   ParseUUIDPipe,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
@@ -26,11 +27,17 @@ import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireAnyPermission } from '../auth/any-permission.decorator';
 import { AnyPermissionGuard } from '../auth/any-permission.guard';
 import { Public } from '../auth/public.decorator';
+import { OwnershipService } from '../auth/ownership.service';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
 @ApiTags('ERP Core Features')
 @Controller('erp-core')
 export class FeesController {
-  constructor(private readonly feesService: FeesService) {}
+  constructor(
+    private readonly feesService: FeesService,
+    private readonly ownershipService: OwnershipService,
+  ) {}
 
   @Post('fees/structures')
   @RequirePermissions('MANAGE_FEES')
@@ -121,6 +128,32 @@ export class FeesController {
     @Body() dto: CreateFeePaymentDto,
   ) {
     return this.feesService.recordFeePayment(id, dto);
+  }
+
+  // Own-record download — same inline staff-or-ownership pattern as
+  // ReportCardsController.downloadReportCardPdf: a parent/student never
+  // holds MANAGE_FEES/PAY_FEES in the sense this route needs, so ownership
+  // is checked directly via OwnershipService instead of the class default.
+  @Get('fees/payments/:id/receipt')
+  @RequirePermissions()
+  @ApiOperation({ summary: 'Render (or re-render) a fee payment receipt as a real PDF' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  async downloadFeeReceipt(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const isStaff =
+      user.permissions.includes('*') ||
+      user.permissions.includes('MANAGE_FEES') ||
+      user.permissions.includes('PAY_FEES');
+    if (!isStaff) {
+      const role = (user.role || '').toLowerCase();
+      if (role !== 'student' && role !== 'parent') {
+        throw new ForbiddenException('You do not have access to this receipt.');
+      }
+      await this.ownershipService.assertOwnsFeePayment(user, id);
+    }
+    return this.feesService.renderFeeReceiptPdf(id);
   }
 
   // Public + signature-verified, not authenticated-user-callable: Razorpay's

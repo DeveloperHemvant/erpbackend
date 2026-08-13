@@ -6,9 +6,17 @@ import { TransportOwnershipService } from './transport-ownership.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CommunicationModule } from '../communication/communication.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { DocumentsModule } from '../documents/documents.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule, CommunicationModule, NotificationsModule],
+  imports: [
+    PrismaModule,
+    CommunicationModule,
+    NotificationsModule,
+    DocumentsModule,
+    AuthModule,
+  ],
   controllers: [TransportController],
   providers: [TransportService, TransportRepository, TransportOwnershipService],
   exports: [TransportService, TransportOwnershipService],

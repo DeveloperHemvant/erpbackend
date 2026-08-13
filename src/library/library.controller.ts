@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { LibraryService } from './library.service';
@@ -17,6 +18,8 @@ import {
   UpdateFineStatusDto,
 } from './dto/library.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
+import { RequireStudentAccessOrPermission } from '../auth/student-access-or-permission.decorator';
+import { StudentAccessOrPermissionGuard } from '../auth/student-access-or-permission.guard';
 
 // Class-level MANAGE_ACADEMICS default. Every method except getBooks/
 // getLibraryReport was previously undecorated, which under the global
@@ -69,7 +72,17 @@ export class LibraryController {
     return this.libraryService.returnBook(id);
   }
 
+  // Phase 11: was staff-only (class-level MANAGE_ACADEMICS), so a student's
+  // own library account — books currently out, due dates, fines — was
+  // invisible to the family it's about. Same self-or-permission pattern as
+  // report-cards/health-records/achievements.
   @Get('student/:enrollmentId')
+  @UseGuards(StudentAccessOrPermissionGuard)
+  @RequireStudentAccessOrPermission('enrollmentId', ['MANAGE_ACADEMICS'], {
+    idType: 'enrollment',
+    source: 'params',
+  })
+  @RequirePermissions()
   @ApiOperation({ summary: 'Get Student Book Issues' })
   async getStudentIssues(
     @Param('enrollmentId', ParseUUIDPipe) enrollmentId: string,

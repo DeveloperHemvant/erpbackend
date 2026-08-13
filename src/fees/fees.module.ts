@@ -7,9 +7,10 @@ import { StudentsModule } from '../students/students.module';
 import { AuthModule } from '../auth/auth.module';
 import { FeeRepository } from './repositories/fee.repository';
 import { ErpCoreAuditLogRepository } from './repositories/audit-log.repository';
+import { DocumentsModule } from '../documents/documents.module';
 
 @Module({
-  imports: [PrismaModule, CommunicationModule, StudentsModule, AuthModule],
+  imports: [PrismaModule, CommunicationModule, StudentsModule, AuthModule, DocumentsModule],
   controllers: [FeesController],
   providers: [FeesService, FeeRepository, ErpCoreAuditLogRepository],
   exports: [FeesService],

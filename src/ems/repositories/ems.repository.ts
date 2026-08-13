@@ -22,6 +22,10 @@ export class EmsRepository {
     });
   }
 
+  findSessionById(id: string) {
+    return this.prisma.eMSExamSession.findUnique({ where: { id } });
+  }
+
   deleteSession(id: string) {
     return this.prisma.eMSExamSession.delete({ where: { id } });
   }
@@ -176,6 +180,36 @@ export class EmsRepository {
       where: { studentId, room: { scheduleId: { in: scheduleIds } } },
       include: {
         room: { include: { invigilators: { include: { staff: true } } } },
+      },
+    });
+  }
+
+  findSeatingsForStudentInSession(studentId: string, sessionId: string) {
+    return this.prisma.eMSExamSeating.findMany({
+      where: { studentId, room: { schedule: { sessionId } } },
+      include: {
+        room: {
+          include: {
+            schedule: { include: { subject: true } },
+          },
+        },
+      },
+    });
+  }
+
+  findMasterRoomsByIds(roomIds: string[]) {
+    return this.prisma.room.findMany({ where: { id: { in: roomIds } } });
+  }
+
+  findStudentForHallTicket(studentId: string) {
+    return this.prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        enrollments: {
+          where: { status: 'Enrolled' },
+          include: { section: { include: { class: true } } },
+          take: 1,
+        },
       },
     });
   }
@@ -341,7 +375,11 @@ export class EmsRepository {
       where: { studentId },
       include: {
         schedule: {
-          include: { subject: true, template: { include: { type: true } } },
+          include: {
+            subject: true,
+            template: { include: { type: true } },
+            session: true,
+          },
         },
         evaluations: true,
       },

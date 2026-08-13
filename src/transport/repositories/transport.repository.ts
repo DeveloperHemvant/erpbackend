@@ -7,6 +7,23 @@ export class TransportRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   // --- Ownership lookups ---
+  findActiveTransportAssignmentForStudent(studentId: string) {
+    return this.prisma.transportStudentAssignment.findFirst({
+      where: {
+        status: 'Active',
+        enrollment: { studentId, status: 'Enrolled' },
+      },
+      include: {
+        enrollment: {
+          include: { student: true, section: { include: { class: true } } },
+        },
+        route: { include: { vehicle: true } },
+        stop: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   findVehicleStaffAssignment(staffId: string, vehicleId: string) {
     return this.prisma.transportVehicleStaff.findFirst({
       where: { staffId, vehicleId, status: 'Assigned' },

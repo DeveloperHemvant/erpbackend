@@ -137,6 +137,22 @@ export class FeeRepository {
     });
   }
 
+  findPaymentWithContext(paymentId: string) {
+    return this.prisma.feePayment.findUnique({
+      where: { id: paymentId },
+      include: {
+        invoice: {
+          include: {
+            enrollment: {
+              include: { student: true, section: { include: { class: true } } },
+            },
+            payments: true,
+          },
+        },
+      },
+    });
+  }
+
   findPaymentWithRefunds(paymentId: string) {
     return this.prisma.feePayment.findUnique({
       where: { id: paymentId },

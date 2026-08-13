@@ -9,6 +9,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TransportRepository } from './repositories/transport.repository';
 import { TransportOwnershipService } from './transport-ownership.service';
+import { DocumentRenderingService } from '../documents/document-rendering.service';
+import { StorageService } from '../storage/storage.service';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
 describe('TransportService', () => {
@@ -43,11 +45,18 @@ describe('TransportService', () => {
     findAccidentById: jest.fn(),
     acknowledgeAccident: jest.fn(),
     findStopById: jest.fn(),
+    findActiveTransportAssignmentForStudent: jest.fn(),
   };
   const mockTransportOwnership = {
     assertVehicleAccess: jest.fn(),
     assertRouteAccess: jest.fn(),
     assertStopAccess: jest.fn(),
+  };
+  const mockRenderer = {
+    renderBusPass: jest.fn(),
+  };
+  const mockStorage = {
+    uploadFile: jest.fn(),
   };
 
   const driver: AuthenticatedUser = {
@@ -76,6 +85,8 @@ describe('TransportService', () => {
           provide: TransportOwnershipService,
           useValue: mockTransportOwnership,
         },
+        { provide: DocumentRenderingService, useValue: mockRenderer },
+        { provide: StorageService, useValue: mockStorage },
       ],
     }).compile();
 
@@ -439,6 +450,64 @@ describe('TransportService', () => {
           data: expect.objectContaining({ mileage: 10 }),
         }),
       );
+    });
+  });
+
+  describe('renderStudentBusPassPdf', () => {
+    it('throws NotFoundException when the student has no active transport assignment', async () => {
+      mockTransportRepository.findActiveTransportAssignmentForStudent.mockResolvedValue(
+        null,
+      );
+
+      await expect(
+        service.renderStudentBusPassPdf('student-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('renders and uploads a bus pass for an active assignment', async () => {
+      mockTransportRepository.findActiveTransportAssignmentForStudent.mockResolvedValue(
+        {
+          id: 'assignment-1',
+          enrollment: {
+            student: {
+              fullName: 'Asha Rao',
+              admissionNumber: 'A-001',
+              photoUrl: null,
+            },
+            section: { name: 'A', class: { grade: 'Grade 8' } },
+          },
+          route: {
+            routeName: 'Route 4',
+            vehicle: { busName: 'Bus 4', vehicleNumber: 'KA-01-1234' },
+          },
+          stop: {
+            stopName: 'Green Park',
+            arrivalTime: '07:30',
+            departureTime: '15:30',
+          },
+        },
+      );
+      mockRenderer.renderBusPass.mockResolvedValue(Buffer.from('pdf'));
+      mockStorage.uploadFile.mockResolvedValue({ url: 'https://storage/bus-pass.pdf' });
+
+      const result = await service.renderStudentBusPassPdf('student-1');
+
+      expect(mockRenderer.renderBusPass).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fullName: 'Asha Rao',
+          className: 'Grade 8 - A',
+          routeName: 'Route 4',
+          stopName: 'Green Park',
+          vehicleLabel: 'Bus 4',
+        }),
+      );
+      expect(mockStorage.uploadFile).toHaveBeenCalledWith(
+        expect.any(Buffer),
+        'bus-passes/student-1',
+        'bus-pass-assignment-1.pdf',
+        'application/pdf',
+      );
+      expect(result).toEqual({ url: 'https://storage/bus-pass.pdf' });
     });
   });
 });

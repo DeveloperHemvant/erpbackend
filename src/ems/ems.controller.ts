@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { EmsService } from './ems.service';
 import { RequirePermissions } from '../auth/permissions.decorator';
@@ -15,6 +16,7 @@ import { RequireStudentAccess } from '../auth/student-access.decorator';
 import { StudentAccessGuard } from '../auth/student-access.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import { OwnershipService } from '../auth/ownership.service';
 import {
   CreateEmsSessionDto,
   CreateEmsExamTypeDto,
@@ -47,7 +49,10 @@ import {
 @RequirePermissions('MANAGE_EXAMS')
 @Controller('ems')
 export class EmsController {
-  constructor(private readonly emsService: EmsService) {}
+  constructor(
+    private readonly emsService: EmsService,
+    private readonly ownershipService: OwnershipService,
+  ) {}
 
   // --- Exam Sessions ---
   @Post('sessions')
@@ -386,6 +391,31 @@ export class EmsController {
   @RequireStudentAccess('studentId')
   getStudentResults(@Param('studentId') studentId: string) {
     return this.emsService.getStudentResults(studentId);
+  }
+
+  // Own-record download — same inline staff-or-ownership pattern as
+  // FeesController.downloadFeeReceipt: a parent/student never holds
+  // MANAGE_EXAMS, so ownership is checked directly instead of the class
+  // default, while staff can still pull any student's hall ticket for
+  // printing/distribution.
+  @Get('students/:studentId/hall-ticket/:sessionId/pdf')
+  @RequirePermissions()
+  async renderStudentHallTicketPdf(
+    @Param('studentId') studentId: string,
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const isStaff =
+      user.permissions.includes('*') ||
+      user.permissions.includes('MANAGE_EXAMS');
+    if (!isStaff) {
+      const role = (user.role || '').toLowerCase();
+      if (role !== 'student' && role !== 'parent') {
+        throw new ForbiddenException('You do not have access to this hall ticket.');
+      }
+      await this.ownershipService.assertOwnsStudent(user, studentId);
+    }
+    return this.emsService.renderStudentHallTicketPdf(studentId, sessionId);
   }
 
   @Get('staff/:staffId/invigilations')

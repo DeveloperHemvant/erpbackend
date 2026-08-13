@@ -5,9 +5,10 @@ import { EmsRepository } from './repositories/ems.repository';
 import { PrismaModule } from '../prisma/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuthModule } from '../auth/auth.module';
+import { DocumentsModule } from '../documents/documents.module';
 
 @Module({
-  imports: [PrismaModule, NotificationsModule, AuthModule],
+  imports: [PrismaModule, NotificationsModule, AuthModule, DocumentsModule],
   controllers: [EmsController],
   providers: [EmsService, EmsRepository],
   exports: [EmsService, EmsRepository],

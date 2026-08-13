@@ -118,6 +118,26 @@ export class OwnershipService {
     await this.assertOwnsEnrollment(user, reportCard.enrollmentId);
   }
 
+  /** Resolves a FeePayment id to its invoice's enrollment, then defers to the
+   * same ownership rule — lets a parent/student download their own fee
+   * receipt without holding MANAGE_FEES/PAY_FEES. */
+  async assertOwnsFeePayment(
+    user: RequestUser,
+    paymentId: string | undefined,
+  ): Promise<void> {
+    if (!paymentId) {
+      throw new ForbiddenException('You do not have access to this record.');
+    }
+    const payment = await this.prisma.feePayment.findUnique({
+      where: { id: paymentId },
+      select: { invoice: { select: { enrollmentId: true } } },
+    });
+    if (!payment) {
+      throw new ForbiddenException('You do not have access to this record.');
+    }
+    await this.assertOwnsEnrollment(user, payment.invoice.enrollmentId);
+  }
+
   /** Resolves a ConsentResponse id to its student, then defers to the same
    * ownership rule — lets a parent respond to their own child's consent
    * request without holding MANAGE_COMMUNICATION. */

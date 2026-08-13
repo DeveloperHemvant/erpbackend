@@ -161,6 +161,7 @@ model Staff {
   supervisedAssemblies  MorningAssembly[]
   issuedAchievements    StudentAchievement[]  @relation("IssuedBy")
   consentRequestsCreated ConsentRequest[]
+  ptmSlots               PTMSlot[]
 
   @@map("staff")
 }
@@ -228,6 +229,7 @@ model Student {
   diaryEntries        SchoolDiaryEntry[]
   achievements        StudentAchievement[]
   consentResponses    ConsentResponse[]
+  ptmSlots            PTMSlot[]
 
   houseId String?      @db.Uuid
   house   SchoolHouse? @relation("HouseMembers", fields: [houseId], references: [id])
@@ -545,6 +547,7 @@ model Parent {
   updatedAt    DateTime        @updatedAt
   students     ParentStudent[]
   consentResponses ConsentResponse[]
+  ptmSlots     PTMSlot[]
 
   @@map("parents")
 }
@@ -2778,6 +2781,30 @@ model Appointment {
 
 // Added Phase 2 — internal meetings scheduling (SOR item 2.8). "Meetings"
 // had zero implementation anywhere per the operational readiness audit.
+// Phase 11 — real PTM slot-booking. Distinct from Meeting (above), which is
+// a staff-only, organizer-fixed-attendee-list model with no parent/student
+// concept at all. A teacher publishes open windows; a parent books one for
+// a specific child — same simple-status-field convention as
+// LeaveApplication/HostelOutpass, not a new generic booking engine.
+model PTMSlot {
+  id          String    @id @default(uuid()) @db.Uuid
+  teacherId   String    @db.Uuid
+  teacher     Staff     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  date        DateTime
+  startTime   String
+  endTime     String
+  location    String?
+  status      String    @default("Open") // Open, Booked, Cancelled
+  parentId    String?   @db.Uuid
+  parent      Parent?   @relation(fields: [parentId], references: [id], onDelete: SetNull)
+  studentId   String?   @db.Uuid
+  student     Student?  @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  bookedAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("ptm_slots")
+}
+
 model Meeting {
   id           String   @id @default(uuid()) @db.Uuid
   title        String

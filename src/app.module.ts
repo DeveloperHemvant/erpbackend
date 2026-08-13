@@ -63,6 +63,8 @@ import { StorageModule } from './storage/storage.module';
 import { ConsentModule } from './consent/consent.module';
 import { DocumentsModule } from './documents/documents.module';
 import { GrievanceModule } from './grievance/grievance.module';
+import { AdmissionDocumentModule } from './admission-documents/admission-document.module';
+import { PTMModule } from './ptm/ptm.module';
 
 @Module({
   imports: [
@@ -131,6 +133,8 @@ import { GrievanceModule } from './grievance/grievance.module';
     ConsentModule,
     DocumentsModule,
     GrievanceModule,
+    AdmissionDocumentModule,
+    PTMModule,
   ],
   controllers: [AppController],
   providers: [

@@ -165,11 +165,16 @@ export class AcmsService {
   // UNIFIED CALENDAR (Phase 3)
   // ==========================================
   async getUnifiedCalendar() {
-    // Aggregates Holidays, Events, and Exams into a single timeline stream
+    // Aggregates Holidays, Events, Exams, and Homework due dates into a
+    // single timeline stream
     const holidays = await this.prisma.aCMSHolidayMaster.findMany();
     const events = await this.prisma.aCMSEvent.findMany();
     const exams = await this.prisma.eMSExamSchedule.findMany({
       include: { subject: true },
+    });
+    const homework = await this.prisma.lMSAssignment.findMany({
+      where: { dueDate: { not: null } },
+      include: { section: { include: { class: true } } },
     });
 
     const calendar = [
@@ -191,6 +196,14 @@ export class AcmsService {
         title: `${e.subject?.name || 'Exam'}`,
         date: e.date,
         details: 'Academic Exam',
+      })),
+      ...homework.map((h) => ({
+        type: 'HOMEWORK',
+        title: h.title,
+        date: h.dueDate as Date,
+        details: h.section
+          ? `${h.section.class?.grade || ''} - ${h.section.name}`.trim()
+          : 'Homework Due',
       })),
     ];
 

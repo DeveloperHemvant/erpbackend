@@ -10,6 +10,8 @@ import { CreateTripDto } from './dto/transport.dto';
 import { TransportRepository } from './repositories/transport.repository';
 import { TransportOwnershipService } from './transport-ownership.service';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import { DocumentRenderingService } from '../documents/document-rendering.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class TransportService {
@@ -18,6 +20,8 @@ export class TransportService {
     private notificationsService: NotificationsService,
     private transportRepository: TransportRepository,
     private transportOwnership: TransportOwnershipService,
+    private readonly renderer: DocumentRenderingService,
+    private readonly storage: StorageService,
   ) {}
 
   // ---------------------------------------------------------
@@ -264,6 +268,51 @@ export class TransportService {
         },
       },
     });
+  }
+
+  /** Renders on-demand from the student's current active route/stop
+   * assignment, same reasoning as ID cards and fee receipts — no separate
+   * "bus pass" row to persist, the assignment itself is the source of truth. */
+  async renderStudentBusPassPdf(studentId: string): Promise<{ url: string }> {
+    const assignment =
+      await this.transportRepository.findActiveTransportAssignmentForStudent(
+        studentId,
+      );
+    if (!assignment) {
+      throw new NotFoundException(
+        'No active transport assignment found for this student',
+      );
+    }
+
+    const student = assignment.enrollment.student;
+    const section = assignment.enrollment.section;
+    const className = section
+      ? `${section.class?.grade ?? ''} - ${section.name ?? ''}`
+      : '';
+    const vehicle = assignment.route?.vehicle;
+    const vehicleLabel = vehicle
+      ? vehicle.busName || vehicle.vehicleNumber
+      : 'Unassigned';
+
+    const pdfBuffer = await this.renderer.renderBusPass({
+      fullName: student.fullName,
+      admissionNumber: student.admissionNumber,
+      className,
+      photoUrl: student.photoUrl,
+      routeName: assignment.route?.routeName || 'Unassigned',
+      stopName: assignment.stop?.stopName || 'Unassigned',
+      vehicleLabel,
+      pickupTime: assignment.stop?.arrivalTime,
+      dropTime: assignment.stop?.departureTime,
+    });
+
+    const { url } = await this.storage.uploadFile(
+      pdfBuffer,
+      `bus-passes/${studentId}`,
+      `bus-pass-${assignment.id}.pdf`,
+      'application/pdf',
+    );
+    return { url };
   }
   // ---------------------------------------------------------
   // TRIPS & GPS LOGS

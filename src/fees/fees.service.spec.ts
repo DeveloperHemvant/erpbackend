@@ -10,6 +10,8 @@ import { CommunicationService } from '../communication/communication.service';
 import { StudentRepository } from '../students/repositories/student.repository';
 import { FeeRepository } from './repositories/fee.repository';
 import { ErpCoreAuditLogRepository } from './repositories/audit-log.repository';
+import { DocumentRenderingService } from '../documents/document-rendering.service';
+import { StorageService } from '../storage/storage.service';
 
 describe('FeesService', () => {
   let service: FeesService;
@@ -31,6 +33,7 @@ describe('FeesService', () => {
     findInvoiceWithPaymentsAndRefunds: jest.fn(),
     findPaymentByGatewayId: jest.fn(),
     createWebhookPayment: jest.fn(),
+    findPaymentWithContext: jest.fn(),
   };
   const mockStudentRepository = {
     findActiveAcademicSession: jest.fn(),
@@ -42,6 +45,8 @@ describe('FeesService', () => {
   const mockCommService = {
     sendFeeReminder: jest.fn(),
   };
+  const mockRenderer = { renderFeeReceipt: jest.fn() };
+  const mockStorage = { uploadFile: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -56,6 +61,8 @@ describe('FeesService', () => {
           provide: ErpCoreAuditLogRepository,
           useValue: mockAuditLogRepository,
         },
+        { provide: DocumentRenderingService, useValue: mockRenderer },
+        { provide: StorageService, useValue: mockStorage },
       ],
     }).compile();
 
@@ -471,6 +478,8 @@ describe('FeesService', () => {
             provide: ErpCoreAuditLogRepository,
             useValue: mockAuditLogRepository,
           },
+          { provide: DocumentRenderingService, useValue: mockRenderer },
+          { provide: StorageService, useValue: mockStorage },
         ],
       }).compile();
 
@@ -544,6 +553,8 @@ describe('FeesService', () => {
               provide: ErpCoreAuditLogRepository,
               useValue: mockAuditLogRepository,
             },
+            { provide: DocumentRenderingService, useValue: mockRenderer },
+            { provide: StorageService, useValue: mockStorage },
           ],
         }).compile();
         const unconfiguredService = module.get<FeesService>(FeesService);
@@ -743,6 +754,60 @@ describe('FeesService', () => {
 
         expect(mockFeeRepository.updateInvoiceStatusSimple).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('renderFeeReceiptPdf', () => {
+    it('throws NotFoundException when the payment does not exist', async () => {
+      mockFeeRepository.findPaymentWithContext.mockResolvedValue(null);
+      await expect(service.renderFeeReceiptPdf('missing')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws BadRequestException when the payment has no associated student', async () => {
+      mockFeeRepository.findPaymentWithContext.mockResolvedValue({
+        id: 'pay-1',
+        invoice: { enrollment: { student: null, section: null }, payments: [] },
+      });
+      await expect(service.renderFeeReceiptPdf('pay-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('renders and uploads, returning the real url with the correct outstanding balance', async () => {
+      mockFeeRepository.findPaymentWithContext.mockResolvedValue({
+        id: 'pay-1',
+        amountPaid: '400',
+        paymentMode: 'UPI',
+        referenceNo: 'ref-1',
+        paymentDate: '2026-08-01',
+        invoice: {
+          id: 'inv-1',
+          totalAmount: '1000',
+          amount: '1000',
+          enrollment: {
+            student: { fullName: 'Test Student', admissionNumber: 'ADM-1' },
+            section: { name: 'B', class: { grade: 'Grade 8' } },
+          },
+          payments: [{ amountPaid: '400' }, { amountPaid: '200' }],
+        },
+      });
+      mockRenderer.renderFeeReceipt.mockResolvedValue(Buffer.from('%PDF'));
+      mockStorage.uploadFile.mockResolvedValue({ url: '/uploads/fee-receipts/inv-1/x.pdf' });
+
+      const result = await service.renderFeeReceiptPdf('pay-1');
+
+      expect(mockRenderer.renderFeeReceipt).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'pay-1', amountPaid: '400', paymentMode: 'UPI' }),
+        expect.objectContaining({
+          studentName: 'Test Student',
+          admissionNumber: 'ADM-1',
+          className: 'Grade 8 - B',
+          balanceAfter: 400,
+        }),
+      );
+      expect(result).toEqual({ url: '/uploads/fee-receipts/inv-1/x.pdf' });
     });
   });
 });

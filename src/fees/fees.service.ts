@@ -11,6 +11,8 @@ import { CommunicationService } from '../communication/communication.service';
 import { StudentRepository } from '../students/repositories/student.repository';
 import { FeeRepository } from './repositories/fee.repository';
 import { ErpCoreAuditLogRepository } from './repositories/audit-log.repository';
+import { DocumentRenderingService } from '../documents/document-rendering.service';
+import { StorageService } from '../storage/storage.service';
 import {
   CreateFeeStructureDto,
   CreateFeeInvoiceDto,
@@ -30,6 +32,8 @@ export class FeesService {
     private readonly studentRepository: StudentRepository,
     private readonly feeRepository: FeeRepository,
     private readonly auditLogRepository: ErpCoreAuditLogRepository,
+    private readonly renderer: DocumentRenderingService,
+    private readonly storage: StorageService,
   ) {
     const { RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET } =
       process.env;
@@ -375,6 +379,53 @@ export class FeesService {
 
   async getFeePayments() {
     return this.feeRepository.findAllPayments();
+  }
+
+  /** Rendered fresh on every call, same as ReportCardsService.renderReportCardPdf
+   * — a receipt is a low-repeat-visit personal download, not worth a schema
+   * field + staleness tracking. */
+  async renderFeeReceiptPdf(paymentId: string): Promise<{ url: string }> {
+    const payment = await this.feeRepository.findPaymentWithContext(paymentId);
+    if (!payment) throw new NotFoundException('Payment not found.');
+
+    const invoice = payment.invoice;
+    const student = invoice?.enrollment?.student;
+    const section = invoice?.enrollment?.section;
+    if (!student) {
+      throw new BadRequestException('This payment has no associated student.');
+    }
+
+    const invoiceAmount = Number(invoice.totalAmount || invoice.amount);
+    const totalPaid = (invoice.payments || []).reduce(
+      (sum, p) => sum + Number(p.amountPaid),
+      0,
+    );
+    const balanceAfter = Math.max(0, invoiceAmount - totalPaid);
+
+    const pdfBuffer = await this.renderer.renderFeeReceipt(
+      {
+        id: payment.id,
+        amountPaid: payment.amountPaid.toString(),
+        paymentMode: payment.paymentMode,
+        referenceNo: payment.referenceNo,
+        paymentDate: payment.paymentDate,
+      },
+      {
+        studentName: student.fullName,
+        admissionNumber: student.admissionNumber,
+        className: section ? `${section.class?.grade ?? ''} - ${section.name}` : '—',
+        invoiceTotal: (invoice.totalAmount || invoice.amount).toString(),
+        balanceAfter,
+      },
+    );
+
+    const { url } = await this.storage.uploadFile(
+      pdfBuffer,
+      `fee-receipts/${invoice.id}`,
+      `receipt-${payment.id}.pdf`,
+      'application/pdf',
+    );
+    return { url };
   }
 
   // ==========================================

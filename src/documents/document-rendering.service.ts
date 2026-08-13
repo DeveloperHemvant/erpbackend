@@ -464,4 +464,367 @@ export class DocumentRenderingService {
     );
     return renderToBuffer(doc);
   }
+
+  async renderFeeReceipt(
+    payment: {
+      id: string;
+      amountPaid: string | number;
+      paymentMode: string;
+      referenceNo?: string | null;
+      paymentDate: string;
+    },
+    ctx: {
+      studentName: string;
+      admissionNumber: string;
+      className: string;
+      invoiceTotal: string | number;
+      balanceAfter: number;
+    },
+  ): Promise<Buffer> {
+    const styles = StyleSheet.create({
+      page: { padding: 36, fontSize: 10 },
+      title: { fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 },
+      subtitle: { fontSize: 11, textAlign: 'center', color: '#555555', marginBottom: 20 },
+      receiptNo: { fontSize: 10, textAlign: 'center', color: '#555555', marginBottom: 20 },
+      infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+      infoLabel: { color: '#555555' },
+      infoValue: { fontWeight: 'bold' },
+      divider: { borderTop: '1px solid #cccccc', marginVertical: 16 },
+      amountBox: {
+        marginTop: 8,
+        border: '2px solid #16a34a',
+        borderRadius: 4,
+        padding: 14,
+        alignItems: 'center',
+      },
+      amountLabel: { fontSize: 10, color: '#555555' },
+      amountValue: { fontSize: 22, fontWeight: 'bold', color: '#16a34a', marginTop: 4 },
+      footerNote: { marginTop: 24, fontSize: 8, color: '#888888', textAlign: 'center' },
+    });
+
+    const doc = this.h(
+      Document,
+      null,
+      this.h(
+        Page,
+        { size: 'A4', style: styles.page },
+        this.h(Text, { style: styles.title }, SCHOOL_NAME),
+        this.h(Text, { style: styles.subtitle }, 'Fee Payment Receipt'),
+        this.h(Text, { style: styles.receiptNo }, `Receipt No. ${payment.id}`),
+        this.h(
+          View,
+          null,
+          this.h(
+            View,
+            { style: styles.infoRow },
+            this.h(Text, { style: styles.infoLabel }, 'Student'),
+            this.h(Text, { style: styles.infoValue }, ctx.studentName),
+          ),
+          this.h(
+            View,
+            { style: styles.infoRow },
+            this.h(Text, { style: styles.infoLabel }, 'Admission No.'),
+            this.h(Text, { style: styles.infoValue }, ctx.admissionNumber),
+          ),
+          this.h(
+            View,
+            { style: styles.infoRow },
+            this.h(Text, { style: styles.infoLabel }, 'Class'),
+            this.h(Text, { style: styles.infoValue }, ctx.className),
+          ),
+          this.h(
+            View,
+            { style: styles.infoRow },
+            this.h(Text, { style: styles.infoLabel }, 'Payment Date'),
+            this.h(Text, { style: styles.infoValue }, payment.paymentDate),
+          ),
+          this.h(
+            View,
+            { style: styles.infoRow },
+            this.h(Text, { style: styles.infoLabel }, 'Payment Mode'),
+            this.h(Text, { style: styles.infoValue }, payment.paymentMode),
+          ),
+          payment.referenceNo
+            ? this.h(
+                View,
+                { style: styles.infoRow },
+                this.h(Text, { style: styles.infoLabel }, 'Reference No.'),
+                this.h(Text, { style: styles.infoValue }, payment.referenceNo),
+              )
+            : null,
+        ),
+        this.h(View, { style: styles.divider }),
+        this.h(
+          View,
+          { style: styles.amountBox },
+          this.h(Text, { style: styles.amountLabel }, 'Amount Paid'),
+          this.h(Text, { style: styles.amountValue }, `₹${Number(payment.amountPaid).toFixed(2)}`),
+        ),
+        this.h(View, { style: styles.divider }),
+        this.h(
+          View,
+          { style: styles.infoRow },
+          this.h(Text, { style: styles.infoLabel }, 'Invoice Total'),
+          this.h(Text, { style: styles.infoValue }, `₹${Number(ctx.invoiceTotal).toFixed(2)}`),
+        ),
+        this.h(
+          View,
+          { style: styles.infoRow },
+          this.h(Text, { style: styles.infoLabel }, 'Outstanding Balance'),
+          this.h(Text, { style: styles.infoValue }, `₹${ctx.balanceAfter.toFixed(2)}`),
+        ),
+        this.h(
+          Text,
+          { style: styles.footerNote },
+          'This is a system-generated receipt and does not require a signature.',
+        ),
+      ),
+    );
+    return renderToBuffer(doc);
+  }
+
+  async renderHallTicket(
+    ctx: {
+      studentName: string;
+      admissionNumber: string;
+      className: string;
+      photoUrl?: string | null;
+      sessionName: string;
+      subjects: Array<{
+        subject: string;
+        date: string;
+        startTime: string;
+        endTime: string;
+        roomName: string;
+        seatNumber: string;
+      }>;
+    },
+  ): Promise<Buffer> {
+    const photoSrc = await this.resolveImageSource(ctx.photoUrl);
+
+    const styles = StyleSheet.create({
+      page: { padding: 36, fontSize: 10 },
+      title: { fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 },
+      subtitle: { fontSize: 12, fontWeight: 'bold', textAlign: 'center', color: '#1e40af', marginBottom: 20, textTransform: 'uppercase' },
+      headerRow: { flexDirection: 'row', gap: 16, marginBottom: 16 },
+      photo: { width: 70, height: 84, backgroundColor: '#e5e7eb', border: '1px solid #d0d0d0' },
+      infoCol: { flex: 1, justifyContent: 'center' },
+      infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+      infoLabel: { color: '#555555' },
+      infoValue: { fontWeight: 'bold' },
+      table: { marginTop: 8, border: '1px solid #cccccc' },
+      tableRow: { flexDirection: 'row', borderBottom: '1px solid #eeeeee' },
+      tableHeaderRow: { flexDirection: 'row', backgroundColor: '#f3f4f6', borderBottom: '1px solid #cccccc' },
+      cell: { flex: 1, padding: 6 },
+      cellHeader: { flex: 1, padding: 6, fontWeight: 'bold' },
+      footerNote: { marginTop: 24, fontSize: 9, color: '#991b1b', textAlign: 'center', fontWeight: 'bold' },
+      signature: { marginTop: 40, alignSelf: 'flex-end', textAlign: 'center', fontSize: 9, color: '#555555' },
+      signatureLine: { borderTop: '1px solid #555555', width: 160, marginBottom: 4 },
+    });
+
+    const rows = ctx.subjects.map((s, i) =>
+      this.h(
+        View,
+        { key: i, style: styles.tableRow },
+        this.h(Text, { style: styles.cell }, s.subject),
+        this.h(Text, { style: styles.cell }, new Date(s.date).toLocaleDateString('en-IN')),
+        this.h(Text, { style: styles.cell }, `${s.startTime} - ${s.endTime}`),
+        this.h(Text, { style: styles.cell }, s.roomName),
+        this.h(Text, { style: styles.cell }, s.seatNumber),
+      ),
+    );
+
+    const doc = this.h(
+      Document,
+      null,
+      this.h(
+        Page,
+        { size: 'A4', style: styles.page },
+        this.h(Text, { style: styles.title }, SCHOOL_NAME),
+        this.h(Text, { style: styles.subtitle }, `Examination Hall Ticket — ${ctx.sessionName}`),
+        this.h(
+          View,
+          { style: styles.headerRow },
+          photoSrc
+            ? this.h(Image, { src: photoSrc, style: styles.photo })
+            : this.h(View, { style: styles.photo }),
+          this.h(
+            View,
+            { style: styles.infoCol },
+            this.h(
+              View,
+              { style: styles.infoRow },
+              this.h(Text, { style: styles.infoLabel }, 'Student'),
+              this.h(Text, { style: styles.infoValue }, ctx.studentName),
+            ),
+            this.h(
+              View,
+              { style: styles.infoRow },
+              this.h(Text, { style: styles.infoLabel }, 'Admission No.'),
+              this.h(Text, { style: styles.infoValue }, ctx.admissionNumber),
+            ),
+            this.h(
+              View,
+              { style: styles.infoRow },
+              this.h(Text, { style: styles.infoLabel }, 'Class'),
+              this.h(Text, { style: styles.infoValue }, ctx.className),
+            ),
+          ),
+        ),
+        this.h(
+          View,
+          { style: styles.table },
+          this.h(
+            View,
+            { style: styles.tableHeaderRow },
+            this.h(Text, { style: styles.cellHeader }, 'Subject'),
+            this.h(Text, { style: styles.cellHeader }, 'Date'),
+            this.h(Text, { style: styles.cellHeader }, 'Time'),
+            this.h(Text, { style: styles.cellHeader }, 'Room'),
+            this.h(Text, { style: styles.cellHeader }, 'Seat'),
+          ),
+          ...rows,
+        ),
+        this.h(
+          Text,
+          { style: styles.footerNote },
+          'This hall ticket must be carried to every examination listed above. No entry without it.',
+        ),
+        this.h(
+          View,
+          { style: styles.signature },
+          this.h(View, { style: styles.signatureLine }),
+          this.h(Text, null, 'Controller of Examinations'),
+        ),
+      ),
+    );
+    return renderToBuffer(doc);
+  }
+
+  /** Card-sized, same dimensions/layout family as renderIdCard — a bus pass
+   * is functionally a second ID card, just with route/stop info instead of
+   * a role label. */
+  async renderBusPass(ctx: {
+    fullName: string;
+    admissionNumber: string;
+    className: string;
+    photoUrl?: string | null;
+    routeName: string;
+    stopName: string;
+    vehicleLabel: string;
+    pickupTime?: string | null;
+    dropTime?: string | null;
+  }): Promise<Buffer> {
+    const photoSrc = await this.resolveImageSource(ctx.photoUrl);
+    const primary = '#ea580c';
+    const secondary = '#9a3412';
+
+    const styles = StyleSheet.create({
+      page: { padding: 0 },
+      card: {
+        width: 340,
+        height: 214,
+        backgroundColor: '#ffffff',
+        border: '1px solid #d0d0d0',
+        position: 'relative',
+      },
+      header: {
+        backgroundColor: primary,
+        height: 40,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 12,
+      },
+      headerText: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' },
+      headerBadge: { color: '#ffffff', fontSize: 9, fontWeight: 'bold', letterSpacing: 0.5 },
+      body: { flexDirection: 'row', padding: 12, gap: 10 },
+      photo: { width: 58, height: 70, backgroundColor: '#e5e7eb', border: '1px solid #d0d0d0' },
+      infoCol: { flex: 1 },
+      name: { fontSize: 12, fontWeight: 'bold', color: '#111827', marginBottom: 2 },
+      sub: { fontSize: 8.5, color: secondary, marginBottom: 6 },
+      detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+      detailLabel: { fontSize: 8, color: '#6b7280' },
+      detailValue: { fontSize: 8.5, fontWeight: 'bold', color: '#111827' },
+      footer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: secondary,
+        height: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      footerText: { color: '#ffffff', fontSize: 7, fontWeight: 'bold' },
+    });
+
+    const doc = this.h(
+      Document,
+      null,
+      this.h(
+        Page,
+        { size: [340, 214], style: styles.page },
+        this.h(
+          View,
+          { style: styles.card },
+          this.h(
+            View,
+            { style: styles.header },
+            this.h(Text, { style: styles.headerText }, SCHOOL_NAME),
+            this.h(Text, { style: styles.headerBadge }, 'BUS PASS'),
+          ),
+          this.h(
+            View,
+            { style: styles.body },
+            photoSrc
+              ? this.h(Image, { src: photoSrc, style: styles.photo })
+              : this.h(View, { style: styles.photo }),
+            this.h(
+              View,
+              { style: styles.infoCol },
+              this.h(Text, { style: styles.name }, ctx.fullName),
+              this.h(Text, { style: styles.sub }, `${ctx.admissionNumber} · ${ctx.className}`),
+              this.h(
+                View,
+                { style: styles.detailRow },
+                this.h(Text, { style: styles.detailLabel }, 'Route'),
+                this.h(Text, { style: styles.detailValue }, ctx.routeName),
+              ),
+              this.h(
+                View,
+                { style: styles.detailRow },
+                this.h(Text, { style: styles.detailLabel }, 'Stop'),
+                this.h(Text, { style: styles.detailValue }, ctx.stopName),
+              ),
+              this.h(
+                View,
+                { style: styles.detailRow },
+                this.h(Text, { style: styles.detailLabel }, 'Vehicle'),
+                this.h(Text, { style: styles.detailValue }, ctx.vehicleLabel),
+              ),
+              ctx.pickupTime || ctx.dropTime
+                ? this.h(
+                    View,
+                    { style: styles.detailRow },
+                    this.h(Text, { style: styles.detailLabel }, 'Timing'),
+                    this.h(
+                      Text,
+                      { style: styles.detailValue },
+                      `${ctx.pickupTime || '—'} / ${ctx.dropTime || '—'}`,
+                    ),
+                  )
+                : null,
+            ),
+          ),
+          this.h(
+            View,
+            { style: styles.footer },
+            this.h(Text, { style: styles.footerText }, 'Valid for the current academic session · Non-transferable'),
+          ),
+        ),
+      ),
+    );
+    return renderToBuffer(doc);
+  }
 }

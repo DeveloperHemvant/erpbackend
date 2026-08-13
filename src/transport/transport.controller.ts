@@ -8,11 +8,13 @@ import {
   Delete,
   Put,
   Query,
+  ForbiddenException,
 } from '@nestjs/common';
 import { TransportService } from './transport.service';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import { OwnershipService } from '../auth/ownership.service';
 import {
   CreateVehicleDto,
   UpdateVehicleDto,
@@ -54,7 +56,10 @@ import {
 @RequirePermissions('MANAGE_TRANSPORT')
 @Controller('transport')
 export class TransportController {
-  constructor(private readonly transportService: TransportService) {}
+  constructor(
+    private readonly transportService: TransportService,
+    private readonly ownershipService: OwnershipService,
+  ) {}
 
   // --- VEHICLES ---
   @Post('vehicles')
@@ -148,6 +153,30 @@ export class TransportController {
   @RequirePermissions('MANAGE_TRANSPORT')
   getStudentTransport(@Param('enrollmentId') enrollmentId: string) {
     return this.transportService.getStudentTransport(enrollmentId);
+  }
+
+  // Own-record download — same inline staff-or-ownership pattern as
+  // FeesController.downloadFeeReceipt / EmsController's hall ticket route: a
+  // parent/student never holds MANAGE_TRANSPORT, so ownership is checked
+  // directly instead of the class default, while staff can still pull any
+  // student's pass for printing/re-issue.
+  @Get('students/:studentId/bus-pass/pdf')
+  @RequirePermissions()
+  async renderStudentBusPassPdf(
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const isStaff =
+      user.permissions.includes('*') ||
+      user.permissions.includes('MANAGE_TRANSPORT');
+    if (!isStaff) {
+      const role = (user.role || '').toLowerCase();
+      if (role !== 'student' && role !== 'parent') {
+        throw new ForbiddenException('You do not have access to this bus pass.');
+      }
+      await this.ownershipService.assertOwnsStudent(user, studentId);
+    }
+    return this.transportService.renderStudentBusPassPdf(studentId);
   }
 
   @Get('routes/:id/roster')

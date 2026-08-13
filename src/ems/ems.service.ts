@@ -7,6 +7,8 @@ import { EmsRepository } from './repositories/ems.repository';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OwnershipService } from '../auth/ownership.service';
 import { AuthenticatedUser } from '../auth/current-user.decorator';
+import { DocumentRenderingService } from '../documents/document-rendering.service';
+import { StorageService } from '../storage/storage.service';
 import {
   CreateEmsSessionDto,
   CreateEmsExamTypeDto,
@@ -37,6 +39,8 @@ export class EmsService {
     private readonly emsRepository: EmsRepository,
     private readonly notificationsService: NotificationsService,
     private readonly ownershipService: OwnershipService,
+    private readonly renderer: DocumentRenderingService,
+    private readonly storage: StorageService,
   ) {}
 
   // --- Exam Sessions ---
@@ -806,6 +810,8 @@ export class EmsService {
       return {
         attemptId: a.id,
         scheduleId: a.scheduleId,
+        sessionId: a.schedule.sessionId,
+        sessionName: (a.schedule as any).session?.name,
         status: a.status,
         subject: a.schedule.subject,
         template: a.schedule.template,
@@ -828,6 +834,100 @@ export class EmsService {
           : null,
       };
     });
+  }
+
+  /** Assembles hall-ticket data straight from the seating plan — a student
+   * only has a hall ticket for subjects a room/seat has actually been
+   * assigned for, so an empty seating plan means "not published yet"
+   * rather than a document with blank rows. */
+  async getStudentHallTicketData(studentId: string, sessionId: string) {
+    const session = await this.emsRepository.findSessionById(sessionId);
+    if (!session) throw new NotFoundException('Exam session not found');
+
+    const student =
+      await this.emsRepository.findStudentForHallTicket(studentId);
+    if (!student) throw new NotFoundException('Student not found');
+
+    const seatings = await this.emsRepository.findSeatingsForStudentInSession(
+      studentId,
+      sessionId,
+    );
+    if (seatings.length === 0) {
+      throw new NotFoundException(
+        'No seating plan has been published for this student in this exam session yet',
+      );
+    }
+
+    const roomIds = Array.from(
+      new Set(seatings.map((s) => s.room.roomId)),
+    );
+    const masterRooms =
+      await this.emsRepository.findMasterRoomsByIds(roomIds);
+    const roomNameById = new Map(masterRooms.map((r) => [r.id, r.name]));
+
+    const enrollment = (student as any).enrollments?.[0];
+    const className = enrollment
+      ? `${enrollment.section?.class?.grade ?? ''} - ${enrollment.section?.name ?? ''}`
+      : '';
+
+    const subjects = seatings
+      .map((s) => ({
+        subject: s.room.schedule.subject?.name || 'Exam',
+        date: s.room.schedule.date,
+        startTime: s.room.schedule.startTime,
+        endTime: s.room.schedule.endTime,
+        roomName: roomNameById.get(s.room.roomId) || 'TBD',
+        seatNumber: s.seatNumber,
+      }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    return {
+      session: { id: session.id, name: session.name },
+      student: {
+        fullName: student.fullName,
+        admissionNumber: student.admissionNumber,
+        photoUrl: student.photoUrl,
+        className,
+      },
+      subjects,
+    };
+  }
+
+  async renderStudentHallTicketPdf(
+    studentId: string,
+    sessionId: string,
+  ): Promise<{ url: string }> {
+    const data = await this.getStudentHallTicketData(studentId, sessionId);
+
+    const pdfBuffer = await this.renderer.renderHallTicket({
+      studentName: data.student.fullName,
+      admissionNumber: data.student.admissionNumber,
+      className: data.student.className,
+      photoUrl: data.student.photoUrl,
+      sessionName: data.session.name,
+      subjects: data.subjects.map((s) => ({
+        subject: s.subject,
+        date: s.date.toISOString(),
+        startTime: new Date(s.startTime).toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        endTime: new Date(s.endTime).toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        roomName: s.roomName,
+        seatNumber: s.seatNumber,
+      })),
+    });
+
+    const { url } = await this.storage.uploadFile(
+      pdfBuffer,
+      `hall-tickets/${studentId}`,
+      `hall-ticket-${data.session.id}.pdf`,
+      'application/pdf',
+    );
+    return { url };
   }
 
   async getStudentResults(studentId: string) {
