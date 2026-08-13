@@ -33,10 +33,26 @@ export class IssueCertificateDto {
   @IsString()
   @IsNotEmpty()
   title: string;
+}
+
+export class RequestCertificateDto {
+  @IsString()
+  @IsNotEmpty()
+  studentId: string;
+
+  @IsIn(['BONAFIDE', 'TRANSFER', 'MIGRATION'])
+  @IsNotEmpty()
+  type: string;
 
   @IsString()
-  @IsOptional()
-  fileUrl?: string;
+  @IsNotEmpty()
+  title: string;
+}
+
+export class ApproveCertificateRequestDto {
+  @IsString()
+  @IsNotEmpty()
+  templateId: string;
 }
 
 export class UpdateDocumentTemplateDto {

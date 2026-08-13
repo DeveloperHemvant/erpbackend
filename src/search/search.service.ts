@@ -3,7 +3,7 @@ import {
   SearchRepository,
   SearchResult,
 } from './repositories/search.repository';
-import { ENTITY_VIEW_PERMISSION } from '../common/entity-permissions';
+import { canAccessEntityType } from '../common/entity-permissions';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
 const SEARCHERS: Record<
@@ -43,10 +43,8 @@ export class SearchService {
   ): Promise<SearchResult[]> {
     if (!q || q.trim().length < 2) return [];
 
-    const isSuperAdmin = user.permissions.includes('*');
-    const allowedTypes = Object.keys(SEARCHERS).filter(
-      (type) =>
-        isSuperAdmin || user.permissions.includes(ENTITY_VIEW_PERMISSION[type]),
+    const allowedTypes = Object.keys(SEARCHERS).filter((type) =>
+      canAccessEntityType(user.permissions, type),
     );
 
     const perTypeLimit = Math.max(

@@ -112,6 +112,13 @@ export class FeeRepository {
     return this.prisma.feePayment.create({ data });
   }
 
+  /** Idempotency check for the Razorpay webhook — Razorpay redelivers events
+   * on timeout/retry, and gatewayPaymentId is the one field that uniquely
+   * identifies "we already recorded this specific Razorpay payment." */
+  findPaymentByGatewayId(gatewayPaymentId: string) {
+    return this.prisma.feePayment.findFirst({ where: { gatewayPaymentId } });
+  }
+
   findAllPayments() {
     return this.prisma.feePayment.findMany({
       include: { invoice: { include: { enrollment: true } } },

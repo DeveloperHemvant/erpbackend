@@ -160,6 +160,7 @@ model Staff {
   lostFoundItems        LostFoundItem[]
   supervisedAssemblies  MorningAssembly[]
   issuedAchievements    StudentAchievement[]  @relation("IssuedBy")
+  consentRequestsCreated ConsentRequest[]
 
   @@map("staff")
 }
@@ -226,6 +227,7 @@ model Student {
   housesViceCaptained SchoolHouse[]        @relation("HouseViceCaptain")
   diaryEntries        SchoolDiaryEntry[]
   achievements        StudentAchievement[]
+  consentResponses    ConsentResponse[]
 
   houseId String?      @db.Uuid
   house   SchoolHouse? @relation("HouseMembers", fields: [houseId], references: [id])
@@ -299,6 +301,7 @@ model Section {
   LMSCourseSection  LMSCourseSection[]
   morningAssemblies MorningAssembly[]
   homeworkAssignments LMSAssignment[]
+  consentRequests   ConsentRequest[]
 
   @@map("sections")
 }
@@ -441,6 +444,12 @@ model ReportCard {
   remarks        String?
   isApproved     Boolean           @default(false)
   status         String            @default("Active")
+  // Parent sign-off (Phase 10) — same 3-field shape as
+  // SchoolDiaryEntry.parentSigned/parentSignedAt/signatureAttachmentId and
+  // ConsentResponse, not a new pattern.
+  parentSigned           Boolean   @default(false)
+  parentSignedAt         DateTime?
+  signatureAttachmentId  String?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   createdBy      String?
@@ -535,6 +544,7 @@ model Parent {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   students     ParentStudent[]
+  consentResponses ConsentResponse[]
 
   @@map("parents")
 }
@@ -803,8 +813,54 @@ model HostelOutpass {
   exitTime     DateTime?
   returnTime   DateTime?
   createdAt    DateTime          @default(now())
+  // Parent co-sign (Phase 3) — same 3-field consent shape as
+  // SchoolDiaryEntry.parentSigned. resolveOutpass() hard-gates Approved on
+  // this being true first; giveOutpassConsent() is the only writer.
+  parentConsent          Boolean   @default(false)
+  parentConsentAt        DateTime?
+  parentConsentAttachmentId String?
 
   @@map("hostel_outpasses")
+}
+
+// --- CONSENT / PERMISSION SLIPS ---
+// General-purpose broadcast consent capability (Phase 3, "optional if
+// wanted" item) — e.g. field trip permission to one class, a photo-policy
+// notice to the whole school. One ConsentRequest fans out into one
+// ConsentResponse per targeted student at creation time (same
+// pre-materialize-per-recipient pattern as attendance registries), each
+// independently signed/declined by that student's parent.
+model ConsentRequest {
+  id              String            @id @default(uuid()) @db.Uuid
+  title           String
+  description     String
+  targetType      String // ALL, SECTION, STUDENT
+  targetSectionId String?           @db.Uuid
+  targetSection   Section?          @relation(fields: [targetSectionId], references: [id])
+  dueDate         DateTime?
+  createdById     String            @db.Uuid
+  createdBy       Staff             @relation(fields: [createdById], references: [id])
+  createdAt       DateTime          @default(now())
+  responses       ConsentResponse[]
+
+  @@map("consent_requests")
+}
+
+model ConsentResponse {
+  id                     String         @id @default(uuid()) @db.Uuid
+  consentRequestId       String         @db.Uuid
+  consentRequest         ConsentRequest @relation(fields: [consentRequestId], references: [id], onDelete: Cascade)
+  studentId              String         @db.Uuid
+  student                Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status                 String         @default("Pending") // Pending, Signed, Declined
+  respondedAt            DateTime?
+  respondedById          String?        @db.Uuid
+  respondedBy            Parent?        @relation(fields: [respondedById], references: [id])
+  signatureAttachmentId  String?
+  createdAt              DateTime       @default(now())
+
+  @@unique([consentRequestId, studentId])
+  @@map("consent_responses")
 }
 
 // --- LIBRARY ---
@@ -1481,6 +1537,11 @@ model TransportDailyCheck {
   odometerReading    Float?
   overallStatus      String           @default("Fit") // Fit, Not Fit
   remarks            String?
+  // Phase 7 (paperless rollout plan) GPS consistency: captured once at
+  // submission time as proof the driver was actually at the vehicle, not a
+  // live-tracked position like TransportTripLog's per-ping coordinates.
+  latitude           Float?
+  longitude          Float?
   createdAt          DateTime         @default(now())
 
   @@map("transport_daily_checks")
@@ -2781,17 +2842,23 @@ model TeacherSubstitution {
 }
 
 model SchoolDiaryEntry {
-  id             String    @id @default(uuid()) @db.Uuid
-  studentId      String    @db.Uuid
-  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacherId      String    @db.Uuid
-  teacher        Staff     @relation(fields: [teacherId], references: [id])
-  type           String
-  content        String
-  parentSigned   Boolean   @default(false)
-  parentSignedAt DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                    String    @id @default(uuid()) @db.Uuid
+  studentId             String    @db.Uuid
+  student               Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId             String    @db.Uuid
+  teacher               Staff     @relation(fields: [teacherId], references: [id])
+  type                  String
+  content               String
+  parentSigned          Boolean   @default(false)
+  parentSignedAt        DateTime?
+  // Reference implementation for the consent-signature pattern (Phase 2c):
+  // a captured signature image, stored as any other file via the generic
+  // Attachment table rather than a dedicated signature table. Repeat this
+  // same 3-field shape (signed/signedAt/signatureAttachmentId) on other
+  // consent-shaped models rather than building a shared signature engine.
+  signatureAttachmentId String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@map("school_diary_entries")
 }
@@ -2820,6 +2887,8 @@ model GrievanceRecord {
   assignedTo      Staff?   @relation(fields: [assignedToId], references: [id])
   escalationLevel Int      @default(0)
   status          String   @default("Open")
+  resolutionRemarks String?
+  resolvedAt      DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -7,6 +7,8 @@ import { CommunicationService } from '../communication/communication.service';
 import { ExamRepository } from '../exams/repositories/exam.repository';
 import { ReportCardRepository } from './repositories/report-card.repository';
 import { CreateReportCardDto } from './dto/report-card.dto';
+import { DocumentRenderingService } from '../documents/document-rendering.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class ReportCardsService {
@@ -14,6 +16,8 @@ export class ReportCardsService {
     private readonly commService: CommunicationService,
     private readonly examRepository: ExamRepository,
     private readonly reportCardRepository: ReportCardRepository,
+    private readonly renderer: DocumentRenderingService,
+    private readonly storage: StorageService,
   ) {}
 
   async createReportCard(dto: CreateReportCardDto) {
@@ -44,6 +48,58 @@ export class ReportCardsService {
 
   async deleteReportCard(id: string) {
     return this.reportCardRepository.delete(id);
+  }
+
+  /** Parent sign-off — same 3-field shape as DiaryService.signDiaryEntry,
+   * called from the portal after ownership is verified by the caller. */
+  async signReportCard(id: string, signatureAttachmentId?: string) {
+    const card = await this.reportCardRepository.findById(id);
+    if (!card) throw new NotFoundException('Report card not found.');
+    return this.reportCardRepository.updateSignature(
+      id,
+      signatureAttachmentId,
+    );
+  }
+
+  /** Rendered fresh on every call rather than cached on the row — this is a
+   * personal-view download (repeat-visit rate is low), not a one-time issued
+   * document like a Certificate, so the extra render cost isn't worth a
+   * schema field + staleness tracking (see Phase 4 plan notes). */
+  async renderReportCardPdf(id: string): Promise<{ url: string }> {
+    const card = await this.reportCardRepository.findByIdWithContext(id);
+    if (!card) throw new NotFoundException('Report card not found.');
+
+    const student = card.enrollment?.student;
+    const section = card.enrollment?.section;
+    if (!student) {
+      throw new BadRequestException(
+        'This report card has no associated student.',
+      );
+    }
+
+    const pdfBuffer = await this.renderer.renderReportCard(
+      {
+        gpa: card.gpa,
+        attendanceRate: card.attendanceRate,
+        remarks: card.remarks,
+        isApproved: card.isApproved,
+        computedData: card.computedData,
+      },
+      {
+        studentName: student.fullName,
+        admissionNumber: student.admissionNumber,
+        className: section ? `${section.class?.grade ?? ''} - ${section.name}` : '—',
+        examName: card.exam?.name || 'Report Card',
+      },
+    );
+
+    const { url } = await this.storage.uploadFile(
+      pdfBuffer,
+      `report-cards/${card.enrollmentId}`,
+      `report-card-${card.id}.pdf`,
+      'application/pdf',
+    );
+    return { url };
   }
 
   async generateReportCard(enrollmentId: string, examId: string) {

@@ -9,7 +9,11 @@ import {
   Query,
   Delete,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  ForbiddenException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { HostelService } from './hostel.service';
 import {
@@ -27,6 +31,9 @@ import {
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireAnyPermission } from '../auth/any-permission.decorator';
 import { AnyPermissionGuard } from '../auth/any-permission.guard';
+import { RequireStudentAccessOrPermission } from '../auth/student-access-or-permission.decorator';
+import { StudentAccessOrPermissionGuard } from '../auth/student-access-or-permission.guard';
+import { OwnershipService } from '../auth/ownership.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
@@ -43,7 +50,10 @@ import type { AuthenticatedUser } from '../auth/current-user.decorator';
 @ApiTags('Hostel')
 @Controller('hostel')
 export class HostelController {
-  constructor(private readonly hostelService: HostelService) {}
+  constructor(
+    private readonly hostelService: HostelService,
+    private readonly ownershipService: OwnershipService,
+  ) {}
 
   @Post('hostels')
   @ApiOperation({ summary: 'Create Hostel' })
@@ -132,13 +142,30 @@ export class HostelController {
     return this.hostelService.resolveGrievance(id, data.status);
   }
 
+  // Student/parent self-service: a student requesting their own outpass never
+  // holds MANAGE_HOSTEL, so these two routes defer to enrollment ownership
+  // instead (StudentAccessOrPermissionGuard) rather than the class-level
+  // Warden-only default — Warden still gets full access via the permission
+  // branch of that same guard.
   @Post('outpasses')
+  @UseGuards(StudentAccessOrPermissionGuard)
+  @RequireStudentAccessOrPermission('enrollmentId', ['MANAGE_HOSTEL'], {
+    idType: 'enrollment',
+    source: 'body',
+  })
+  @RequirePermissions()
   @ApiOperation({ summary: 'Request a hostel outpass' })
   async createOutpass(@Body() data: CreateHostelOutpassDto) {
     return this.hostelService.createOutpass(data);
   }
 
   @Get('outpasses')
+  @UseGuards(StudentAccessOrPermissionGuard)
+  @RequireStudentAccessOrPermission('enrollmentId', ['MANAGE_HOSTEL'], {
+    idType: 'enrollment',
+    source: 'query',
+  })
+  @RequirePermissions()
   @ApiOperation({ summary: 'List hostel outpasses (optionally by student enrollment)' })
   async getOutpasses(@Query('enrollmentId') enrollmentId?: string) {
     return this.hostelService.getOutpasses(enrollmentId);
@@ -164,6 +191,80 @@ export class HostelController {
   @ApiOperation({ summary: 'Record student return from outpass' })
   async recordOutpassReturn(@Param('id', ParseUUIDPipe) id: string) {
     return this.hostelService.recordOutpassReturn(id);
+  }
+
+  // Deliberately NOT built on RequireStudentAccessOrPermission's usual
+  // staff-bypass-or-ownership pattern: recording parent consent must only
+  // ever come from the actual parent, never from staff (even MANAGE_HOSTEL)
+  // acting on their behalf, or the "hard gate" resolveOutpass enforces
+  // becomes spoofable by whoever is approving it. Ownership is still
+  // checked via OwnershipService directly, just without the permission
+  // bypass branch.
+  @Patch('outpasses/:id/consent')
+  @RequirePermissions()
+  @UseInterceptors(FileInterceptor('signature'))
+  @ApiOperation({
+    summary: "Parent records consent for their child's outpass request, optionally with a captured signature",
+  })
+  async giveOutpassConsent(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() signature?: any,
+  ) {
+    if ((user.role || '').toLowerCase() !== 'parent') {
+      throw new ForbiddenException(
+        'Only a parent can record consent for an outpass.',
+      );
+    }
+    await this.ownershipService.assertOwnsHostelOutpass(user, id);
+    return this.hostelService.giveOutpassConsent(id, user.userId, signature);
+  }
+
+  // Own-record attachment access — same ownership-or-MANAGE_HOSTEL pattern as
+  // createOutpass/getOutpasses above, resolved via the outpass id itself
+  // rather than a separate enrollmentId param.
+  @Get('outpasses/:id/attachments')
+  @UseGuards(StudentAccessOrPermissionGuard)
+  @RequireStudentAccessOrPermission('id', ['MANAGE_HOSTEL'], {
+    idType: 'hostelOutpass',
+    source: 'params',
+  })
+  @RequirePermissions()
+  @ApiOperation({ summary: "List an outpass request's attachments" })
+  async getOutpassAttachments(@Param('id', ParseUUIDPipe) id: string) {
+    return this.hostelService.getOutpassAttachments(id);
+  }
+
+  @Post('outpasses/:id/attachments')
+  @UseGuards(StudentAccessOrPermissionGuard)
+  @RequireStudentAccessOrPermission('id', ['MANAGE_HOSTEL'], {
+    idType: 'hostelOutpass',
+    source: 'params',
+  })
+  @RequirePermissions()
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Attach a file to an outpass request' })
+  async uploadOutpassAttachment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: any,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.hostelService.uploadOutpassAttachment(id, file, user.userId);
+  }
+
+  @Delete('outpasses/:id/attachments/:attachmentId')
+  @UseGuards(StudentAccessOrPermissionGuard)
+  @RequireStudentAccessOrPermission('id', ['MANAGE_HOSTEL'], {
+    idType: 'hostelOutpass',
+    source: 'params',
+  })
+  @RequirePermissions()
+  @ApiOperation({ summary: "Remove an outpass request's attachment" })
+  async deleteOutpassAttachment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('attachmentId', ParseUUIDPipe) attachmentId: string,
+  ) {
+    return this.hostelService.deleteOutpassAttachment(attachmentId);
   }
 
   @Post('attendance')

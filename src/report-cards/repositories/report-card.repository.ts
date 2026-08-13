@@ -32,6 +32,18 @@ export class ReportCardRepository {
     return this.prisma.reportCard.findUnique({ where: { id } });
   }
 
+  findByIdWithContext(id: string) {
+    return this.prisma.reportCard.findUnique({
+      where: { id },
+      include: {
+        enrollment: {
+          include: { student: true, section: { include: { class: true } } },
+        },
+        exam: true,
+      },
+    });
+  }
+
   updateApproval(id: string, isApproved: boolean, remarks?: string) {
     return this.prisma.reportCard.update({
       where: { id },
@@ -46,6 +58,17 @@ export class ReportCardRepository {
 
   delete(id: string) {
     return this.prisma.reportCard.delete({ where: { id } });
+  }
+
+  updateSignature(id: string, signatureAttachmentId?: string) {
+    return this.prisma.reportCard.update({
+      where: { id },
+      data: {
+        parentSigned: true,
+        parentSignedAt: new Date(),
+        ...(signatureAttachmentId !== undefined && { signatureAttachmentId }),
+      },
+    });
   }
 
   findByEnrollmentAndExam(enrollmentId: string, examId: string) {

@@ -183,8 +183,6 @@ export class StaffController {
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() file: any,
   ) {
-    // Return a mock URL for now. In a real app, this would be uploaded to S3 or a local public folder.
-    const mockUrl = `/uploads/staff/${id}/${file.originalname}`;
-    return { url: mockUrl };
+    return this.staffService.uploadPhoto(id, file);
   }
 }

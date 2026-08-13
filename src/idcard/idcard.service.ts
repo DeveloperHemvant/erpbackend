@@ -4,10 +4,16 @@ import {
   CreateIdCardTemplateDto,
   UpdateIdCardTemplateDto,
 } from './dto/idcard-template.dto';
+import { DocumentRenderingService } from '../documents/document-rendering.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class IdCardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly renderer: DocumentRenderingService,
+    private readonly storage: StorageService,
+  ) {}
 
   async getStudentIdCard(studentId: string) {
     const card = await this.prisma.idCard.findFirst({
@@ -39,6 +45,58 @@ export class IdCardService {
     if (!card)
       throw new NotFoundException('ID Card not found for this staff member');
     return card;
+  }
+
+  /** Rendered fresh each call, same reasoning as ReportCardsService — a
+   * personal-view download, not a one-time issued document. */
+  async renderStudentIdCardPdf(studentId: string): Promise<{ url: string }> {
+    const card = await this.getStudentIdCard(studentId);
+    const student = card.student as any;
+    const enrollment = student?.enrollments?.[0];
+    const roleLabel = enrollment
+      ? `${enrollment.section?.class?.grade ?? ''} - ${enrollment.section?.name ?? ''}`
+      : 'Student';
+
+    const pdfBuffer = await this.renderer.renderIdCard(card.template, {
+      fullName: student.fullName,
+      role: roleLabel,
+      idNumber: card.idNumber,
+      photoUrl: student.photoUrl,
+      expiryDate: card.expiryDate
+        ? new Date(card.expiryDate).toLocaleDateString('en-IN')
+        : undefined,
+    });
+
+    const { url } = await this.storage.uploadFile(
+      pdfBuffer,
+      `id-cards/student/${studentId}`,
+      `id-card-${card.idNumber}.pdf`,
+      'application/pdf',
+    );
+    return { url };
+  }
+
+  async renderStaffIdCardPdf(staffId: string): Promise<{ url: string }> {
+    const card = await this.getStaffIdCard(staffId);
+    const staff = card.staff as any;
+
+    const pdfBuffer = await this.renderer.renderIdCard(card.template, {
+      fullName: staff.fullName,
+      role: staff.role?.name || 'Staff',
+      idNumber: card.idNumber,
+      photoUrl: staff.photoUrl,
+      expiryDate: card.expiryDate
+        ? new Date(card.expiryDate).toLocaleDateString('en-IN')
+        : undefined,
+    });
+
+    const { url } = await this.storage.uploadFile(
+      pdfBuffer,
+      `id-cards/staff/${staffId}`,
+      `id-card-${card.idNumber}.pdf`,
+      'application/pdf',
+    );
+    return { url };
   }
 
   // --- TEMPLATE MANAGEMENT ---

@@ -8,6 +8,7 @@ import {
   Patch,
   Query,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { HrService } from './hr.service';
@@ -130,6 +131,27 @@ export class HrController {
       month ? parseInt(month, 10) : undefined,
       year ? parseInt(year, 10) : undefined,
     );
+  }
+
+  // Own-record download, keyed by payslip id rather than staffId, so
+  // ownership is checked inline (fetch then compare) instead of via
+  // RequireSelfOrPermission — same pattern as ReportCardsController.
+  @Get('payslips/:id/pdf')
+  @RequirePermissions()
+  @ApiOperation({ summary: 'Render this payslip as a real PDF' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  async downloadPayslipPdf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const isHr = user.permissions.includes('*') || user.permissions.includes('MANAGE_HR');
+    if (!isHr) {
+      const payslip = await this.hrService.findPayslipById(id);
+      if (!payslip || payslip.staffId !== user.userId) {
+        throw new ForbiddenException('You do not have access to this payslip.');
+      }
+    }
+    return this.hrService.renderPayslipPdf(id);
   }
 
   @Get('staff/:staffId/workload')

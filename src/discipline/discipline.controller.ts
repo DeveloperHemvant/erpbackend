@@ -37,7 +37,7 @@ export class DisciplineController {
   // or the student themself sees the same route but a note-free summary.
   @Get('students/:studentId/incidents')
   @UseGuards(StudentAccessOrPermissionGuard)
-  @RequireStudentAccessOrPermission('studentId', 'MANAGE_DISCIPLINE')
+  @RequireStudentAccessOrPermission('studentId', ['MANAGE_DISCIPLINE'])
   @RequirePermissions()
   getIncidentsForStudent(
     @Param('studentId') studentId: string,

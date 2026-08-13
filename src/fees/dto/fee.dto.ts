@@ -4,7 +4,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsUUID,
-  IsNumber,
   IsIn,
 } from 'class-validator';
 
@@ -137,32 +136,3 @@ export class ResolveRefundDto {
   remarks?: string;
 }
 
-export class WebhookPaymentDto {
-  @ApiProperty({ example: 'e936551b-4d43-4011-8fe6-b3334863adfb' })
-  @IsUUID()
-  @IsNotEmpty()
-  invoiceId: string;
-
-  @ApiProperty({ example: 1500 })
-  @IsNumber()
-  @IsNotEmpty()
-  amountPaid: number;
-
-  @ApiProperty({
-    example: 'Stripe',
-    enum: ['Stripe', 'Razorpay'],
-    required: false,
-  })
-  @IsString()
-  @IsOptional()
-  paymentMode?: string;
-
-  @ApiProperty({ example: 'pay_ABC123', required: false })
-  @IsString()
-  @IsOptional()
-  referenceNo?: string;
-
-  @ApiProperty({ example: {}, required: false })
-  @IsOptional()
-  gatewayResponse?: any;
-}

@@ -125,7 +125,7 @@ export class ActivitiesController {
   // as discipline/health-records, so this is viewable from the student's own
   // dashboard, not just the admin desk.
   @UseGuards(StudentAccessOrPermissionGuard)
-  @RequireStudentAccessOrPermission('studentId', 'MANAGE_ACTIVITIES')
+  @RequireStudentAccessOrPermission('studentId', ['MANAGE_ACTIVITIES'])
   @RequirePermissions()
   @Get('students/:studentId/achievements')
   @ApiOperation({ summary: 'Get achievements for a student' })

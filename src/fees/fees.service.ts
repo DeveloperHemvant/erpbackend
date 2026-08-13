@@ -3,8 +3,10 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import Razorpay from 'razorpay';
+import * as crypto from 'crypto';
 import { CommunicationService } from '../communication/communication.service';
 import { StudentRepository } from '../students/repositories/student.repository';
 import { FeeRepository } from './repositories/fee.repository';
@@ -15,13 +17,13 @@ import {
   CreateFeePaymentDto,
   RequestRefundDto,
   ResolveRefundDto,
-  WebhookPaymentDto,
 } from './dto/fee.dto';
 
 @Injectable()
 export class FeesService {
   private readonly logger = new Logger(FeesService.name);
   private razorpayClient: Razorpay | null = null;
+  private readonly razorpayWebhookSecret: string | null;
 
   constructor(
     private readonly commService: CommunicationService,
@@ -29,7 +31,8 @@ export class FeesService {
     private readonly feeRepository: FeeRepository,
     private readonly auditLogRepository: ErpCoreAuditLogRepository,
   ) {
-    const { RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET } = process.env;
+    const { RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET } =
+      process.env;
     if (RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) {
       this.razorpayClient = new Razorpay({
         key_id: RAZORPAY_KEY_ID,
@@ -38,6 +41,12 @@ export class FeesService {
     } else {
       this.logger.warn(
         'Razorpay not configured (RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET) — fee payment order creation will return not_configured instead of a real order.',
+      );
+    }
+    this.razorpayWebhookSecret = RAZORPAY_WEBHOOK_SECRET || null;
+    if (!this.razorpayWebhookSecret) {
+      this.logger.warn(
+        'Razorpay webhook secret not configured (RAZORPAY_WEBHOOK_SECRET) — the payment webhook will reject every request until it is set, rather than accept unverified payment confirmations.',
       );
     }
   }
@@ -261,26 +270,107 @@ export class FeesService {
     return payment;
   }
 
-  async processOnlinePaymentWebhook(payload: WebhookPaymentDto) {
-    // Simulate receiving a webhook from Stripe/Razorpay
-    // Payload should contain invoiceId and status
-    const { invoiceId, amountPaid, paymentMode, referenceNo, gatewayResponse } =
-      payload;
+  /** True HMAC-SHA256 comparison over the raw request body, per Razorpay's
+   * webhook signing spec — never trust the parsed/re-serialized JSON for
+   * this, key order or whitespace differences would break the digest. */
+  verifyRazorpayWebhookSignature(
+    rawBody: Buffer,
+    signature: string | undefined,
+  ): boolean {
+    if (!this.razorpayWebhookSecret || !signature || !rawBody) return false;
+    const expected = crypto
+      .createHmac('sha256', this.razorpayWebhookSecret)
+      .update(rawBody)
+      .digest('hex');
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    const signatureBuf = Buffer.from(signature, 'utf8');
+    if (expectedBuf.length !== signatureBuf.length) return false;
+    return crypto.timingSafeEqual(expectedBuf, signatureBuf);
+  }
 
-    const invoice = await this.feeRepository.findInvoiceById(invoiceId);
-    if (!invoice) throw new NotFoundException('Invoice not found');
+  /**
+   * Real Razorpay webhook (Phase 6) — replaces the old
+   * fees/webhook/online-payment route, which required an authenticated
+   * PAY_FEES/MANAGE_FEES caller and trusted a client-supplied
+   * {invoiceId, amountPaid} with no signature at all: any parent could mark
+   * *any* invoice paid for *any* amount by calling it directly. This route
+   * is public (Razorpay's servers call it, not a logged-in user) and only
+   * ever trusts amounts/invoice linkage it reads back out of a
+   * signature-verified payload.
+   */
+  async processRazorpayWebhook(
+    rawBody: Buffer,
+    signature: string | undefined,
+    payload: any,
+  ) {
+    if (!this.razorpayWebhookSecret) {
+      throw new BadRequestException(
+        'Razorpay webhook is not configured on this server.',
+      );
+    }
+    if (!this.verifyRazorpayWebhookSignature(rawBody, signature)) {
+      throw new UnauthorizedException('Invalid webhook signature.');
+    }
 
-    return this.feeRepository.createWebhookPayment({
+    if (payload?.event !== 'payment.captured') {
+      // Acknowledge (200) but take no action on events we don't handle
+      // (order.paid, payment.failed, ...) — Razorpay retries on non-2xx.
+      return { status: 'ignored', event: payload?.event };
+    }
+
+    const paymentEntity = payload?.payload?.payment?.entity;
+    if (!paymentEntity?.id) {
+      throw new BadRequestException(
+        'Malformed webhook payload — missing payment entity.',
+      );
+    }
+
+    const existing = await this.feeRepository.findPaymentByGatewayId(
+      paymentEntity.id,
+    );
+    if (existing) {
+      return { status: 'already_processed', paymentId: existing.id };
+    }
+
+    let invoiceId: string | undefined = paymentEntity.notes?.invoiceId;
+    if (!invoiceId && paymentEntity.order_id && this.razorpayClient) {
+      const order = await this.razorpayClient.orders.fetch(
+        paymentEntity.order_id,
+      );
+      invoiceId = (order.notes as Record<string, string> | undefined)
+        ?.invoiceId;
+    }
+    if (!invoiceId) {
+      throw new BadRequestException(
+        'Could not resolve which invoice this payment belongs to.',
+      );
+    }
+
+    const invoice = await this.feeRepository.findInvoiceWithPayments(invoiceId);
+    if (!invoice) throw new NotFoundException('Invoice not found for this payment.');
+
+    const amountPaid = paymentEntity.amount / 100; // paise -> rupees
+
+    const payment = await this.feeRepository.createWebhookPayment({
       invoiceId,
       amountPaid: amountPaid.toString(),
-      paymentMode: paymentMode || 'Stripe',
-      referenceNo: referenceNo || `TRX-${Date.now()}`,
+      paymentMode: 'Razorpay',
+      referenceNo: paymentEntity.id,
+      gatewayPaymentId: paymentEntity.id,
       paymentDate: new Date().toISOString().split('T')[0],
-      gatewayResponse: gatewayResponse,
-      createdBy: 'WEBHOOK',
+      gatewayResponse: payload,
+      createdBy: 'RAZORPAY_WEBHOOK',
     });
-    // In a real flow, we'd also trigger recordFeePayment logic or similar to update invoice status.
-    // For this mock, we'll just update it directly here.
+
+    const totalPaid =
+      invoice.payments.reduce((sum, p) => sum + Number(p.amountPaid), 0) +
+      amountPaid;
+    const invoiceAmount = Number(invoice.totalAmount || invoice.amount);
+    if (totalPaid >= invoiceAmount) {
+      await this.feeRepository.updateInvoiceStatusSimple(invoiceId, 'Paid');
+    }
+
+    return { status: 'processed', paymentId: payment.id };
   }
 
   async getFeePayments() {

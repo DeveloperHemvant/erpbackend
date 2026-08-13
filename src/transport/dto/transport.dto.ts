@@ -768,6 +768,16 @@ export class CreateDailyCheckDto {
   @IsString()
   @IsOptional()
   remarks?: string;
+
+  // Phase 7 GPS consistency: one-time capture of the driver's location at
+  // submission time, not a live-tracked position.
+  @IsNumber()
+  @IsOptional()
+  latitude?: number;
+
+  @IsNumber()
+  @IsOptional()
+  longitude?: number;
 }
 
 // --- Fuel / expense approval ---

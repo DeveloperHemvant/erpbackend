@@ -5,7 +5,7 @@
  * generic across entity types and so need a runtime lookup instead of a
  * static per-route @RequirePermissions() decorator.
  */
-export const ENTITY_VIEW_PERMISSION: Record<string, string> = {
+export const ENTITY_VIEW_PERMISSION: Record<string, string | string[]> = {
   student: 'VIEW_STUDENTS',
   staff: 'MANAGE_USERS',
   vehicle: 'VIEW_TRANSPORT',
@@ -19,6 +19,12 @@ export const ENTITY_VIEW_PERMISSION: Record<string, string> = {
   event: 'VIEW_STUDENTS',
   house: 'VIEW_STUDENTS',
   'library-book': 'MANAGE_ACADEMICS',
+  // Either permission grants access here on purpose: a student attaching
+  // their own submitted work only ever holds VIEW_LMS, a teacher grading it
+  // only ever holds MANAGE_LMS. Matches the existing accepted security
+  // posture of POST /lms/assignments/:id/submit (@RequireAnyPermission
+  // VIEW_LMS/MANAGE_LMS, no per-submission ownership check) — not a new gap.
+  'homework-submission': ['VIEW_LMS', 'MANAGE_LMS'],
 };
 
 export function canAccessEntityType(
@@ -28,5 +34,6 @@ export function canAccessEntityType(
   if (permissions.includes('*')) return true;
   const required = ENTITY_VIEW_PERMISSION[entityType];
   if (!required) return false;
-  return permissions.includes(required);
+  const requiredList = Array.isArray(required) ? required : [required];
+  return requiredList.some((r) => permissions.includes(r));
 }

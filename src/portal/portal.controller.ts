@@ -2,18 +2,28 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Param,
   ParseUUIDPipe,
   Query,
   Put,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PortalService } from './portal.service';
 import { AuthService } from '../auth/auth.service';
 import { Public } from '../auth/public.decorator';
 import { RequireSelfAccess } from '../auth/self-access.decorator';
 import { RequirePermissions } from '../auth/permissions.decorator';
+import { RequireStudentAccessOrPermission } from '../auth/student-access-or-permission.decorator';
+import { StudentAccessOrPermissionGuard } from '../auth/student-access-or-permission.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import { OwnershipService } from '../auth/ownership.service';
 import { PortalLoginDto } from './dto/portal-login.dto';
 
 @ApiTags('Portal')
@@ -22,6 +32,7 @@ export class PortalController {
   constructor(
     private readonly portalService: PortalService,
     private readonly authService: AuthService,
+    private readonly ownershipService: OwnershipService,
   ) {}
 
   @Public()
@@ -98,6 +109,63 @@ export class PortalController {
   @ApiOperation({ summary: "Get diary entries for all of this parent's children" })
   getParentDiary(@Param('id', ParseUUIDPipe) id: string) {
     return this.portalService.getParentDiary(id);
+  }
+
+  // Routes around DiaryController's admin-only PATCH /diary/:id/sign
+  // (MANAGE_DIARY, held by nobody but Super Admin/Principal) with a
+  // properly self-scoped parent route instead of loosening that permission —
+  // StudentAccessOrPermissionGuard confirms entryId's student is actually one
+  // of this parent's own children before signDiaryEntry runs.
+  @Patch('parent/:id/diary/:entryId/sign')
+  @RequireSelfAccess('id')
+  @RequirePermissions('VIEW_CHILD_PROFILE')
+  @UseGuards(StudentAccessOrPermissionGuard)
+  @RequireStudentAccessOrPermission('entryId', ['MANAGE_DIARY'], {
+    idType: 'diaryEntry',
+    source: 'params',
+  })
+  @UseInterceptors(FileInterceptor('signature'))
+  @ApiOperation({
+    summary:
+      "Parent signs (acknowledges) their child's diary entry, optionally with a captured signature image",
+  })
+  signParentDiaryEntry(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('entryId', ParseUUIDPipe) entryId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() signature?: any,
+  ) {
+    return this.portalService.parentSignDiaryEntry(
+      entryId,
+      user.userId,
+      signature,
+    );
+  }
+
+  // reportCardId isn't a StudentAccessOrPermissionGuard idType (unlike
+  // diaryEntry/consentResponse), so ownership is checked inline here,
+  // same as ReportCardsController's own PDF-download route — not a new
+  // pattern, just the same inline-check shape applied to a second route.
+  @Patch('parent/:id/report-cards/:reportCardId/sign')
+  @RequireSelfAccess('id')
+  @RequirePermissions('VIEW_CHILD_PROFILE')
+  @UseInterceptors(FileInterceptor('signature'))
+  @ApiOperation({
+    summary:
+      "Parent signs off on their child's report card, optionally with a captured signature image",
+  })
+  async signParentReportCard(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('reportCardId', ParseUUIDPipe) reportCardId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() signature?: any,
+  ) {
+    await this.ownershipService.assertOwnsReportCard(user, reportCardId);
+    return this.portalService.parentSignReportCard(
+      reportCardId,
+      user.userId,
+      signature,
+    );
   }
 
   @Get('student/:id/homework')

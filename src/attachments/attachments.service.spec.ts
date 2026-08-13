@@ -2,6 +2,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AttachmentsService } from './attachments.service';
 import { AttachmentRepository } from './repositories/attachment.repository';
+import { StorageService } from '../storage/storage.service';
 
 describe('AttachmentsService', () => {
   let service: AttachmentsService;
@@ -11,6 +12,10 @@ describe('AttachmentsService', () => {
     findById: jest.fn(),
     create: jest.fn(),
     delete: jest.fn(),
+  };
+
+  const mockStorage = {
+    uploadFile: jest.fn(),
   };
 
   const staffUser = {
@@ -32,6 +37,7 @@ describe('AttachmentsService', () => {
       providers: [
         AttachmentsService,
         { provide: AttachmentRepository, useValue: mockRepository },
+        { provide: StorageService, useValue: mockStorage },
       ],
     }).compile();
 
@@ -43,21 +49,31 @@ describe('AttachmentsService', () => {
   });
 
   describe('uploadAttachment', () => {
-    it('stores a mock URL built from entityType/entityId/filename when permitted', async () => {
+    it('uploads via StorageService and stores the real URL when permitted', async () => {
+      mockStorage.uploadFile.mockResolvedValue({
+        url: '/uploads/attachments/staff/entity-1/abc-resume.pdf',
+        key: 'attachments/staff/entity-1/abc-resume.pdf',
+      });
       mockRepository.create.mockResolvedValue({ id: 'a1' });
 
       await service.uploadAttachment(
         { entityType: 'staff', entityId: 'entity-1' },
-        { originalname: 'resume.pdf', size: 1024 },
+        { originalname: 'resume.pdf', size: 1024, buffer: Buffer.from('x') },
         staffUser,
       );
 
+      expect(mockStorage.uploadFile).toHaveBeenCalledWith(
+        Buffer.from('x'),
+        'attachments/staff/entity-1',
+        'resume.pdf',
+        undefined,
+      );
       expect(mockRepository.create).toHaveBeenCalledWith({
         entityType: 'staff',
         entityId: 'entity-1',
         fileName: 'resume.pdf',
         sizeBytes: 1024,
-        url: '/uploads/staff/entity-1/resume.pdf',
+        url: '/uploads/attachments/staff/entity-1/abc-resume.pdf',
         uploadedById: 'staff-1',
       });
     });
@@ -66,10 +82,11 @@ describe('AttachmentsService', () => {
       await expect(
         service.uploadAttachment(
           { entityType: 'staff', entityId: 'entity-1' },
-          { originalname: 'x.pdf', size: 1 },
+          { originalname: 'x.pdf', size: 1, buffer: Buffer.from('x') },
           unprivilegedUser as any,
         ),
       ).rejects.toThrow(ForbiddenException);
+      expect(mockStorage.uploadFile).not.toHaveBeenCalled();
     });
   });
 

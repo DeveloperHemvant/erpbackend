@@ -7,9 +7,12 @@ import {
   Body,
   Param,
   Query,
+  Req,
+  Headers,
   ParseUUIDPipe,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags, ApiOperation, ApiParam } from '@nestjs/swagger';
 import { FeesService } from './fees.service';
 import {
@@ -18,11 +21,11 @@ import {
   CreateFeePaymentDto,
   RequestRefundDto,
   ResolveRefundDto,
-  WebhookPaymentDto,
 } from './dto/fee.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireAnyPermission } from '../auth/any-permission.decorator';
 import { AnyPermissionGuard } from '../auth/any-permission.guard';
+import { Public } from '../auth/public.decorator';
 
 @ApiTags('ERP Core Features')
 @Controller('erp-core')
@@ -120,13 +123,25 @@ export class FeesController {
     return this.feesService.recordFeePayment(id, dto);
   }
 
-  @Post('fees/webhook/online-payment')
-  @UseGuards(AnyPermissionGuard)
-  @RequireAnyPermission('PAY_FEES', 'MANAGE_FEES')
-  @RequirePermissions()
-  @ApiOperation({ summary: 'Simulate webhook from payment gateway' })
-  processOnlinePaymentWebhook(@Body() payload: WebhookPaymentDto) {
-    return this.feesService.processOnlinePaymentWebhook(payload);
+  // Public + signature-verified, not authenticated-user-callable: Razorpay's
+  // servers call this directly, they have no school-user JWT. Replaces the
+  // old fees/webhook/online-payment route, which required PAY_FEES/
+  // MANAGE_FEES and trusted a client-supplied {invoiceId, amountPaid} with
+  // zero signature check — any parent could have called it directly to mark
+  // any invoice paid for any amount. See FeesService.processRazorpayWebhook.
+  @Post('fees/webhook/razorpay')
+  @Public()
+  @ApiOperation({
+    summary:
+      "Razorpay payment webhook — signature-verified, called by Razorpay's servers only",
+  })
+  processRazorpayWebhook(
+    @Req() req: Request,
+    @Headers('x-razorpay-signature') signature: string | undefined,
+    @Body() payload: any,
+  ) {
+    const rawBody = (req as unknown as { rawBody?: Buffer }).rawBody as Buffer;
+    return this.feesService.processRazorpayWebhook(rawBody, signature, payload);
   }
 
   @Get('fees/reports/financial')

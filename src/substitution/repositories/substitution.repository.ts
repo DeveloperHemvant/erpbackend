@@ -12,7 +12,7 @@ export class SubstitutionRepository {
       include: {
         primaryTeacher: true,
         substituteTeacher: true,
-        timetablePeriod: true,
+        timetablePeriod: { include: { section: true, subject: true } },
       },
     });
   }
@@ -23,9 +23,19 @@ export class SubstitutionRepository {
       include: {
         primaryTeacher: true,
         substituteTeacher: true,
-        timetablePeriod: true,
+        timetablePeriod: { include: { section: true, subject: true } },
       },
       orderBy: { date: 'desc' },
     });
+  }
+
+  findEnrolledStudentIdsInSection(sectionId: string) {
+    return this.prisma.studentEnrollment
+      .findMany({
+        where: { sectionId, status: 'Enrolled' },
+        select: { studentId: true },
+        distinct: ['studentId'],
+      })
+      .then((rows) => rows.map((r) => r.studentId));
   }
 }

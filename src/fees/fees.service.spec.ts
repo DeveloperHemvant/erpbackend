@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import * as crypto from 'crypto';
 import { FeesService } from './fees.service';
 import { CommunicationService } from '../communication/communication.service';
 import { StudentRepository } from '../students/repositories/student.repository';
@@ -24,6 +29,8 @@ describe('FeesService', () => {
     findAllRefunds: jest.fn(),
     findRefundsForPayment: jest.fn(),
     findInvoiceWithPaymentsAndRefunds: jest.fn(),
+    findPaymentByGatewayId: jest.fn(),
+    createWebhookPayment: jest.fn(),
   };
   const mockStudentRepository = {
     findActiveAcademicSession: jest.fn(),
@@ -430,6 +437,312 @@ describe('FeesService', () => {
         'inv-1',
         'Paid',
       );
+    });
+  });
+
+  describe('Razorpay webhook', () => {
+    const WEBHOOK_SECRET = 'test-webhook-secret';
+    let originalWebhookSecret: string | undefined;
+    let originalKeyId: string | undefined;
+    let originalKeySecret: string | undefined;
+    let webhookService: FeesService;
+
+    const sign = (rawBody: Buffer) =>
+      crypto
+        .createHmac('sha256', WEBHOOK_SECRET)
+        .update(rawBody)
+        .digest('hex');
+
+    beforeEach(async () => {
+      originalWebhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+      originalKeyId = process.env.RAZORPAY_KEY_ID;
+      originalKeySecret = process.env.RAZORPAY_KEY_SECRET;
+      process.env.RAZORPAY_WEBHOOK_SECRET = WEBHOOK_SECRET;
+      delete process.env.RAZORPAY_KEY_ID;
+      delete process.env.RAZORPAY_KEY_SECRET;
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          FeesService,
+          { provide: CommunicationService, useValue: mockCommService },
+          { provide: StudentRepository, useValue: mockStudentRepository },
+          { provide: FeeRepository, useValue: mockFeeRepository },
+          {
+            provide: ErpCoreAuditLogRepository,
+            useValue: mockAuditLogRepository,
+          },
+        ],
+      }).compile();
+
+      webhookService = module.get<FeesService>(FeesService);
+    });
+
+    afterEach(() => {
+      if (originalWebhookSecret === undefined) {
+        delete process.env.RAZORPAY_WEBHOOK_SECRET;
+      } else {
+        process.env.RAZORPAY_WEBHOOK_SECRET = originalWebhookSecret;
+      }
+      if (originalKeyId === undefined) {
+        delete process.env.RAZORPAY_KEY_ID;
+      } else {
+        process.env.RAZORPAY_KEY_ID = originalKeyId;
+      }
+      if (originalKeySecret === undefined) {
+        delete process.env.RAZORPAY_KEY_SECRET;
+      } else {
+        process.env.RAZORPAY_KEY_SECRET = originalKeySecret;
+      }
+    });
+
+    describe('verifyRazorpayWebhookSignature', () => {
+      it('accepts a signature computed with the configured secret over the exact raw body', () => {
+        const rawBody = Buffer.from(JSON.stringify({ event: 'payment.captured' }));
+        expect(
+          webhookService.verifyRazorpayWebhookSignature(rawBody, sign(rawBody)),
+        ).toBe(true);
+      });
+
+      it('rejects a signature computed with the wrong secret', () => {
+        const rawBody = Buffer.from(JSON.stringify({ event: 'payment.captured' }));
+        const wrongSignature = crypto
+          .createHmac('sha256', 'not-the-real-secret')
+          .update(rawBody)
+          .digest('hex');
+        expect(
+          webhookService.verifyRazorpayWebhookSignature(rawBody, wrongSignature),
+        ).toBe(false);
+      });
+
+      it('rejects when the raw body has been tampered with after signing', () => {
+        const rawBody = Buffer.from(JSON.stringify({ amount: 100 }));
+        const signature = sign(rawBody);
+        const tamperedBody = Buffer.from(JSON.stringify({ amount: 100000 }));
+        expect(
+          webhookService.verifyRazorpayWebhookSignature(tamperedBody, signature),
+        ).toBe(false);
+      });
+
+      it('rejects when no signature header is present', () => {
+        const rawBody = Buffer.from('{}');
+        expect(
+          webhookService.verifyRazorpayWebhookSignature(rawBody, undefined),
+        ).toBe(false);
+      });
+    });
+
+    describe('processRazorpayWebhook', () => {
+      it('throws BadRequestException when the webhook secret is not configured on this server', async () => {
+        delete process.env.RAZORPAY_WEBHOOK_SECRET;
+        const module: TestingModule = await Test.createTestingModule({
+          providers: [
+            FeesService,
+            { provide: CommunicationService, useValue: mockCommService },
+            { provide: StudentRepository, useValue: mockStudentRepository },
+            { provide: FeeRepository, useValue: mockFeeRepository },
+            {
+              provide: ErpCoreAuditLogRepository,
+              useValue: mockAuditLogRepository,
+            },
+          ],
+        }).compile();
+        const unconfiguredService = module.get<FeesService>(FeesService);
+
+        await expect(
+          unconfiguredService.processRazorpayWebhook(
+            Buffer.from('{}'),
+            'any-signature',
+            { event: 'payment.captured' },
+          ),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('throws UnauthorizedException when the signature does not match the raw body', async () => {
+        const payload = {
+          event: 'payment.captured',
+          payload: { payment: { entity: { id: 'pay_123', amount: 100000 } } },
+        };
+        const rawBody = Buffer.from(JSON.stringify(payload));
+
+        await expect(
+          webhookService.processRazorpayWebhook(
+            rawBody,
+            'totally-forged-signature',
+            payload,
+          ),
+        ).rejects.toThrow(UnauthorizedException);
+        expect(mockFeeRepository.createWebhookPayment).not.toHaveBeenCalled();
+      });
+
+      it('acknowledges but ignores non-payment.captured events without recording a payment', async () => {
+        const payload = { event: 'payment.failed', payload: {} };
+        const rawBody = Buffer.from(JSON.stringify(payload));
+
+        const result = await webhookService.processRazorpayWebhook(
+          rawBody,
+          sign(rawBody),
+          payload,
+        );
+
+        expect(result).toEqual({ status: 'ignored', event: 'payment.failed' });
+        expect(mockFeeRepository.createWebhookPayment).not.toHaveBeenCalled();
+      });
+
+      it('throws BadRequestException when the payload is missing a payment entity', async () => {
+        const payload = { event: 'payment.captured', payload: {} };
+        const rawBody = Buffer.from(JSON.stringify(payload));
+
+        await expect(
+          webhookService.processRazorpayWebhook(rawBody, sign(rawBody), payload),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('returns already_processed for a redelivered event without creating a duplicate payment', async () => {
+        const payload = {
+          event: 'payment.captured',
+          payload: {
+            payment: {
+              entity: {
+                id: 'pay_123',
+                amount: 100000,
+                notes: { invoiceId: 'inv-1' },
+              },
+            },
+          },
+        };
+        const rawBody = Buffer.from(JSON.stringify(payload));
+        mockFeeRepository.findPaymentByGatewayId.mockResolvedValue({
+          id: 'existing-pay-1',
+        });
+
+        const result = await webhookService.processRazorpayWebhook(
+          rawBody,
+          sign(rawBody),
+          payload,
+        );
+
+        expect(result).toEqual({
+          status: 'already_processed',
+          paymentId: 'existing-pay-1',
+        });
+        expect(mockFeeRepository.createWebhookPayment).not.toHaveBeenCalled();
+      });
+
+      it('throws BadRequestException when the invoice cannot be resolved from the payload', async () => {
+        const payload = {
+          event: 'payment.captured',
+          payload: {
+            payment: { entity: { id: 'pay_123', amount: 100000, notes: {} } },
+          },
+        };
+        const rawBody = Buffer.from(JSON.stringify(payload));
+        mockFeeRepository.findPaymentByGatewayId.mockResolvedValue(null);
+
+        await expect(
+          webhookService.processRazorpayWebhook(rawBody, sign(rawBody), payload),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('throws NotFoundException when the resolved invoice does not exist', async () => {
+        const payload = {
+          event: 'payment.captured',
+          payload: {
+            payment: {
+              entity: {
+                id: 'pay_123',
+                amount: 100000,
+                notes: { invoiceId: 'missing-invoice' },
+              },
+            },
+          },
+        };
+        const rawBody = Buffer.from(JSON.stringify(payload));
+        mockFeeRepository.findPaymentByGatewayId.mockResolvedValue(null);
+        mockFeeRepository.findInvoiceWithPayments.mockResolvedValue(null);
+
+        await expect(
+          webhookService.processRazorpayWebhook(rawBody, sign(rawBody), payload),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('creates the payment from the verified payload and marks the invoice Paid when fully covered', async () => {
+        const payload = {
+          event: 'payment.captured',
+          payload: {
+            payment: {
+              entity: {
+                id: 'pay_123',
+                amount: 100000, // paise -> 1000 rupees
+                notes: { invoiceId: 'inv-1' },
+              },
+            },
+          },
+        };
+        const rawBody = Buffer.from(JSON.stringify(payload));
+        mockFeeRepository.findPaymentByGatewayId.mockResolvedValue(null);
+        mockFeeRepository.findInvoiceWithPayments.mockResolvedValue({
+          id: 'inv-1',
+          totalAmount: '1000',
+          amount: '1000',
+          status: 'Unpaid',
+          payments: [],
+        });
+        mockFeeRepository.createWebhookPayment.mockResolvedValue({
+          id: 'new-pay-1',
+        });
+
+        const result = await webhookService.processRazorpayWebhook(
+          rawBody,
+          sign(rawBody),
+          payload,
+        );
+
+        expect(mockFeeRepository.createWebhookPayment).toHaveBeenCalledWith(
+          expect.objectContaining({
+            invoiceId: 'inv-1',
+            amountPaid: '1000',
+            paymentMode: 'Razorpay',
+            gatewayPaymentId: 'pay_123',
+            createdBy: 'RAZORPAY_WEBHOOK',
+          }),
+        );
+        expect(mockFeeRepository.updateInvoiceStatusSimple).toHaveBeenCalledWith(
+          'inv-1',
+          'Paid',
+        );
+        expect(result).toEqual({ status: 'processed', paymentId: 'new-pay-1' });
+      });
+
+      it('does not mark the invoice Paid when the captured payment only partially covers the balance', async () => {
+        const payload = {
+          event: 'payment.captured',
+          payload: {
+            payment: {
+              entity: {
+                id: 'pay_123',
+                amount: 30000, // paise -> 300 rupees
+                notes: { invoiceId: 'inv-1' },
+              },
+            },
+          },
+        };
+        const rawBody = Buffer.from(JSON.stringify(payload));
+        mockFeeRepository.findPaymentByGatewayId.mockResolvedValue(null);
+        mockFeeRepository.findInvoiceWithPayments.mockResolvedValue({
+          id: 'inv-1',
+          totalAmount: '1000',
+          amount: '1000',
+          status: 'Unpaid',
+          payments: [],
+        });
+        mockFeeRepository.createWebhookPayment.mockResolvedValue({
+          id: 'new-pay-1',
+        });
+
+        await webhookService.processRazorpayWebhook(rawBody, sign(rawBody), payload);
+
+        expect(mockFeeRepository.updateInvoiceStatusSimple).not.toHaveBeenCalled();
+      });
     });
   });
 });

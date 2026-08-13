@@ -7,11 +7,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { resolveSingleCampusIdOrThrow } from '../common/utils/campus-resolution';
+import { StorageService } from '../storage/storage.service';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class StaffService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async create(createStaffDto: CreateStaffDto) {
     // Verify email uniqueness
@@ -416,5 +420,23 @@ export class StaffService {
     return this.prisma.staff.delete({
       where: { id },
     });
+  }
+
+  async uploadPhoto(
+    id: string,
+    file: { originalname: string; buffer: Buffer; mimetype?: string },
+  ) {
+    await this.findOne(id);
+    const { url } = await this.storage.uploadFile(
+      file.buffer,
+      `staff/${id}`,
+      file.originalname,
+      file.mimetype,
+    );
+    await this.prisma.staff.update({
+      where: { id },
+      data: { photoUrl: url },
+    });
+    return { url };
   }
 }

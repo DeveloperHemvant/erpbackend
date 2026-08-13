@@ -257,7 +257,12 @@ async function main() {
     // student discipline day to day; previously no seeded role held this
     // permission at all, so the Discipline Desk (mobile tile a9, web
     // dashboard/admin/discipline) was reachable by nobody but Super Admin.
-    { name: 'Vice Principal', permissions: ['VIEW_STUDENTS', 'MANAGE_USERS', 'MANAGE_ACADEMICS', 'MARK_ATTENDANCE', 'MANAGE_EXAMS', 'MANAGE_FEES', 'VIEW_REPORTS', 'MANAGE_TRANSPORT', 'MANAGE_TRANSPORT_FLEET', 'MANAGE_LMS', 'MANAGE_DISCIPLINE'] },
+    // MANAGE_GRIEVANCES added here and on Admin Staff: Phase 5 of the
+    // paperless rollout plan wires up the previously controller-less
+    // GrievanceRecord model, but no seeded role held a permission for it —
+    // Vice Principal and Admin Staff are who actually triage/resolve general
+    // complaints day to day (Principal/Super Admin already hold '*').
+    { name: 'Vice Principal', permissions: ['VIEW_STUDENTS', 'MANAGE_USERS', 'MANAGE_ACADEMICS', 'MARK_ATTENDANCE', 'MANAGE_EXAMS', 'MANAGE_FEES', 'VIEW_REPORTS', 'MANAGE_TRANSPORT', 'MANAGE_TRANSPORT_FLEET', 'MANAGE_LMS', 'MANAGE_DISCIPLINE', 'MANAGE_GRIEVANCES'] },
     { name: 'Academic Coordinator', permissions: ['VIEW_STUDENTS', 'MANAGE_ACADEMICS', 'MANAGE_EXAMS', 'VIEW_REPORTS', 'MANAGE_ACTIVITIES'] },
     // MANAGE_EXAMS added here: the Exams Desk (mobile tile t3) does real
     // invigilation/evaluation/online-test-monitoring work against /ems/*,
@@ -274,7 +279,7 @@ async function main() {
     // admissions conversion (MANAGE_USERS covers PATCH /erp-core/students);
     // the pipeline view is the same registrar job, but no role held this
     // permission before, so the Admissions Pipeline desk was unreachable.
-    { name: 'Admin Staff', permissions: ['MANAGE_USERS', 'MANAGE_COMMUNICATION', 'VIEW_REPORTS', 'MANAGE_ADMISSIONS_PIPELINE'] },
+    { name: 'Admin Staff', permissions: ['MANAGE_USERS', 'MANAGE_COMMUNICATION', 'VIEW_REPORTS', 'MANAGE_ADMISSIONS_PIPELINE', 'MANAGE_GRIEVANCES'] },
     // New role: the 'Nurse' staff designation existed (STAFF_ROLES above)
     // but had no matching Role — it silently fell back to Admin Staff, which
     // lacks MANAGE_HEALTH_RECORDS, so the school nurse could never open the

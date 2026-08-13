@@ -10,10 +10,17 @@ import {
   CreateMessMenuDto,
   MarkHostelAttendanceDto,
 } from './dto/hostel.dto';
+import {
+  AttachmentsService,
+  AttachmentFile,
+} from '../attachments/attachments.service';
 
 @Injectable()
 export class HostelService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly attachmentsService: AttachmentsService,
+  ) {}
 
   async createHostel(data: CreateHostelDto) {
     return this.prisma.hostel.create({ data });
@@ -150,10 +157,56 @@ export class HostelService {
   }
 
   async resolveOutpass(id: string, status: string, approvedById: string) {
+    if (status === 'Approved') {
+      const outpass = await this.prisma.hostelOutpass.findUnique({
+        where: { id },
+        select: { parentConsent: true },
+      });
+      if (!outpass) throw new NotFoundException('Outpass not found');
+      if (!outpass.parentConsent) {
+        throw new BadRequestException(
+          'Cannot approve this outpass until the parent has given consent.',
+        );
+      }
+    }
     return this.prisma.hostelOutpass.update({
       where: { id },
       data: { status, approvedById },
     });
+  }
+
+  /** Parent-only — see HostelController.giveOutpassConsent for the role
+   * check (this method assumes the caller has already been verified). The
+   * signature (if any) is uploaded pre-authorized, same as
+   * uploadOutpassAttachment, since the caller route already confirmed
+   * ownership before this runs. */
+  async giveOutpassConsent(
+    outpassId: string,
+    uploadedById: string,
+    signatureFile?: AttachmentFile,
+  ) {
+    let parentConsentAttachmentId: string | undefined;
+    if (signatureFile) {
+      const attachment =
+        await this.attachmentsService.uploadAttachmentPreauthorized(
+          'hostel-outpass-consent',
+          outpassId,
+          signatureFile,
+          uploadedById,
+        );
+      parentConsentAttachmentId = attachment.id;
+    }
+    const outpass = await this.prisma.hostelOutpass.update({
+      where: { id: outpassId },
+      data: {
+        parentConsent: true,
+        parentConsentAt: new Date(),
+        ...(parentConsentAttachmentId !== undefined && {
+          parentConsentAttachmentId,
+        }),
+      },
+    });
+    return outpass;
   }
 
   async verifyOutpassExit(id: string) {
@@ -168,6 +221,32 @@ export class HostelService {
       where: { id },
       data: { returnTime: new Date(), status: 'Returned' },
     });
+  }
+
+  async getOutpassAttachments(outpassId: string) {
+    return this.attachmentsService.getAttachmentsPreauthorized(
+      'hostel-outpass',
+      outpassId,
+    );
+  }
+
+  async uploadOutpassAttachment(
+    outpassId: string,
+    file: AttachmentFile,
+    uploadedById: string,
+  ) {
+    return this.attachmentsService.uploadAttachmentPreauthorized(
+      'hostel-outpass',
+      outpassId,
+      file,
+      uploadedById,
+    );
+  }
+
+  async deleteOutpassAttachment(attachmentId: string) {
+    return this.attachmentsService.deleteAttachmentPreauthorized(
+      attachmentId,
+    );
   }
 
   async markAttendance(data: MarkHostelAttendanceDto) {

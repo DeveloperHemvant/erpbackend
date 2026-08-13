@@ -20,7 +20,7 @@ export class HealthRecordsController {
 
   @Get('students/:studentId/profile')
   @UseGuards(StudentAccessOrPermissionGuard)
-  @RequireStudentAccessOrPermission('studentId', 'MANAGE_HEALTH_RECORDS')
+  @RequireStudentAccessOrPermission('studentId', ['MANAGE_HEALTH_RECORDS'])
   @RequirePermissions()
   getProfile(@Param('studentId') studentId: string) {
     return this.healthRecordsService.getProfile(studentId);
@@ -36,7 +36,7 @@ export class HealthRecordsController {
 
   @Get('students/:studentId/visits')
   @UseGuards(StudentAccessOrPermissionGuard)
-  @RequireStudentAccessOrPermission('studentId', 'MANAGE_HEALTH_RECORDS')
+  @RequireStudentAccessOrPermission('studentId', ['MANAGE_HEALTH_RECORDS'])
   @RequirePermissions()
   getVisits(@Param('studentId') studentId: string) {
     return this.healthRecordsService.getVisitsForStudent(studentId);
@@ -58,7 +58,7 @@ export class HealthRecordsController {
 
   @Get('students/:studentId/vaccinations')
   @UseGuards(StudentAccessOrPermissionGuard)
-  @RequireStudentAccessOrPermission('studentId', 'MANAGE_HEALTH_RECORDS')
+  @RequireStudentAccessOrPermission('studentId', ['MANAGE_HEALTH_RECORDS'])
   @RequirePermissions()
   getVaccinations(@Param('studentId') studentId: string) {
     return this.healthRecordsService.getVaccinationsForStudent(studentId);

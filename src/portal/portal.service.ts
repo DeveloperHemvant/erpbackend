@@ -2,6 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DiaryService } from '../diary/diary.service';
 import { LmsService } from '../lms/lms.service';
+import { ReportCardsService } from '../report-cards/report-cards.service';
+import {
+  AttachmentsService,
+  AttachmentFile,
+} from '../attachments/attachments.service';
 
 @Injectable()
 export class PortalService {
@@ -9,6 +14,8 @@ export class PortalService {
     private prisma: PrismaService,
     private diaryService: DiaryService,
     private lmsService: LmsService,
+    private reportCardsService: ReportCardsService,
+    private attachmentsService: AttachmentsService,
   ) {}
 
   async getStudentDashboard(studentId: string) {
@@ -420,6 +427,53 @@ export class PortalService {
     dto: { studentId: string; type: string; content: string },
   ) {
     return this.diaryService.createDiaryEntry(teacherId, dto);
+  }
+
+  /** Parent-facing counterpart to DiaryController's admin-only PATCH
+   * /diary/:id/sign (MANAGE_DIARY, which no parent-facing role holds) — the
+   * calling route's StudentAccessOrPermissionGuard has already verified this
+   * entry belongs to one of this parent's own children before we get here,
+   * so the signature image (if any) is uploaded pre-authorized rather than
+   * through the generic role-checked /attachments endpoint. */
+  async parentSignDiaryEntry(
+    entryId: string,
+    uploadedById: string,
+    signatureFile?: AttachmentFile,
+  ) {
+    let signatureAttachmentId: string | undefined;
+    if (signatureFile) {
+      const attachment =
+        await this.attachmentsService.uploadAttachmentPreauthorized(
+          'consent-signature',
+          entryId,
+          signatureFile,
+          uploadedById,
+        );
+      signatureAttachmentId = attachment.id;
+    }
+    return this.diaryService.signDiaryEntry(entryId, signatureAttachmentId);
+  }
+
+  async parentSignReportCard(
+    reportCardId: string,
+    uploadedById: string,
+    signatureFile?: AttachmentFile,
+  ) {
+    let signatureAttachmentId: string | undefined;
+    if (signatureFile) {
+      const attachment =
+        await this.attachmentsService.uploadAttachmentPreauthorized(
+          'consent-signature',
+          reportCardId,
+          signatureFile,
+          uploadedById,
+        );
+      signatureAttachmentId = attachment.id;
+    }
+    return this.reportCardsService.signReportCard(
+      reportCardId,
+      signatureAttachmentId,
+    );
   }
 
   private async getActiveSectionId(studentId: string): Promise<string | null> {

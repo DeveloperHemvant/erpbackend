@@ -218,6 +218,65 @@ export class CommunicationService {
     }
   }
 
+  /** Grievance assignee is always a Staff row (GrievanceRecord.assignedTo),
+   * which has no phone field — email is the only real channel available. */
+  async notifyGrievanceAssigned(assignedToId: string, title: string) {
+    const staff = await this.prisma.staff.findUnique({
+      where: { id: assignedToId },
+    });
+    if (!staff?.email) return;
+    const msg = `A grievance has been assigned to you: "${title}". Please review and resolve it via the ERP.`;
+    await this.sendEmail(staff.email, 'Grievance Assigned To You', msg);
+  }
+
+  /** Reporter can be a Student, Parent, or Staff member (GrievanceRecord.userType) —
+   * unlike the studentId-keyed alerts above, contact info has to be resolved
+   * per reporter type rather than always traversing Student -> parents. */
+  async notifyGrievanceResolved(
+    userType: string,
+    reporterId: string,
+    title: string,
+    remarks?: string | null,
+  ) {
+    const msg = `Your grievance "${title}" has been resolved.${remarks ? ` Remarks: ${remarks}` : ''}`;
+
+    if (userType === 'STAFF') {
+      const staff = await this.prisma.staff.findUnique({
+        where: { id: reporterId },
+      });
+      if (staff?.email) await this.sendEmail(staff.email, 'Grievance Resolved', msg);
+      return;
+    }
+
+    if (userType === 'STUDENT') {
+      const student = await this.prisma.student.findUnique({
+        where: { id: reporterId },
+      });
+      if (student?.phone) await this.sendSms(student.phone, msg);
+    } else if (userType === 'PARENT') {
+      const parent = await this.prisma.parent.findUnique({
+        where: { id: reporterId },
+      });
+      if (parent?.phone) await this.sendSms(parent.phone, msg);
+      if (parent?.email) await this.sendEmail(parent.email, 'Grievance Resolved', msg);
+    }
+
+    const portalAccount = await this.prisma.portalAccount.findFirst({
+      where: { referenceId: reporterId, userType },
+    });
+    if (portalAccount) {
+      await this.prisma.notification.create({
+        data: {
+          recipientId: portalAccount.id,
+          type: 'PUSH',
+          title: 'Grievance Resolved',
+          content: msg,
+          priority: 'NORMAL',
+        },
+      });
+    }
+  }
+
   // ---------------------------------------------------------
   // REST API ENDPOINT LOGIC
   // ---------------------------------------------------------

@@ -1,9 +1,19 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { DocumentRenderingService } from '../documents/document-rendering.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class HrService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly renderer: DocumentRenderingService,
+    private readonly storage: StorageService,
+  ) {}
 
   // ---------------------------------------------------------
   // LEAVE MANAGEMENT
@@ -194,6 +204,43 @@ export class HrService {
       where: { staffId, month: month || undefined, year: year || undefined },
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
     });
+  }
+
+  async findPayslipById(id: string) {
+    return this.prisma.payslip.findUnique({
+      where: { id },
+      include: { staff: { select: { fullName: true, role: { select: { name: true } } } } },
+    });
+  }
+
+  /** Rendered fresh each call — same reasoning as report cards/ID cards. */
+  async renderPayslipPdf(id: string): Promise<{ url: string }> {
+    const payslip = await this.findPayslipById(id);
+    if (!payslip) throw new NotFoundException('Payslip not found.');
+
+    const pdfBuffer = await this.renderer.renderPayslip(
+      {
+        month: payslip.month,
+        year: payslip.year,
+        basicSalary: Number(payslip.basicSalary),
+        allowances: Number(payslip.allowances),
+        fixedDeductions: Number(payslip.fixedDeductions),
+        lopDeductions: Number(payslip.lopDeductions),
+        netSalary: Number(payslip.netSalary),
+      },
+      {
+        staffName: payslip.staff.fullName,
+        role: payslip.staff.role?.name || 'Staff',
+      },
+    );
+
+    const { url } = await this.storage.uploadFile(
+      pdfBuffer,
+      `payslips/${payslip.staffId}`,
+      `payslip-${payslip.year}-${payslip.month}.pdf`,
+      'application/pdf',
+    );
+    return { url };
   }
 
   // ---------------------------------------------------------

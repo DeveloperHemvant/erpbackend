@@ -49,8 +49,25 @@ export class StudentAccessOrPermissionGuard implements CanActivate {
       );
     }
 
-    const studentId = request.params?.[config.paramName];
-    await this.ownershipService.assertOwnsStudent(user, studentId);
+    const source = config.source ?? 'params';
+    const id = request[source]?.[config.paramName];
+
+    switch (config.idType) {
+      case 'enrollment':
+        await this.ownershipService.assertOwnsEnrollment(user, id);
+        break;
+      case 'hostelOutpass':
+        await this.ownershipService.assertOwnsHostelOutpass(user, id);
+        break;
+      case 'diaryEntry':
+        await this.ownershipService.assertOwnsDiaryEntry(user, id);
+        break;
+      case 'consentResponse':
+        await this.ownershipService.assertOwnsConsentResponse(user, id);
+        break;
+      default:
+        await this.ownershipService.assertOwnsStudent(user, id);
+    }
     return true;
   }
 }

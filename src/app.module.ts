@@ -55,11 +55,14 @@ import { VisitorModule } from './visitor/visitor.module';
 import { ReceptionModule } from './reception/reception.module';
 import { MeetingsModule } from './meetings/meetings.module';
 import { ActivitiesModule } from './activities/activities.module';
-import { MedicalModule } from './medical/medical.module';
 import { SubstitutionModule } from './substitution/substitution.module';
 import { DiaryModule } from './diary/diary.module';
 import { SimulatorModule } from './testing/simulator/simulator.module';
 import { SimulationModule } from './simulation-engine/simulation.module';
+import { StorageModule } from './storage/storage.module';
+import { ConsentModule } from './consent/consent.module';
+import { DocumentsModule } from './documents/documents.module';
+import { GrievanceModule } from './grievance/grievance.module';
 
 @Module({
   imports: [
@@ -78,6 +81,7 @@ import { SimulationModule } from './simulation-engine/simulation.module';
       },
     }),
     PrismaModule,
+    StorageModule,
     RolesModule,
     StaffModule,
     AuthModule,
@@ -120,11 +124,13 @@ import { SimulationModule } from './simulation-engine/simulation.module';
     ReceptionModule,
     MeetingsModule,
     ActivitiesModule,
-    MedicalModule,
     SubstitutionModule,
     DiaryModule,
     SimulatorModule,
     SimulationModule,
+    ConsentModule,
+    DocumentsModule,
+    GrievanceModule,
   ],
   controllers: [AppController],
   providers: [

@@ -28,10 +28,11 @@ export class DiaryService {
     return this.repository.findDiaryEntries(where);
   }
 
-  async signDiaryEntry(id: string) {
+  async signDiaryEntry(id: string, signatureAttachmentId?: string) {
     const entry = await this.repository.updateDiaryEntry(id, {
       parentSigned: true,
       parentSignedAt: new Date(),
+      ...(signatureAttachmentId !== undefined && { signatureAttachmentId }),
     });
     if (!entry) throw new NotFoundException('Diary entry not found');
     return entry;

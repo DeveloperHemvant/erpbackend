@@ -9,8 +9,18 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Increase request body size limit
-  app.use(express.json({ limit: '50mb' }));
+  // Increase request body size limit. verify: stashes the exact raw bytes
+  // onto req.rawBody — needed by the Razorpay webhook, whose signature is
+  // computed over the raw body, not the parsed/re-serialized JSON (which can
+  // differ in key order/whitespace and would break HMAC verification).
+  app.use(
+    express.json({
+      limit: '50mb',
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Serve uploaded images (events, announcements, ...) back out as static files.
