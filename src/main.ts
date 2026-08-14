@@ -46,14 +46,8 @@ async function bootstrap() {
     }),
   );
 
-  // Enable CORS
-  const allowedOrigins = (
-    process.env.CORS_ORIGINS ?? 'http://localhost:3000,http://localhost:8081'
-  )
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  app.enableCors({ origin: allowedOrigins, credentials: true });
+  // Enable CORS — allow all origins
+  app.enableCors({ origin: true, credentials: true });
 
   // Swagger
   const config = new DocumentBuilder()
