@@ -49,18 +49,57 @@ export function requireCampusId(tenantContext: TenantContext): string {
 export class TenantContextBuilder {
   constructor(private readonly prisma: PrismaService) {}
 
-  async build(user: AuthenticatedUser): Promise<TenantContext> {
+  /**
+   * `requestedCampusId` is a voluntary narrowing a canAccessAllCampuses
+   * user (Super Admin/Principal) can send (see TenantContextInterceptor,
+   * which reads it off the `X-Campus-Id` request header) to view one
+   * campus instead of every campus at once. It is meaningless — and
+   * ignored — for a campus-fixed user, whose campusId already determines
+   * their view.
+   *
+   * When it resolves to a real Campus, this presents the returned context
+   * AS campus-restricted (canAccessAllCampuses: false, campusId: the
+   * requested campus) for the rest of this request. Every repository
+   * already branches on exactly those two fields to build its campus
+   * filter (D3's `if (!canAccessAllCampuses) filter by campusId` rule,
+   * used in ~40 call sites across student/fee/attendance/analytics/search
+   * repositories) — reusing that instead of adding a third field means
+   * narrowing works everywhere that rule is already applied, with no
+   * per-repository changes and no new failure mode to test.
+   */
+  async build(
+    user: AuthenticatedUser,
+    requestedCampusId?: string | null,
+  ): Promise<TenantContext> {
     const activeSession = await this.prisma.academicSession.findFirst({
       where: { isActive: true },
       select: { id: true },
     });
 
+    let campusId = user.campusId;
+    let canAccessAllCampuses = user.canAccessAllCampuses;
+
+    if (user.canAccessAllCampuses && requestedCampusId) {
+      // Validate against a real Campus rather than trusting the header
+      // verbatim — an unknown id degrades to "all campuses" (unchanged
+      // behavior) rather than silently filtering to a campus that doesn't
+      // exist, which would look like an empty state, not an error.
+      const campus = await this.prisma.campus.findUnique({
+        where: { id: requestedCampusId },
+        select: { id: true },
+      });
+      if (campus) {
+        campusId = campus.id;
+        canAccessAllCampuses = false;
+      }
+    }
+
     return {
       userId: user.userId,
       role: user.role,
       permissions: user.permissions,
-      campusId: user.campusId,
-      canAccessAllCampuses: user.canAccessAllCampuses,
+      campusId,
+      canAccessAllCampuses,
       academicSessionId: activeSession?.id ?? null,
     };
   }

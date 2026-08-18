@@ -40,9 +40,13 @@ export class CreateAssetDto {
 }
 
 export class CreatePurchaseRequisitionDto {
+  // Optional: campus-fixed staff never need to send this - the controller
+  // fills it in from the authenticated user's own campusId. Only a
+  // canAccessAllCampuses user (who has no fixed campus) must pick one
+  // explicitly.
   @IsUUID()
-  @IsNotEmpty()
-  campusId: string;
+  @IsOptional()
+  campusId?: string;
 
   @IsString()
   @IsNotEmpty()

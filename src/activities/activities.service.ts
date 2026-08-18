@@ -5,6 +5,7 @@ import {
   CreateSchoolHouseDto,
   UpdateSchoolHouseDto,
   CreateStudentAchievementDto,
+  UpdateStudentAchievementDto,
   CreateStaffDutyDto,
 } from './dto/activities.dto';
 
@@ -74,6 +75,22 @@ export class ActivitiesService {
 
   async getStudentAchievements(studentId: string) {
     return this.repository.findAchievementsByStudent(studentId);
+  }
+
+  async updateAchievement(id: string, dto: UpdateStudentAchievementDto) {
+    const existing = await this.repository.findAchievementById(id);
+    if (!existing) throw new NotFoundException('Achievement not found');
+    return this.repository.updateAchievement(id, {
+      type: dto.type,
+      title: dto.title,
+      award: dto.award,
+    });
+  }
+
+  async deleteAchievement(id: string) {
+    const existing = await this.repository.findAchievementById(id);
+    if (!existing) throw new NotFoundException('Achievement not found');
+    return this.repository.deleteAchievement(id);
   }
 
   async createStaffDuty(dto: CreateStaffDutyDto) {

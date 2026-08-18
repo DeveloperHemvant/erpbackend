@@ -12,6 +12,7 @@ import { TransportOwnershipService } from './transport-ownership.service';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { DocumentRenderingService } from '../documents/document-rendering.service';
 import { StorageService } from '../storage/storage.service';
+import { assertPendingStatus } from '../common/assert-pending-status.util';
 
 @Injectable()
 export class TransportService {
@@ -445,11 +446,7 @@ export class TransportService {
   ) {
     const log = await this.transportRepository.findFuelLogById(id);
     if (!log) throw new NotFoundException('Fuel log not found.');
-    if (log.status !== 'Pending') {
-      throw new BadRequestException(
-        `Only pending fuel logs can be resolved (current status: ${log.status}).`,
-      );
-    }
+    assertPendingStatus(log.status, 'Pending', 'fuel logs');
     return this.transportRepository.resolveFuelLog(id, {
       status: dto.status,
       approvedBy: resolvedBy,
@@ -629,11 +626,7 @@ export class TransportService {
   ) {
     const expense = await this.transportRepository.findExpenseById(id);
     if (!expense) throw new NotFoundException('Expense not found.');
-    if (expense.status !== 'Pending') {
-      throw new BadRequestException(
-        `Only pending expenses can be resolved (current status: ${expense.status}).`,
-      );
-    }
+    assertPendingStatus(expense.status, 'Pending', 'expenses');
     return this.transportRepository.resolveExpense(id, {
       status: dto.status,
       approvedBy: resolvedBy,

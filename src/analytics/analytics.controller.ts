@@ -376,7 +376,7 @@ export class AnalyticsController {
 
   @Get('dashboard/operations/medical-room')
   @UseGuards(AnyPermissionGuard)
-  @RequireAnyPermission('MANAGE_HEALTH', 'VIEW_REPORTS')
+  @RequireAnyPermission('MANAGE_HEALTH_RECORDS', 'VIEW_REPORTS')
   @RequirePermissions()
   @UseInterceptors(TenantContextInterceptor, TenantAwareCacheInterceptor)
   @CacheKey('dashboard_ops_medical_room')

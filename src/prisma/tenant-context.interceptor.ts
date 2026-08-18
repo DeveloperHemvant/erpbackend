@@ -27,8 +27,15 @@ export class TenantContextInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
     const user = request.user as AuthenticatedUser;
+    // Only meaningful for a canAccessAllCampuses user narrowing their own
+    // view (TenantContextBuilder.build ignores it otherwise) — see the web
+    // campus switcher, which sends this on every API request once a campus
+    // is selected.
+    const requestedCampusId = request.headers?.['x-campus-id'] as
+      | string
+      | undefined;
 
-    return from(this.builder.build(user)).pipe(
+    return from(this.builder.build(user, requestedCampusId)).pipe(
       switchMap((tenantContext) => {
         request.tenantContext = tenantContext;
         return next.handle();

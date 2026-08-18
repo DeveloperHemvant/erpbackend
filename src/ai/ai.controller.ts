@@ -7,7 +7,7 @@ export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post('infer')
-  @RequirePermissions()
+  @RequirePermissions('USE_AI_ASSISTANT')
   infer(@Body() body: { task: string; payload?: unknown }) {
     return this.aiService.infer(body.task, body.payload);
   }

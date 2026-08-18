@@ -3,6 +3,8 @@ import {
   Get,
   Post,
   Put,
+  Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -27,6 +29,7 @@ import {
   UpdateSchoolHouseDto,
   AwardHousePointsDto,
   CreateStudentAchievementDto,
+  UpdateStudentAchievementDto,
   CreateStaffDutyDto,
 } from './dto/activities.dto';
 
@@ -133,6 +136,29 @@ export class ActivitiesController {
   @ApiResponse({ status: 200, description: 'List of achievements' })
   getStudentAchievements(@Param('studentId') studentId: string) {
     return this.activitiesService.getStudentAchievements(studentId);
+  }
+
+  @RequirePermissions('MANAGE_ACTIVITIES')
+  @Patch('achievements/:id')
+  @ApiOperation({ summary: 'Update a student co-curricular achievement award' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Achievement updated successfully' })
+  @ApiResponse({ status: 404, description: 'Achievement not found' })
+  updateAchievement(
+    @Param('id') id: string,
+    @Body() dto: UpdateStudentAchievementDto,
+  ) {
+    return this.activitiesService.updateAchievement(id, dto);
+  }
+
+  @RequirePermissions('MANAGE_ACTIVITIES')
+  @Delete('achievements/:id')
+  @ApiOperation({ summary: 'Delete a student co-curricular achievement award' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Achievement deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Achievement not found' })
+  deleteAchievement(@Param('id') id: string) {
+    return this.activitiesService.deleteAchievement(id);
   }
 
   @RequirePermissions('MANAGE_ACTIVITIES')

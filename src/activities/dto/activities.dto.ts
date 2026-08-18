@@ -95,6 +95,20 @@ export class CreateStudentAchievementDto {
   award: string; // MEDAL, TROPHY, CERTIFICATE, SCHOLARSHIP
 }
 
+export class UpdateStudentAchievementDto {
+  @IsString()
+  @IsOptional()
+  type?: string; // ACADEMIC, SPORTS, MUSIC, DANCE, DEBATE, OLYMPIAD
+
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  award?: string; // MEDAL, TROPHY, CERTIFICATE, SCHOLARSHIP
+}
+
 export class CreateStaffDutyDto {
   @IsUUID()
   staffId: string;

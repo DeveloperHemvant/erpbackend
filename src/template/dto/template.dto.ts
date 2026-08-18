@@ -5,7 +5,9 @@ export class CreateDocumentTemplateDto {
   @IsNotEmpty()
   name: string;
 
-  @IsIn(['ID_CARD', 'CERTIFICATE'])
+  // 'ID_CARD' was removed - IdCardTemplate/IdCard is the real, wired-up ID
+  // card flow; a DocumentTemplate of that type had no downstream consumer.
+  @IsIn(['CERTIFICATE'])
   @IsNotEmpty()
   type: string;
 
@@ -60,7 +62,7 @@ export class UpdateDocumentTemplateDto {
   @IsOptional()
   name?: string;
 
-  @IsIn(['ID_CARD', 'CERTIFICATE'])
+  @IsIn(['CERTIFICATE'])
   @IsOptional()
   type?: string;
 

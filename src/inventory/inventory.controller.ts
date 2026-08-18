@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -18,6 +19,8 @@ import {
   UpdatePurchaseRequisitionStatusDto,
 } from './dto/inventory.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 
 // Class-level MANAGE_ACADEMICS default -- matches the mobile Inventory tile
 // (modules.tsx id 'a5-inv'), which already expects MANAGE_ACADEMICS and was
@@ -54,8 +57,22 @@ export class InventoryController {
 
   @Post('requisitions')
   @ApiOperation({ summary: 'Create Purchase Requisition' })
-  async createRequisition(@Body() data: CreatePurchaseRequisitionDto) {
-    return this.inventoryService.createRequisition(data);
+  async createRequisition(
+    @Body() data: CreatePurchaseRequisitionDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    // Campus-fixed staff (the overwhelming majority of requisition raisers)
+    // never need to know or send their own campus id - it's already on
+    // their JWT. Previously this was a required client-supplied field with
+    // no fallback, which is why the mobile app resorted to guessing one
+    // from whatever asset/requisition happened to already be loaded.
+    const campusId = data.campusId || user.campusId;
+    if (!campusId) {
+      throw new BadRequestException(
+        'campusId is required: select a campus before raising a requisition.',
+      );
+    }
+    return this.inventoryService.createRequisition({ ...data, campusId });
   }
 
   @Get('requisitions')

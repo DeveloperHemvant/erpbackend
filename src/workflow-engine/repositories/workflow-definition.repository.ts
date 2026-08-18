@@ -14,6 +14,28 @@ export class WorkflowDefinitionRepository {
     return this.prisma.workflowDefinition.findMany();
   }
 
+  findById(id: string) {
+    return this.prisma.workflowDefinition.findUnique({ where: { id } });
+  }
+
+  findByEntityTypeAndName(entityType: string, name: string) {
+    return this.prisma.workflowDefinition.findUnique({
+      where: { entityType_name: { entityType, name } },
+    });
+  }
+
+  create(data: Prisma.WorkflowDefinitionUncheckedCreateInput) {
+    return this.prisma.workflowDefinition.create({ data });
+  }
+
+  update(id: string, data: Prisma.WorkflowDefinitionUncheckedUpdateInput) {
+    return this.prisma.workflowDefinition.update({ where: { id }, data });
+  }
+
+  delete(id: string) {
+    return this.prisma.workflowDefinition.delete({ where: { id } });
+  }
+
   upsert(
     entityType: string,
     name: string,

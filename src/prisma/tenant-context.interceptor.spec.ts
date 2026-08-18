@@ -37,13 +37,32 @@ describe('TenantContextInterceptor', () => {
       canAccessAllCampuses: false,
       academicSessionId: 'session-1',
     });
-    const request: any = { user: staffUser };
+    const request: any = { user: staffUser, headers: {} };
 
     const result$ = interceptor.intercept(makeContext(request), makeNext());
     const result = await firstValueFrom(result$);
 
-    expect(mockBuilder.build).toHaveBeenCalledWith(staffUser);
+    expect(mockBuilder.build).toHaveBeenCalledWith(staffUser, undefined);
     expect(request.tenantContext).toMatchObject({ campusId: 'campus-a' });
     expect(result).toBe('handler-result');
+  });
+
+  it('forwards the X-Campus-Id request header as the requested campus id', async () => {
+    mockBuilder.build.mockResolvedValue({
+      userId: 'staff-1',
+      role: 'Teacher',
+      permissions: [],
+      campusId: 'campus-b',
+      canAccessAllCampuses: false,
+      academicSessionId: 'session-1',
+    });
+    const request: any = {
+      user: staffUser,
+      headers: { 'x-campus-id': 'campus-b' },
+    };
+
+    await firstValueFrom(interceptor.intercept(makeContext(request), makeNext()));
+
+    expect(mockBuilder.build).toHaveBeenCalledWith(staffUser, 'campus-b');
   });
 });

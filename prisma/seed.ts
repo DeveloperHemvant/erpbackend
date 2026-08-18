@@ -10,12 +10,13 @@ const prisma = new PrismaClient();
 
 const BASE_FAKER_SEED = 20260804;
 
-// Multi-Campus Demo Data Overhaul — two sessions with real temporal meaning
-// relative to "today" (2026-08-13), not two arbitrary future years:
+// Single-campus demo data, two sessions with real temporal meaning relative
+// to "today" (2026-08-13), not two arbitrary future years:
 //   - Historical session (2025-2026): fully in the past, seeded completely
-//     (every data type, full year) — this is what gets promoted FROM.
+//     (every data type, every school day, full year — no truncation) — this
+//     is what gets promoted FROM.
 //   - Current session (2026-2027): the one actually active today, seeded
-//     only from its start through today — this is what gets promoted TO.
+//     from its start through today — this is what gets promoted TO.
 const SESSION_DEFS = [
   {
     name: '2025-2026',
@@ -38,6 +39,12 @@ const SESSION_END = SESSION_DEFS[0].end;
 const TODAY = new Date('2026-08-13');
 
 const CLASS_NAMES = ['Nursery', 'LKG', 'UKG', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+// EMS is seeded for a representative slice (both grades share the same
+// subject list) rather than the whole school — the point is a real,
+// complete attempt->evaluation->result chain with many real students, not
+// matching the core Exam system's full-population volume.
+const EMS_TARGET_GRADES = ['Grade 9', 'Grade 10'];
+const EMS_TARGET_SUBJECTS = ['English', 'Mathematics', 'Physics'];
 const SECTION_NAMES = ['A', 'B', 'C', 'D'];
 const STAFF_PASSWORD = 'Staff@123';
 const PARENT_PASSWORD = 'Parent@123';
@@ -46,34 +53,22 @@ const MAX_STUDENTS_PER_SECTION = 80;
 const MIN_STUDENTS_PER_SECTION = 72;
 const TRANSPORT_ROUTES = 30;
 
-// Campus Isolation Phase 4 — two genuinely independent campuses, each with
-// its own full population, not one dataset split in half. `slug` folds into
-// every generated identifier that would otherwise collide once the same
-// generation logic runs twice (admission numbers, vehicle numbers, parent
-// emails, ID card numbers) — see CAMPUS_ISOLATION Multi-Campus Demo Data
-// Overhaul plan, Stage 2. `fakerSeedOffset` makes campus B's random draws
-// diverge from campus A's (same faker instance, reseeded per campus) so the
-// two campuses don't end up with identical "twin" fake data.
+// Single-campus deployment — the per-campus loop below still exists (kept
+// intentionally rather than unwound) because every downstream section reads
+// `campus`/`def` from it; with exactly one entry it just runs once. `slug`
+// still folds into generated identifiers (admission numbers, vehicle
+// numbers, parent emails, ID card numbers) purely for readability, not to
+// avoid collisions across campuses anymore.
 const CAMPUS_DEFS = [
   {
     slug: 'main',
-    name: 'Central Academy Main Campus',
+    name: 'Central Academy',
     address: 'Hebbal, Bengaluru, Karnataka 560024',
     latitude: 12.9898,
     longitude: 77.5946,
     fakerSeedOffset: 0,
     admissionYear: 2025,
     vehiclePrefix: 'KA-05',
-  },
-  {
-    slug: 'north',
-    name: 'Central Academy North Campus',
-    address: 'Yelahanka New Town, Bengaluru, Karnataka 560064',
-    latitude: 13.1007,
-    longitude: 77.5963,
-    fakerSeedOffset: 5000,
-    admissionYear: 2025,
-    vehiclePrefix: 'KA-51',
   },
 ] as const;
 
@@ -207,6 +202,17 @@ function fmt(date: Date) {
   return date.toISOString().split('T')[0];
 }
 
+// Adds a fractional-hour offset to a "HH:MM" string, used to derive a
+// plausible check-out time from a check-in time (e.g. '08:55' + 6.5h ->
+// '15:25') without carrying a full Date object through the attendance rows.
+function addHoursToTime(time: string, hours: number): string {
+  const [h, m] = time.split(':').map(Number);
+  const totalMinutes = h * 60 + m + Math.round(hours * 60);
+  const outH = Math.floor(totalMinutes / 60) % 24;
+  const outM = totalMinutes % 60;
+  return `${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}`;
+}
+
 function isSchoolDay(date: Date) {
   const weekday = date.getDay();
   if (weekday === 0) return false;
@@ -222,11 +228,6 @@ function getSchoolDaysForRange(sessionStart: Date, sessionEnd: Date) {
     }
   }
   return dates;
-}
-
-function getAttendanceDays(sessionStart: Date, sessionEnd: Date, windowDays = 7) {
-  const all = getSchoolDaysForRange(sessionStart, sessionEnd);
-  return all.slice(0, windowDays);
 }
 
 function chunkArray<T>(items: T[], chunkSize: number): T[][] {
@@ -283,13 +284,135 @@ const CAMPUS_SPECIFIC_NAMED_ROLES: { role: string; fullName: string; slug: strin
 type CampusDef = (typeof CAMPUS_DEFS)[number];
 type NamedAccount = { role: string; fullName: string; email: string; password: string; campus: string };
 
+// Runs the full EMS chain once per exam cycle (question bank -> paper ->
+// schedule/seating/invigilation -> real online/offline student attempts ->
+// evaluation -> moderation -> gradebook/result/report card when fullyGraded).
+// Module-level (not a closure) so both the historical-session pass and the
+// current-session pass can call it with their own enrollments/dates.
+async function seedEmsCycle(opts: {
+  campusId: string;
+  subjectMap: Record<string, string>;
+  teacherIds: string[];
+  namedStaffIdsThisCampus: string[];
+  sectionToClassMap: Record<string, { classId: string; grade: string }>;
+  emsRooms: { id: string }[];
+  emsExamTemplateRows: { id: string }[];
+  emsGradingScheme: { ranges: any };
+  emsTargetClasses: { id: string; grade: string }[];
+  sessionName: string; sessionStart: Date; sessionEnd: Date; sessionIsActive: boolean;
+  examTypeIdx: 0 | 1; examDate: Date; mode: 'OFFLINE' | 'ONLINE'; fullyGraded: boolean;
+  targetEnrollments: any[];
+}) {
+  const { subjectMap, teacherIds, namedStaffIdsThisCampus, sectionToClassMap, emsRooms, emsExamTemplateRows, emsGradingScheme, emsTargetClasses } = opts;
+  const emsSession = await prisma.eMSExamSession.create({
+    data: { name: opts.sessionName, startDate: opts.sessionStart, endDate: opts.sessionEnd, isActive: opts.sessionIsActive, campusId: opts.campusId },
+  });
+
+  for (const subjectName of EMS_TARGET_SUBJECTS) {
+    const questionBank = await prisma.eMSQuestionBank.create({
+      data: { title: `${subjectName} Question Bank`, description: `${subjectName} MCQ repository`, subjectId: subjectMap[subjectName] },
+    });
+    const questionRows = Array.from({ length: 10 }).map((_, i) => {
+      const options = [{ id: 'A', text: `Option A for Q${i + 1}` }, { id: 'B', text: `Option B for Q${i + 1}` }, { id: 'C', text: `Option C for Q${i + 1}` }, { id: 'D', text: `Option D for Q${i + 1}` }];
+      return {
+        id: randomUUID(), questionBankId: questionBank.id, type: 'MCQ', text: `${subjectName} question ${i + 1}: sample assessment item.`,
+        bloomLevel: randomItem(['Remember', 'Understand', 'Apply', 'Analyze']), difficulty: randomItem(['EASY', 'MEDIUM', 'HARD']),
+        options, correctOptionId: 'A', marks: 10, createdAt: new Date(),
+      };
+    });
+    await batchInsert(`ems_questions_${subjectName}`, prisma.eMSQuestion, questionRows, 500);
+
+    const paper = await prisma.eMSQuestionPaper.create({
+      data: { title: `${subjectName} — ${opts.sessionName}`, subjectId: subjectMap[subjectName], totalMarks: 100, durationMin: 90, isApproved: true },
+    });
+    await batchInsert(`ems_paper_items_${subjectName}`, prisma.eMSQuestionPaperItem, questionRows.map((q, idx) => ({
+      id: randomUUID(), questionPaperId: paper.id, questionId: q.id, sequence: idx + 1, marks: q.marks,
+    })), 500);
+
+    for (const classDef of emsTargetClasses) {
+      const schedule = await prisma.eMSExamSchedule.create({
+        data: {
+          sessionId: emsSession.id, templateId: emsExamTemplateRows[opts.examTypeIdx].id, subjectId: subjectMap[subjectName],
+          date: opts.examDate, startTime: new Date(`${fmt(opts.examDate)}T09:00:00`), endTime: new Date(`${fmt(opts.examDate)}T10:30:00`),
+          mode: opts.mode, durationMin: 90, questionPaperId: paper.id,
+        },
+      });
+
+      const room = await prisma.eMSExamRoom.create({ data: { scheduleId: schedule.id, roomId: randomItem(emsRooms).id, capacity: 150 } });
+      const classEnrollments = opts.targetEnrollments.filter((e) => sectionToClassMap[e.sectionId]?.classId === classDef.id);
+      const seatingRows = classEnrollments.map((e, idx) => ({ id: randomUUID(), roomId: room.id, studentId: e.studentId, seatNumber: `S-${idx + 1}` }));
+      await batchInsert('ems_exam_seatings', prisma.eMSExamSeating, seatingRows, 2000);
+      await prisma.eMSInvigilator.create({ data: { roomId: room.id, staffId: randomItem(teacherIds) } });
+
+      const attemptRows = classEnrollments.map((e) => ({ id: randomUUID(), scheduleId: schedule.id, studentId: e.studentId, status: 'PRESENT', startedAt: opts.examDate, endedAt: new Date(opts.examDate.getTime() + 80 * 60000), createdAt: opts.examDate }));
+      await batchInsert('ems_exam_attempts', prisma.eMSExamAttempt, attemptRows, 3000);
+
+      if (opts.mode === 'ONLINE') {
+        const submissionRows = attemptRows.map((a) => ({
+          id: randomUUID(), attemptId: a.id, scheduleId: schedule.id, startedAt: a.startedAt, submittedAt: a.endedAt,
+          autoSubmitted: false, status: opts.fullyGraded ? 'GRADED' : 'SUBMITTED', createdAt: a.startedAt,
+        }));
+        await batchInsert('ems_online_submissions', prisma.eMSOnlineSubmission, submissionRows, 3000);
+
+        const answerRows: any[] = [];
+        submissionRows.forEach((submission) => {
+          questionRows.forEach((question) => {
+            const isCorrect = faker.number.int({ min: 1, max: 100 }) <= 78;
+            answerRows.push({
+              id: randomUUID(), submissionId: submission.id, questionId: question.id,
+              selectedOptionId: isCorrect ? question.correctOptionId : randomItem(['A', 'B', 'C', 'D'].filter((o) => o !== question.correctOptionId)),
+              textAnswer: null, isCorrect, marksAwarded: isCorrect ? question.marks : 0,
+            });
+          });
+        });
+        await batchInsert('ems_answers', prisma.eMSAnswer, answerRows, 5000);
+      } else {
+        const answerSheetRows = attemptRows.map((a) => ({ id: randomUUID(), attemptId: a.id, fileUrl: `https://centralacademy.edu/ems/answer-sheets/${a.id}.pdf`, content: null, isGraded: opts.fullyGraded, createdAt: a.startedAt }));
+        await batchInsert('ems_answer_sheets', prisma.eMSAnswerSheet, answerSheetRows, 3000);
+      }
+
+      const evaluationRows = attemptRows.map((a) => ({
+        id: randomUUID(), attemptId: a.id, evaluatorId: randomItem(teacherIds),
+        marksObtained: faker.number.int({ min: 30, max: 98 }), remarks: opts.fullyGraded ? 'Evaluated and finalized.' : 'Evaluation in progress.',
+        gradedAt: opts.fullyGraded ? new Date(opts.examDate.getTime() + 5 * 86400000) : a.startedAt,
+      }));
+      if (opts.fullyGraded) {
+        await batchInsert('ems_evaluation_records', prisma.eMSEvaluationRecord, evaluationRows, 3000);
+        await prisma.eMSModerationRecord.create({
+          data: { scheduleId: schedule.id, moderatorId: namedStaffIdsThisCampus[1] ?? teacherIds[0], graceMarks: 2, reason: 'Standard moderation adjustment for question difficulty.', approvedAt: new Date(opts.examDate.getTime() + 7 * 86400000) },
+        });
+      }
+    }
+  }
+
+  if (opts.fullyGraded) {
+    for (const classDef of emsTargetClasses) {
+      const gradebook = await prisma.eMSGradebook.create({ data: { sessionId: emsSession.id, classId: classDef.id, isPublished: true } });
+      const classEnrollments = opts.targetEnrollments.filter((e) => sectionToClassMap[e.sectionId]?.classId === classDef.id);
+      const resultRows = classEnrollments.map((e) => {
+        const percentage = faker.number.int({ min: 35, max: 98 });
+        const scheme = emsGradingScheme.ranges as any[];
+        const grade = scheme.find((r) => percentage >= r.min && percentage <= r.max)?.grade ?? 'C';
+        return { id: randomUUID(), gradebookId: gradebook.id, studentId: e.studentId, totalMarks: percentage * EMS_TARGET_SUBJECTS.length, percentage, grade, gpa: Number((percentage / 10).toFixed(1)), rank: null as number | null, createdAt: new Date() };
+      });
+      resultRows.sort((a, b) => b.percentage - a.percentage).forEach((r, idx) => { r.rank = idx + 1; });
+      await batchInsert('ems_results', prisma.eMSResult, resultRows, 3000);
+
+      const reportCardRows = classEnrollments.map((e) => ({
+        id: randomUUID(), studentId: e.studentId, sessionId: emsSession.id, fileUrl: `https://centralacademy.edu/ems/report-cards/${e.studentId}.pdf`,
+        remarks: 'Consistent performance across the session.', attendance: 95, publishedAt: opts.sessionEnd,
+      }));
+      await batchInsert('ems_report_cards', prisma.eMSReportCard, reportCardRows, 3000);
+    }
+  }
+}
+
 async function main() {
   console.log('Starting enterprise-grade demo seed for Aegis OS School ERP...');
   await resetDatabase();
 
-  const seedDays = process.env.SEED_DAYS ? parseInt(process.env.SEED_DAYS, 10) : 30;
-  const schoolDays = getAttendanceDays(SESSION_START, SESSION_END, seedDays);
-  console.log(`Historical session (${SESSION_DEFS[0].name}) attendance days: ${schoolDays.length} (configured: ${seedDays})`);
+  const schoolDays = getSchoolDaysForRange(SESSION_START, SESSION_END);
+  console.log(`Historical session (${SESSION_DEFS[0].name}) attendance days: ${schoolDays.length} (full session, no truncation)`);
   const currentSessionDays = getSchoolDaysForRange(SESSION_DEFS[1].start, TODAY);
   console.log(`Current session (${SESSION_DEFS[1].name}) attendance days (start through today): ${currentSessionDays.length}`);
 
@@ -337,19 +460,19 @@ async function main() {
     { name: 'Super Admin', permissions: ['*'] },
     { name: 'Principal', permissions: ['*'] },
     { name: 'Vice Principal', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'VIEW_STUDENTS', 'MANAGE_USERS', 'MANAGE_ACADEMICS', 'MARK_ATTENDANCE', 'MANAGE_EXAMS', 'MANAGE_FEES', 'VIEW_REPORTS', 'MANAGE_TRANSPORT', 'MANAGE_TRANSPORT_FLEET', 'MANAGE_LMS', 'MANAGE_DISCIPLINE', 'MANAGE_GRIEVANCES'] },
-    { name: 'Academic Coordinator', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'VIEW_STUDENTS', 'MANAGE_ACADEMICS', 'MANAGE_EXAMS', 'VIEW_REPORTS', 'MANAGE_ACTIVITIES'] },
-    { name: 'Teacher', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'VIEW_STUDENTS', 'MARK_ATTENDANCE', 'MANAGE_GRADES', 'MANAGE_EXAMS', 'MANAGE_LMS', 'VIEW_REPORTS', 'MANAGE_ACTIVITIES'] },
+    { name: 'Academic Coordinator', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'VIEW_STUDENTS', 'MANAGE_ACADEMICS', 'MANAGE_EXAMS', 'VIEW_REPORTS', 'MANAGE_ACTIVITIES', 'USE_AI_ASSISTANT'] },
+    { name: 'Teacher', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'VIEW_STUDENTS', 'MARK_ATTENDANCE', 'MANAGE_GRADES', 'MANAGE_EXAMS', 'MANAGE_LMS', 'VIEW_REPORTS', 'MANAGE_ACTIVITIES', 'USE_AI_ASSISTANT'] },
     { name: 'Accountant', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_FEES', 'VIEW_REPORTS'] },
     { name: 'Librarian', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_ACADEMICS', 'VIEW_REPORTS'] },
     { name: 'Warden', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_HOSTEL', 'VIEW_REPORTS'] },
     { name: 'Transport Manager', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_TRANSPORT', 'MANAGE_TRANSPORT_FLEET', 'VIEW_REPORTS'] },
     { name: 'Driver', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_TRANSPORT', 'VIEW_REPORTS'] },
     { name: 'Conductor', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_TRANSPORT'] },
-    { name: 'Admin Staff', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_USERS', 'MANAGE_COMMUNICATION', 'VIEW_REPORTS', 'MANAGE_ADMISSIONS_PIPELINE', 'MANAGE_GRIEVANCES'] },
+    { name: 'Admin Staff', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_USERS', 'MANAGE_COMMUNICATION', 'VIEW_REPORTS', 'MANAGE_ADMISSIONS_PIPELINE', 'MANAGE_GRIEVANCES', 'MANAGE_DIARY', 'MANAGE_NEWS', 'MANAGE_LOST_FOUND', 'MANAGE_DOCUMENTS'] },
     { name: 'Nurse', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_HEALTH_RECORDS', 'VIEW_REPORTS'] },
     { name: 'Reception', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_VISITORS', 'VIEW_REPORTS'] },
     { name: 'Security', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_VISITORS', 'VIEW_REPORTS'] },
-    { name: 'Parent', permissions: ['VIEW_CHILD_PROFILE', 'PAY_FEES', 'VIEW_REPORTS'] },
+    { name: 'Parent', permissions: ['VIEW_CHILD_PROFILE', 'PAY_FEES', 'VIEW_REPORTS', 'VIEW_CHILD_GRADES'] },
     { name: 'Student', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_GRADES', 'VIEW_LMS'] },
   ];
 
@@ -410,6 +533,15 @@ async function main() {
     vehicles: any[];
     routeRows: any[];
     driverIds: string[];
+    ems?: {
+      teacherIds: string[];
+      namedStaffIdsThisCampus: string[];
+      sectionToClassMap: Record<string, { classId: string; grade: string }>;
+      emsRooms: { id: string }[];
+      emsExamTemplateRows: { id: string }[];
+      emsGradingScheme: { ranges: any };
+      emsTargetClasses: { id: string; grade: string }[];
+    };
   }> = {};
 
   for (const def of CAMPUS_DEFS) {
@@ -864,12 +996,15 @@ async function main() {
           { value: 'Absent', weight: 5 },
           { value: 'Late', weight: 3 },
         ]);
+        const studentCheckIn = status === 'Late' ? '09:12' : '08:55';
         studentAttendance.push({
           id: randomUUID(),
           enrollmentId: enrollment.id,
           date,
           status,
-          checkInTime: status === 'Late' ? '09:12' : '08:55',
+          checkInTime: studentCheckIn,
+          checkOutTime: status === 'Absent' ? null : addHoursToTime(studentCheckIn, 6.5),
+          faceVerified: status !== 'Absent' && faker.number.int({ min: 1, max: 100 }) <= 90,
           campusId: campus.id,
           sessionId: historicalSession.id,
           createdAt: new Date(),
@@ -888,12 +1023,16 @@ async function main() {
           { value: 'Absent', weight: 2 },
           { value: 'Late', weight: 1 },
         ]);
+        const staffCheckIn = status === 'Late' ? '09:10' : '08:50';
+        const staffOnSite = status === 'Absent' || status === 'Leave';
         staffAttendance.push({
           id: randomUUID(),
           staffId,
           date,
           status,
-          checkInTime: status === 'Late' ? '09:10' : '08:50',
+          checkInTime: staffOnSite ? null : staffCheckIn,
+          checkOutTime: staffOnSite ? null : addHoursToTime(staffCheckIn, 7),
+          faceVerified: !staffOnSite && faker.number.int({ min: 1, max: 100 }) <= 90,
           campusId: campus.id,
           sessionId: historicalSession.id,
           createdAt: new Date(),
@@ -1440,6 +1579,634 @@ async function main() {
       });
     }
     await batchInsert('certificates', prisma.certificate, certificateRows);
+
+    console.log('\n18) Seeding PTM slots (booked against real teacher/parent/student triples)...');
+    const classTeacherRows = assignmentRows.filter((row) => row.isClassTeacher);
+    const ptmDays = ['2025-06-20', '2025-11-25'];
+    const ptmSlotRows: any[] = [];
+    for (const ptmDay of ptmDays) {
+      for (const ctRow of classTeacherRows) {
+        const sectionEnrollments = enrollments.filter((e) => e.sectionId === ctRow.sectionId);
+        const slotTimes = ['15:00', '15:15', '15:30', '15:45', '16:00', '16:15'];
+        slotTimes.forEach((startTime, idx) => {
+          const endTime = addHoursToTime(startTime, 0.25);
+          const bookThisSlot = idx < sectionEnrollments.length && faker.number.int({ min: 1, max: 100 }) <= 65;
+          let parentId: string | null = null;
+          let studentId: string | null = null;
+          let status = 'Open';
+          let bookedAt: Date | null = null;
+          if (bookThisSlot) {
+            const enrollment = sectionEnrollments[idx];
+            const family = familyGroups.find((f) => f.children.includes(enrollment.studentId));
+            if (family) {
+              parentId = family.parentId;
+              studentId = enrollment.studentId;
+              status = 'Booked';
+              bookedAt = new Date(new Date(ptmDay).getTime() - 3 * 86400000);
+            }
+          } else if (faker.number.int({ min: 1, max: 100 }) <= 8) {
+            status = 'Cancelled';
+          }
+          ptmSlotRows.push({
+            id: randomUUID(),
+            teacherId: ctRow.staffId,
+            date: new Date(ptmDay),
+            startTime,
+            endTime,
+            location: `Room ${101 + (idx % 4)}`,
+            status,
+            parentId,
+            studentId,
+            bookedAt,
+          });
+        });
+      }
+    }
+    await batchInsert('ptm_slots', prisma.pTMSlot, ptmSlotRows, 3000);
+
+    console.log('\n19) Seeding real morning assemblies, student achievements, and staff duty rosters...');
+    const mondaySchoolDays = schoolDays.filter((d) => new Date(d).getDay() === 1);
+    const assemblyThemes = ['Honesty & Integrity', 'Environmental Awareness', 'Road Safety', 'Digital Citizenship', 'Kindness & Empathy', 'National Unity', 'Health & Hygiene', 'Financial Literacy'];
+    const assemblyRows: any[] = [];
+    mondaySchoolDays.forEach((date, idx) => {
+      const section = classDefinitions[idx % classDefinitions.length].sections[idx % 4];
+      assemblyRows.push({
+        id: randomUUID(),
+        date: new Date(date),
+        campusId: campus.id,
+        theme: assemblyThemes[idx % assemblyThemes.length],
+        performingSectionId: section.id,
+        supervisingStaffId: teacherIds[idx % teacherIds.length],
+        venue: 'Main Assembly Hall',
+        activities: [
+          { type: 'PRAYER', details: 'Morning prayer' },
+          { type: 'SPEECH', studentId: undefined, details: `Speech on ${assemblyThemes[idx % assemblyThemes.length]}` },
+          { type: 'SINGING', details: 'National anthem' },
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    });
+    await batchInsert('morning_assemblies', prisma.morningAssembly, assemblyRows, 2000);
+
+    const achievementTypes = ['ACADEMIC', 'SPORTS', 'MUSIC', 'DANCE', 'DEBATE', 'OLYMPIAD'];
+    const achievementAwards = ['MEDAL', 'TROPHY', 'CERTIFICATE', 'SCHOLARSHIP'];
+    const achievementRows: any[] = [];
+    faker.helpers.arrayElements(studentRows, Math.round(studentRows.length * 0.05)).forEach((student) => {
+      achievementRows.push({
+        id: randomUUID(),
+        studentId: student.id,
+        type: randomItem(achievementTypes),
+        title: `${randomItem(['Inter-School', 'District-Level', 'State-Level', 'Zonal'])} ${randomItem(['Chess Championship', 'Science Fair', 'Debate Competition', 'Athletics Meet', 'Music Recital', 'Coding Olympiad'])}`,
+        award: randomItem(achievementAwards),
+        issuedById: randomItem(teacherIds),
+        certificateData: {},
+        issuedAt: faker.date.between({ from: SESSION_START, to: SESSION_END }),
+      });
+    });
+    await batchInsert('student_achievements', prisma.studentAchievement, achievementRows, 3000);
+
+    const dutyTypes = ['EXAM', 'ASSEMBLY', 'PTM', 'SPORTS', 'GATE', 'BUS'];
+    const dutyRows: any[] = [];
+    const dutyRosterDays = schoolDays.filter((_, idx) => idx % 10 === 0); // roughly one duty cycle every 2 weeks
+    dutyRosterDays.forEach((date) => {
+      sampleItems(teacherIds, Math.min(4, teacherIds.length)).forEach((staffId) => {
+        dutyRows.push({
+          id: randomUUID(),
+          staffId,
+          dutyType: randomItem(dutyTypes),
+          date: new Date(date),
+          notes: 'Routine duty roster assignment',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      });
+    });
+    await batchInsert('staff_duty_allocations', prisma.staffDutyAllocation, dutyRows, 3000);
+
+    console.log('\n20) Seeding health profiles, visits, and vaccinations...');
+    const nurseStaffId = staffRecords.find((s) => s.details?.designation === 'Nurse')?.id
+      ?? namedStaffIdsThisCampus.find((id) => id) ?? teacherIds[0];
+    const healthProfileRows = studentRows.map((student) => ({
+      id: randomUUID(),
+      studentId: student.id,
+      bloodGroup: student.details?.bloodGroup ?? randomItem(['A+', 'A-', 'B+', 'B-', 'O+', 'O-']),
+      allergies: faker.number.int({ min: 1, max: 100 }) <= 12 ? randomItem(['Peanuts', 'Dust', 'Pollen', 'Lactose']) : null,
+      chronicConditions: faker.number.int({ min: 1, max: 100 }) <= 5 ? randomItem(['Asthma', 'Type 1 Diabetes', 'Epilepsy']) : null,
+      currentMedications: null,
+      emergencyContactName: student.fullName.split(' ').pop() + ' Guardian',
+      emergencyContactPhone: '9' + faker.string.numeric(9),
+      familyDoctorName: `Dr. ${faker.person.lastName()}`,
+      familyDoctorPhone: '9' + faker.string.numeric(9),
+      insuranceProvider: faker.number.int({ min: 1, max: 100 }) <= 40 ? randomItem(['Star Health', 'HDFC Ergo', 'ICICI Lombard']) : null,
+      insurancePolicyNo: null,
+      notes: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+    await batchInsert('health_profiles', prisma.healthProfile, healthProfileRows, 3000);
+    const healthProfileByStudent = new Map(healthProfileRows.map((p) => [p.studentId, p.id]));
+
+    const healthVisitRows: any[] = [];
+    faker.helpers.arrayElements(studentRows, Math.round(studentRows.length * 0.08)).forEach((student) => {
+      const visitDate = faker.date.between({ from: SESSION_START, to: SESSION_END });
+      healthVisitRows.push({
+        id: randomUUID(),
+        studentId: student.id,
+        healthProfileId: healthProfileByStudent.get(student.id),
+        visitDate,
+        reason: randomItem(['Fever', 'Headache', 'Stomach ache', 'Minor injury', 'Dizziness', 'Allergic reaction']),
+        symptoms: randomItem(['Mild', 'Moderate']),
+        temperature: Number(faker.number.float({ min: 97.5, max: 101.5, fractionDigits: 1 })),
+        treatmentGiven: randomItem(['Rest and observation', 'Paracetamol administered', 'First aid applied', 'ORS given']),
+        actionTaken: randomItem(['Observed and Released', 'Sent Home', 'Referred to Doctor']),
+        parentNotified: faker.datatype.boolean(),
+        loggedByStaffId: nurseStaffId,
+        createdAt: visitDate,
+      });
+    });
+    await batchInsert('health_visits', prisma.healthVisit, healthVisitRows, 3000);
+
+    const vaccinationRows: any[] = [];
+    faker.helpers.arrayElements(studentRows, Math.round(studentRows.length * 0.3)).forEach((student) => {
+      const dateAdministered = faker.date.between({ from: SESSION_START, to: SESSION_END });
+      vaccinationRows.push({
+        id: randomUUID(),
+        studentId: student.id,
+        healthProfileId: healthProfileByStudent.get(student.id),
+        vaccineName: randomItem(['DPT Booster', 'Tetanus', 'Hepatitis B', 'MMR', 'Typhoid', 'Influenza']),
+        doseNumber: randomItem([1, 2]),
+        dateAdministered,
+        nextDueDate: null,
+        administeredBy: `Dr. ${faker.person.lastName()}`,
+        certificateUrl: null,
+        createdAt: dateAdministered,
+      });
+    });
+    await batchInsert('vaccinations', prisma.vaccination, vaccinationRows, 3000);
+
+    console.log('\n21) Seeding discipline incidents and counseling notes...');
+    const disciplineIncidentRows: any[] = [];
+    faker.helpers.arrayElements(studentRows, Math.round(studentRows.length * 0.02)).forEach((student) => {
+      const incidentDate = faker.date.between({ from: SESSION_START, to: SESSION_END });
+      const severity = weightedPick([{ value: 'Minor', weight: 60 }, { value: 'Moderate', weight: 30 }, { value: 'Major', weight: 10 }]);
+      disciplineIncidentRows.push({
+        id: randomUUID(),
+        studentId: student.id,
+        incidentDate,
+        category: randomItem(['Bullying', 'Disruption', 'Academic Dishonesty', 'Property Damage', 'Attendance', 'Other']),
+        severity,
+        description: `${severity} incident reported during school hours.`,
+        actionTaken: randomItem(['Verbal Warning', 'Written Warning', 'Detention', 'Parent Meeting', 'Counseling Referral']),
+        status: weightedPick([{ value: 'Resolved', weight: 70 }, { value: 'Open', weight: 20 }, { value: 'Escalated', weight: 10 }]),
+        reportedByStaffId: randomItem(teacherIds),
+        parentNotified: severity !== 'Minor',
+        createdAt: incidentDate,
+        updatedAt: incidentDate,
+      });
+    });
+    await batchInsert('discipline_incidents', prisma.disciplineIncident, disciplineIncidentRows, 2000);
+
+    const counselingNoteRows: any[] = [];
+    disciplineIncidentRows.filter((inc) => inc.status !== 'Open').forEach((incident) => {
+      counselingNoteRows.push({
+        id: randomUUID(),
+        incidentId: incident.id,
+        note: 'Follow-up counseling session completed; student has shown improvement.',
+        createdByStaffId: randomItem(teacherIds),
+        createdAt: incident.incidentDate,
+      });
+    });
+    await batchInsert('discipline_counseling_notes', prisma.disciplineCounselingNote, counselingNoteRows, 2000);
+
+    console.log('\n22) Seeding admission inquiries and follow-ups...');
+    const admissionStaffId = namedStaffIdsThisCampus[9] ?? randomItem(teacherIds); // Admin Staff named account
+    const inquiryStatuses = ['New', 'Contacted', 'Campus Visit Scheduled', 'Application Sent', 'Converted', 'Lost'];
+    const admissionInquiryRows: any[] = [];
+    for (let i = 0; i < 60; i++) {
+      const gender = faker.person.sex() as 'male' | 'female';
+      admissionInquiryRows.push({
+        id: randomUUID(),
+        childName: `${faker.person.firstName(gender)} ${faker.person.lastName()}`,
+        gradeInterested: randomItem(CLASS_NAMES),
+        parentName: faker.person.fullName(),
+        phone: '9' + faker.string.numeric(9),
+        email: faker.internet.email().toLowerCase(),
+        source: randomItem(['Walk-in', 'Website', 'Referral', 'Phone', 'Social Media']),
+        status: randomItem(inquiryStatuses),
+        notes: 'Interested in admission for the upcoming session.',
+        assignedToStaffId: admissionStaffId,
+        createdAt: faker.date.between({ from: SESSION_START, to: SESSION_END }),
+        updatedAt: new Date(),
+      });
+    }
+    await batchInsert('admission_inquiries', prisma.admissionInquiry, admissionInquiryRows, 2000);
+
+    const inquiryFollowUpRows: any[] = [];
+    admissionInquiryRows.filter((inq) => inq.status !== 'New').forEach((inquiry) => {
+      inquiryFollowUpRows.push({
+        id: randomUUID(),
+        inquiryId: inquiry.id,
+        note: `Follow-up call made — status updated to ${inquiry.status}.`,
+        followUpDate: inquiry.createdAt,
+        createdByStaffId: admissionStaffId,
+        createdAt: inquiry.createdAt,
+      });
+    });
+    await batchInsert('admission_inquiry_followups', prisma.admissionInquiryFollowUp, inquiryFollowUpRows, 2000);
+
+    console.log('\n23) Seeding transport fuel/odometer/daily-check logs, maintenance, documents, and fleet vendors...');
+    const transportVendorRows = [
+      { id: randomUUID(), vendorName: 'Bengaluru Auto Garage', contactPerson: faker.person.fullName(), phone: '9' + faker.string.numeric(9), email: 'contact@blrautogarage.example', address: 'Peenya Industrial Area, Bengaluru', vendorType: 'Garage', status: 'Active', createdAt: new Date() },
+      { id: randomUUID(), vendorName: 'Karnataka Tyre House', contactPerson: faker.person.fullName(), phone: '9' + faker.string.numeric(9), email: 'sales@katyrehouse.example', address: 'Mysore Road, Bengaluru', vendorType: 'Tyres', status: 'Active', createdAt: new Date() },
+      { id: randomUUID(), vendorName: 'PowerCell Batteries', contactPerson: faker.person.fullName(), phone: '9' + faker.string.numeric(9), email: 'support@powercell.example', address: 'Whitefield, Bengaluru', vendorType: 'Battery', status: 'Active', createdAt: new Date() },
+      { id: randomUUID(), vendorName: 'SafeDrive Spares', contactPerson: faker.person.fullName(), phone: '9' + faker.string.numeric(9), email: 'orders@safedrivespares.example', address: 'Yeshwanthpur, Bengaluru', vendorType: 'Spare Parts', status: 'Active', createdAt: new Date() },
+    ];
+    await batchInsert('transport_vendors', prisma.transportVendor, transportVendorRows);
+    const garageVendor = transportVendorRows.find((v) => v.vendorType === 'Garage')!;
+    const tyreVendor = transportVendorRows.find((v) => v.vendorType === 'Tyres')!;
+    const batteryVendor = transportVendorRows.find((v) => v.vendorType === 'Battery')!;
+    const sparesVendor = transportVendorRows.find((v) => v.vendorType === 'Spare Parts')!;
+
+    const transportInventoryRows = ['Brake Pads', 'Engine Oil (5L)', 'Air Filter', 'Wiper Blades', 'Coolant (5L)', 'Fan Belt'].map((itemName) => ({
+      id: randomUUID(), itemName, category: 'Spare Part', quantity: faker.number.int({ min: 4, max: 40 }),
+      unitPrice: faker.number.float({ min: 200, max: 4500, fractionDigits: 2 }), vendorId: sparesVendor.id,
+      minimumStock: 5, lastRestockedAt: faker.date.between({ from: SESSION_START, to: SESSION_END }), status: 'Available', createdAt: new Date(),
+    }));
+    await batchInsert('transport_inventory', prisma.transportInventory, transportInventoryRows);
+
+    // Every vehicle gets a full year of monthly-ish fuel/odometer/service
+    // records plus a document set, instead of the single hardcoded-June
+    // snapshot the old auxiliary scripts produced.
+    const fuelLogRows: any[] = [];
+    const odometerLogRows: any[] = [];
+    const dailyCheckRows: any[] = [];
+    const serviceRows: any[] = [];
+    const tyreRows: any[] = [];
+    const batteryRows: any[] = [];
+    const vehicleDocumentRows: any[] = [];
+    const fuelCheckpointDays = schoolDays.filter((_, idx) => idx % 5 === 0); // roughly weekly per vehicle
+
+    vehicles.forEach((vehicle, vIdx) => {
+      let odometer = faker.number.int({ min: 5000, max: 20000 });
+      fuelCheckpointDays.forEach((date) => {
+        const previousOdometer = odometer;
+        const distance = faker.number.int({ min: 150, max: 400 });
+        odometer += distance;
+        const litres = Number((distance / faker.number.float({ min: 3.5, max: 5.5 })).toFixed(1));
+        const ratePerLitre = 92 + faker.number.float({ min: -3, max: 5, fractionDigits: 2 });
+        fuelLogRows.push({
+          id: randomUUID(), vehicleId: vehicle.id, date, fuelStation: randomItem(['Indian Oil - Hebbal', 'HP Petrol Pump - Yelahanka', 'Bharat Petroleum - Hennur']),
+          invoiceNumber: `FUEL-${faker.number.int({ min: 100000, max: 999999 })}`, fuelType: 'Diesel', litres, ratePerLitre: Number(ratePerLitre.toFixed(2)),
+          totalCost: Number((litres * ratePerLitre).toFixed(2)), currentOdometer: odometer, previousOdometer, mileage: Number((distance / litres).toFixed(2)),
+          filledBy: 'Driver', status: 'Approved', approvedBy: 'Transport Manager',
+        });
+        odometerLogRows.push({
+          id: randomUUID(), vehicleId: vehicle.id, date, openingReading: previousOdometer, closingReading: odometer,
+          distanceTravelled: distance, remarks: 'Routine daily operation', createdAt: new Date(date),
+        });
+      });
+
+      schoolDays.filter((_, idx) => idx % 3 === vIdx % 3).forEach((date) => {
+        ['Morning', 'Afternoon'].forEach((shift) => {
+          dailyCheckRows.push({
+            id: randomUUID(), vehicleId: vehicle.id, driverId: driverIds.length ? driverIds[vIdx % driverIds.length] : null,
+            date, shift, brakesOk: true, tyresOk: true, lightsIndicatorsOk: true, hornOk: true, firstAidKitOk: true,
+            fireExtinguisherOk: true, fuelLevelOk: faker.datatype.boolean(), odometerReading: odometer,
+            overallStatus: 'Fit', createdAt: new Date(date),
+          });
+        });
+      });
+
+      // Quarterly preventive service across the session.
+      ['2025-06-15', '2025-09-15', '2025-12-15', '2026-03-01'].forEach((serviceDate) => {
+        serviceRows.push({
+          id: randomUUID(), vehicleId: vehicle.id, serviceDate, serviceType: 'Preventive', odometerReading: odometer,
+          vendorId: garageVendor.id, mechanicName: faker.person.fullName(), totalCost: faker.number.int({ min: 2500, max: 12000 }),
+          description: 'Routine preventive maintenance and safety check.', status: 'Completed',
+          nextServiceDate: null, nextServiceOdo: odometer + 5000, createdAt: new Date(serviceDate),
+        });
+      });
+
+      tyreRows.push({
+        id: randomUUID(), vehicleId: vehicle.id, tyreNumber: `TYR-${vehicle.vehicleNumber}-${faker.number.int({ min: 1000, max: 9999 })}`,
+        brand: randomItem(['MRF', 'CEAT', 'Apollo', 'JK Tyre']), type: 'Front Left', installedDate: '2025-04-05',
+        installedOdo: 4500, currentOdo: odometer, treadDepth: Number(faker.number.float({ min: 3, max: 9, fractionDigits: 1 })),
+        status: 'In Use', warrantyExpiry: '2027-04-05', vendorId: tyreVendor.id, createdAt: new Date('2025-04-05'),
+      } as any);
+      batteryRows.push({
+        id: randomUUID(), vehicleId: vehicle.id, batteryNumber: `BAT-${vehicle.vehicleNumber}-${faker.number.int({ min: 1000, max: 9999 })}`,
+        brand: randomItem(['Exide', 'Amaron', 'Amco']), capacity: '150Ah', installedDate: '2025-04-05',
+        status: 'In Use', warrantyExpiry: '2027-04-05', vendorId: batteryVendor.id, createdAt: new Date('2025-04-05'),
+      } as any);
+
+      ['RC', 'Insurance', 'Permit', 'Fitness', 'Pollution'].forEach((documentType) => {
+        vehicleDocumentRows.push({
+          id: randomUUID(), vehicleId: vehicle.id, documentType, fileUrl: `https://centralacademy.edu/transport-docs/${vehicle.vehicleNumber}-${documentType}.pdf`,
+          issueDate: '2025-04-01', expiryDate: documentType === 'Permit' ? '2027-03-31' : '2026-12-31', status: 'Valid',
+          createdAt: new Date('2025-04-01'), updatedAt: new Date('2025-04-01'),
+        });
+      });
+    });
+    await batchInsert('transport_fuel_logs', prisma.transportFuelLog, fuelLogRows, 3000);
+    await batchInsert('transport_odometer_logs', prisma.transportOdometerLog, odometerLogRows, 3000);
+    await batchInsert('transport_daily_checks', prisma.transportDailyCheck, dailyCheckRows, 3000);
+    await batchInsert('transport_services', prisma.transportService, serviceRows, 2000);
+    await batchInsert('transport_tyres', prisma.transportTyre, tyreRows, 2000);
+    await batchInsert('transport_batteries', prisma.transportBattery, batteryRows, 2000);
+    await batchInsert('transport_vehicle_documents', prisma.transportVehicleDocument, vehicleDocumentRows, 2000);
+
+    const expenseMonths = ['2025-04', '2025-06', '2025-08', '2025-10', '2025-12', '2026-02'];
+    const expenseRows: any[] = [];
+    vehicles.forEach((vehicle) => {
+      expenseMonths.forEach((month) => {
+        expenseRows.push({
+          id: randomUUID(), vehicleId: vehicle.id, date: `${month}-10`, category: randomItem(['Fuel', 'Maintenance', 'Toll', 'Insurance']),
+          amount: faker.number.int({ min: 800, max: 15000 }), paymentMode: randomItem(['Cash', 'Card', 'UPI', 'Bank Transfer']),
+          referenceNumber: `EXP-${faker.number.int({ min: 100000, max: 999999 })}`, vendorId: randomItem(transportVendorRows).id,
+          remarks: 'Routine fleet expense', status: 'Approved', approvedBy: 'Transport Manager', approvedAt: new Date(`${month}-15`), createdAt: new Date(`${month}-10`),
+        });
+      });
+    });
+    await batchInsert('transport_expenses', prisma.transportExpense, expenseRows, 2000);
+
+    console.log('\n24) Seeding hostel outpasses/grievances, staff leave applications, payslips, and performance reviews...');
+    const hostelOutpassRows = boarders.slice(0, 40).map((enrollment) => {
+      const fromDate = faker.date.between({ from: SESSION_START, to: SESSION_END });
+      const toDate = new Date(fromDate.getTime() + 2 * 86400000);
+      const status = randomItem(['Approved', 'Returned', 'Pending']);
+      return {
+        id: randomUUID(), enrollmentId: enrollment.id, reason: randomItem(['Family function', 'Medical appointment', 'Festival at home', 'Sibling wedding']),
+        fromDate, toDate, status, approvedById: status === 'Pending' ? null : staffRecords.find((s) => s.details?.designation === 'Warden')?.id ?? teacherIds[0],
+        exitTime: status === 'Returned' ? fromDate : null, returnTime: status === 'Returned' ? toDate : null,
+        parentConsent: status !== 'Pending', createdAt: fromDate,
+      };
+    });
+    await batchInsert('hostel_outpasses', prisma.hostelOutpass, hostelOutpassRows, 2000);
+
+    const hostelGrievanceRows = boarders.slice(0, 30).map((enrollment) => ({
+      id: randomUUID(), hostelId: randomItem([hostelBoys.id, hostelGirls.id]), enrollmentId: enrollment.id,
+      title: randomItem(['Room maintenance needed', 'Mess food quality', 'Wi-Fi connectivity', 'Water supply issue']),
+      description: 'Reported by boarder via hostel grievance desk.', status: randomItem(['Open', 'Resolved']),
+      createdAt: faker.date.between({ from: SESSION_START, to: SESSION_END }),
+    }));
+    await batchInsert('hostel_grievances', prisma.hostelGrievance, hostelGrievanceRows, 2000);
+
+    const allStaffForLeave = [...staffRecords.map((r) => r.id), ...namedStaffIdsThisCampus];
+    const staffLeaveRows: any[] = [];
+    faker.helpers.arrayElements(allStaffForLeave, Math.round(allStaffForLeave.length * 0.15)).forEach((staffId) => {
+      const startDate = faker.date.between({ from: SESSION_START, to: SESSION_END });
+      const endDate = new Date(startDate.getTime() + faker.number.int({ min: 1, max: 3 }) * 86400000);
+      const status = weightedPick([{ value: 'Approved', weight: 70 }, { value: 'Pending', weight: 15 }, { value: 'Rejected', weight: 15 }]);
+      staffLeaveRows.push({
+        id: randomUUID(), staffId, leaveType: randomItem(['Casual', 'Sick']), startDate, endDate,
+        reason: randomItem(['Personal work', 'Health', 'Family emergency', 'Festival']), status,
+        appliedAt: new Date(startDate.getTime() - 3 * 86400000), resolvedAt: status === 'Pending' ? null : startDate,
+        resolvedById: status === 'Pending' ? null : namedStaffIdsThisCampus[0],
+      });
+    });
+    await batchInsert('leave_applications', prisma.leaveApplication, staffLeaveRows, 3000);
+
+    const teacherSubstitutionRows: any[] = [];
+    staffLeaveRows.filter((leave) => leave.status === 'Approved' && teacherIds.includes(leave.staffId)).slice(0, 40).forEach((leave) => {
+      const substitute = randomItem(teacherIds.filter((id) => id !== leave.staffId));
+      teacherSubstitutionRows.push({
+        id: randomUUID(), leaveApplicationId: leave.id, primaryTeacherId: leave.staffId, substituteTeacherId: substitute,
+        date: leave.startDate, status: 'Confirmed', createdAt: leave.appliedAt,
+      });
+    });
+    await batchInsert('teacher_substitutions', prisma.teacherSubstitution, teacherSubstitutionRows, 2000);
+
+    const payslipRows: any[] = [];
+    const payslipMonths = [{ m: 4, y: 2025 }, { m: 6, y: 2025 }, { m: 8, y: 2025 }, { m: 10, y: 2025 }, { m: 12, y: 2025 }, { m: 2, y: 2026 }];
+    payrollRecords.forEach((payroll) => {
+      payslipMonths.forEach(({ m, y }) => {
+        const gross = payroll.basicSalary + payroll.allowances;
+        payslipRows.push({
+          id: randomUUID(), staffId: payroll.staffId, month: m, year: y, basicSalary: payroll.basicSalary,
+          allowances: payroll.allowances, fixedDeductions: payroll.deductions, lopDeductions: 0,
+          netSalary: gross - payroll.deductions, status: 'Paid', generatedAt: new Date(y, m - 1, 28),
+        });
+      });
+    });
+    await batchInsert('payslips', prisma.payslip, payslipRows, 5000);
+
+    const performanceReviewRows: any[] = [];
+    faker.helpers.arrayElements(teacherIds, Math.round(teacherIds.length * 0.5)).forEach((staffId) => {
+      ['2025 Q2', '2025 Q4'].forEach((cycle) => {
+        performanceReviewRows.push({
+          id: randomUUID(), staffId, reviewerId: namedStaffIdsThisCampus[1] ?? namedStaffIdsThisCampus[0], cycle,
+          rating: faker.number.int({ min: 3, max: 5 }), comments: randomItem(STAFF_OFFER), createdAt: new Date(cycle === '2025 Q2' ? '2025-07-15' : '2026-01-15'),
+        });
+      });
+    });
+    await batchInsert('performance_reviews', prisma.performanceReview, performanceReviewRows, 2000);
+
+    console.log('\n25) Seeding student leave applications and fee refunds...');
+    const studentLeaveRows: any[] = [];
+    faker.helpers.arrayElements(enrollments, Math.round(enrollments.length * 0.04)).forEach((enrollment) => {
+      const startDate = faker.date.between({ from: SESSION_START, to: SESSION_END });
+      const endDate = new Date(startDate.getTime() + faker.number.int({ min: 1, max: 4 }) * 86400000);
+      const status = weightedPick([{ value: 'Approved', weight: 75 }, { value: 'Pending', weight: 15 }, { value: 'Rejected', weight: 10 }]);
+      studentLeaveRows.push({
+        id: randomUUID(), enrollmentId: enrollment.id, leaveType: randomItem(['Medical', 'Personal', 'Family Function']),
+        startDate, endDate, reason: 'Submitted by parent through the portal.', status,
+        appliedAt: new Date(startDate.getTime() - 2 * 86400000), resolvedAt: status === 'Pending' ? null : startDate,
+        resolvedById: status === 'Pending' ? null : randomItem(teacherIds),
+      });
+    });
+    await batchInsert('student_leave_applications', prisma.studentLeaveApplication, studentLeaveRows, 3000);
+
+    const paidPayments = paymentRows.filter((p) => Number(p.amountPaid) > 0);
+    const feeRefundRows = faker.helpers.arrayElements(paidPayments, Math.min(25, paidPayments.length)).map((payment) => {
+      const status = randomItem(['Requested', 'Approved', 'Rejected']);
+      return {
+        id: randomUUID(), paymentId: payment.id, amount: Math.round(Number(payment.amountPaid) * 0.1), reason: 'Overpayment adjustment / transfer certificate refund',
+        status, refundMode: status === 'Approved' ? randomItem(['UPI', 'NetBanking', 'Cheque']) : null,
+        referenceNo: status === 'Approved' ? `RFD-${faker.number.int({ min: 100000, max: 999999 })}` : null,
+        requestedBy: 'Parent Portal', approvedBy: status === 'Approved' ? namedStaffIdsThisCampus[3] : null,
+        remarks: null, requestedAt: new Date(payment.paymentDate), resolvedAt: status === 'Requested' ? null : new Date(payment.paymentDate),
+      };
+    });
+    await batchInsert('fee_refunds', prisma.feeRefund, feeRefundRows, 2000);
+
+    console.log('\n26) Seeding visitor records, gate passes, lost & found, meetings, diary entries, and grievances...');
+    const receptionStaffId = namedStaffIdsThisCampus[11] ?? teacherIds[0]; // Reception named account
+    const visitorRows: any[] = [];
+    for (let i = 0; i < 80; i++) {
+      const entryTime = faker.date.between({ from: SESSION_START, to: SESSION_END });
+      const checkedOut = faker.datatype.boolean();
+      visitorRows.push({
+        id: randomUUID(), fullName: faker.person.fullName(), phone: '9' + faker.string.numeric(9),
+        purpose: randomItem(['Parent Meeting', 'Vendor Visit', 'Admission Enquiry', 'Delivery', 'Interview']),
+        hostId: randomItem(teacherIds), govIdType: randomItem(['Aadhaar', 'Driving License', 'PAN Card']),
+        govIdNumber: faker.string.alphanumeric(10).toUpperCase(), photoUrl: null, vehicleNumber: null,
+        hostConfirmation: 'CONFIRMED', blacklisted: false, entryTime,
+        exitTime: checkedOut ? new Date(entryTime.getTime() + faker.number.int({ min: 20, max: 90 }) * 60000) : null,
+        status: checkedOut ? 'CheckedOut' : 'CheckedIn', createdAt: entryTime, updatedAt: entryTime,
+      });
+    }
+    await batchInsert('visitor_records', prisma.visitorRecord, visitorRows, 2000);
+
+    const gatePassRows = faker.helpers.arrayElements(studentRows, 50).map((student) => {
+      const exitTime = faker.date.between({ from: SESSION_START, to: SESSION_END });
+      const returned = faker.datatype.boolean();
+      return {
+        id: randomUUID(), studentId: student.id, reason: randomItem(['Medical appointment', 'Family emergency', 'Early pickup']),
+        leaveType: 'Half Day', approvedById: randomItem(teacherIds), exitTime,
+        returnTime: returned ? new Date(exitTime.getTime() + 3 * 3600000) : null, status: returned ? 'Returned' : 'Approved',
+        createdAt: exitTime, updatedAt: exitTime,
+      };
+    });
+    await batchInsert('student_gate_passes', prisma.studentGatePass, gatePassRows, 2000);
+
+    const lostFoundRows: any[] = [];
+    for (let i = 0; i < 25; i++) {
+      const status = randomItem(['Reported', 'Claimed']);
+      lostFoundRows.push({
+        id: randomUUID(), status, itemName: randomItem(['Water Bottle', 'Lunch Box', 'Sweater', 'Textbook', 'Umbrella', 'ID Card']),
+        description: 'Found on school premises.', reporterId: receptionStaffId, photoUrl: null,
+        claimantId: status === 'Claimed' ? randomItem(studentRows).id : null,
+        claimedAt: status === 'Claimed' ? faker.date.between({ from: SESSION_START, to: SESSION_END }) : null,
+        createdAt: faker.date.between({ from: SESSION_START, to: SESSION_END }), updatedAt: new Date(),
+      });
+    }
+    await batchInsert('lost_found_items', prisma.lostFoundItem, lostFoundRows, 2000);
+
+    const vehicleGateLogRows = Array.from({ length: 20 }).map(() => {
+      const entryTime = faker.date.between({ from: SESSION_START, to: SESSION_END });
+      const exited = faker.datatype.boolean();
+      return {
+        id: randomUUID(), vehicleNumber: `KA-${faker.number.int({ min: 1, max: 9 })}${faker.string.alpha({ length: 2, casing: 'upper' })}-${faker.number.int({ min: 1000, max: 9999 })}`,
+        driverName: faker.person.fullName(), purpose: randomItem(['Delivery', 'Vendor Visit', 'Maintenance', 'Supplies']),
+        entryTime, exitTime: exited ? new Date(entryTime.getTime() + faker.number.int({ min: 15, max: 60 }) * 60000) : null, loggedById: receptionStaffId,
+      };
+    });
+    await batchInsert('vehicle_gate_logs', prisma.vehicleGateLog, vehicleGateLogRows, 2000);
+
+    const studentGateLogRows = faker.helpers.arrayElements(enrollments, 30).map((enrollment) => ({
+      id: randomUUID(), enrollmentId: enrollment.id, type: randomItem(['LATE_ENTRY', 'EARLY_EXIT']),
+      reason: randomItem(['Traffic delay', 'Medical appointment', 'Family emergency', 'Overslept']),
+      timestamp: faker.date.between({ from: SESSION_START, to: SESSION_END }), loggedById: receptionStaffId,
+    }));
+    await batchInsert('student_gate_logs', prisma.studentGateLog, studentGateLogRows, 2000);
+
+    const courierLogRows = Array.from({ length: 20 }).map(() => {
+      const type = randomItem(['INCOMING', 'OUTGOING']);
+      return {
+        id: randomUUID(), type, sender: type === 'INCOMING' ? faker.company.name() : 'Central Academy',
+        recipient: type === 'OUTGOING' ? faker.company.name() : 'Front Office', description: randomItem(['Documents', 'Textbooks parcel', 'Office supplies', 'Certificates']),
+        status: randomItem(['Received', 'Dispatched', 'Collected']), loggedById: receptionStaffId,
+        createdAt: faker.date.between({ from: SESSION_START, to: SESSION_END }),
+      };
+    });
+    await batchInsert('courier_logs', prisma.courierLog, courierLogRows, 2000);
+
+    const meetingRows = [
+      { title: 'Staff Council Meeting', agenda: 'Term 1 academic planning', scheduledFor: new Date('2025-05-10'), location: 'Conference Room' },
+      { title: 'Parent-Teacher Association Meeting', agenda: 'Sports Day & Annual Day planning', scheduledFor: new Date('2025-09-05'), location: 'Auditorium' },
+      { title: 'Academic Review Committee', agenda: 'Mid-year performance review', scheduledFor: new Date('2025-11-10'), location: 'Conference Room' },
+      { title: 'Staff Council Meeting', agenda: 'Term 2 planning', scheduledFor: new Date('2026-01-15'), location: 'Conference Room' },
+      { title: 'Annual Budget Review', agenda: 'Next-session budget planning', scheduledFor: new Date('2026-02-20'), location: 'Principal Office' },
+    ].map((m) => ({
+      id: randomUUID(), ...m, status: 'Completed', organizerId: namedStaffIdsThisCampus[0],
+      attendeeIds: sampleItems(teacherIds, Math.min(6, teacherIds.length)), createdAt: m.scheduledFor,
+    }));
+    await batchInsert('meetings', prisma.meeting, meetingRows, 500);
+
+    const diaryRows: any[] = [];
+    faker.helpers.arrayElements(enrollments, Math.round(enrollments.length * 0.1)).forEach((enrollment) => {
+      const createdAt = faker.date.between({ from: SESSION_START, to: SESSION_END });
+      diaryRows.push({
+        id: randomUUID(), studentId: enrollment.studentId, teacherId: randomItem(teacherIds),
+        type: randomItem(['Homework', 'Remark', 'Notice']),
+        content: randomItem(['Complete worksheet by tomorrow.', 'Excellent participation in class today.', 'Please bring signed permission slip.', 'Needs to focus more during class hours.']),
+        parentSigned: faker.datatype.boolean(), parentSignedAt: null, signatureAttachmentId: null,
+        createdAt, updatedAt: createdAt,
+      });
+    });
+    await batchInsert('school_diary_entries', prisma.schoolDiaryEntry, diaryRows, 3000);
+
+    const grievanceRecordRows: any[] = [];
+    faker.helpers.arrayElements(parentRows, Math.min(20, parentRows.length)).forEach((parent) => {
+      const status = randomItem(['Open', 'Resolved']);
+      grievanceRecordRows.push({
+        id: randomUUID(), userType: 'PARENT', reporterId: parent.id,
+        title: randomItem(['Fee discrepancy query', 'Transport route change request', 'Classroom facility concern']),
+        description: 'Submitted via parent portal grievance form.', assignedToId: namedStaffIdsThisCampus[0], escalationLevel: 0,
+        status, resolutionRemarks: status === 'Resolved' ? 'Issue addressed and resolved.' : null,
+        resolvedAt: status === 'Resolved' ? new Date() : null, createdAt: faker.date.between({ from: SESSION_START, to: SESSION_END }), updatedAt: new Date(),
+      });
+    });
+    await batchInsert('grievances', prisma.grievanceRecord, grievanceRecordRows, 2000);
+
+    console.log('\n27) Seeding LMS curriculum trees, grading rules, and a generic document template...');
+    const lmsCurriculumRows: any[] = [];
+    const lmsUnitRows: any[] = [];
+    sampleItems(lmsCourses, Math.min(8, lmsCourses.length)).forEach((course) => {
+      const curriculumId = randomUUID();
+      lmsCurriculumRows.push({ id: curriculumId, courseId: course.id, board: 'CBSE', description: `Structured curriculum for ${course.title}.`, createdAt: new Date() });
+      ['Unit 1: Foundations', 'Unit 2: Core Concepts', 'Unit 3: Applications'].forEach((unitTitle, idx) => {
+        lmsUnitRows.push({ id: randomUUID(), curriculumId, title: unitTitle, orderIndex: idx, createdAt: new Date() });
+      });
+    });
+    await batchInsert('lms_curriculum', prisma.lMSCurriculum, lmsCurriculumRows, 500);
+    await batchInsert('lms_units', prisma.lMSUnit, lmsUnitRows, 1000);
+
+    const gradingRuleRows = [
+      { id: randomUUID(), name: 'Standard Absolute Scale', rules: [{ min: 90, grade: 'A+' }, { min: 80, grade: 'A' }, { min: 70, grade: 'B+' }, { min: 60, grade: 'B' }, { min: 50, grade: 'C' }, { min: 35, grade: 'D' }, { min: 0, grade: 'F' }], isActive: true, createdAt: new Date() },
+      { id: randomUUID(), name: 'Primary Grades Scale (Nursery-UKG)', rules: [{ min: 80, grade: 'Outstanding' }, { min: 60, grade: 'Very Good' }, { min: 40, grade: 'Good' }, { min: 0, grade: 'Needs Support' }], isActive: true, createdAt: new Date() },
+    ];
+    await batchInsert('grading_rules', prisma.gradingRule, gradingRuleRows);
+
+    const documentTemplateRows = [
+      { id: randomUUID(), name: 'Transfer Certificate Template', type: 'CERTIFICATE', targetAudience: 'STUDENT', designJson: { layout: 'formal', fields: ['studentName', 'admissionNumber', 'issueDate'] }, status: 'Active', createdAt: new Date(), updatedAt: new Date() },
+      { id: randomUUID(), name: 'Bonafide Certificate Template', type: 'CERTIFICATE', targetAudience: 'STUDENT', designJson: { layout: 'formal', fields: ['studentName', 'className', 'purpose'] }, status: 'Active', createdAt: new Date(), updatedAt: new Date() },
+    ];
+    await batchInsert('document_templates', prisma.documentTemplate, documentTemplateRows);
+
+    console.log('\n28) Seeding EMS scaffolding (rooms, exam types/templates, grading scheme) and the historical-session cycle...');
+    const emsRooms = Array.from({ length: 4 }).map((_, i) => ({
+      id: randomUUID(), name: `Exam Hall ${i + 1}`, capacity: 150, campusId: campus.id, status: 'Active', createdAt: new Date(), updatedAt: new Date(),
+    }));
+    await batchInsert('rooms', prisma.room, emsRooms);
+
+    const emsExamTypeRows = [
+      { id: randomUUID(), name: 'Mid Term', description: 'Offline, scanned-answer-sheet mid-term assessment', createdAt: new Date() },
+      { id: randomUUID(), name: 'Final', description: 'Online proctored final examination', createdAt: new Date() },
+    ];
+    await batchInsert('ems_exam_types', prisma.eMSExamType, emsExamTypeRows);
+
+    const emsExamTemplateRows = [
+      { id: randomUUID(), typeId: emsExamTypeRows[0].id, name: 'Mid Term Template', totalMarks: 100, passMarks: 35, createdAt: new Date() },
+      { id: randomUUID(), typeId: emsExamTypeRows[1].id, name: 'Final Exam Template', totalMarks: 100, passMarks: 35, createdAt: new Date() },
+    ];
+    await batchInsert('ems_exam_templates', prisma.eMSExamTemplate, emsExamTemplateRows);
+
+    const emsTargetClasses = classDefinitions.filter((c) => EMS_TARGET_GRADES.includes(c.grade));
+
+    const emsGradingScheme = await prisma.eMSGradingScheme.create({
+      data: { name: 'EMS Standard Scale', description: 'Percentage-based grading for EMS exams', ranges: [{ min: 90, max: 100, grade: 'A+' }, { min: 75, max: 89, grade: 'A' }, { min: 60, max: 74, grade: 'B' }, { min: 45, max: 59, grade: 'C' }, { min: 35, max: 44, grade: 'D' }, { min: 0, max: 34, grade: 'F' }] },
+    });
+
+    campusContext[def.slug].ems = {
+      teacherIds, namedStaffIdsThisCampus, sectionToClassMap, emsRooms, emsExamTemplateRows, emsGradingScheme, emsTargetClasses,
+    };
+
+    const emsHistoricalEnrollments = enrollments.filter((e) => emsTargetClasses.some((c) => c.id === sectionToClassMap[e.sectionId]?.classId));
+    await seedEmsCycle({
+      campusId: campus.id, subjectMap, teacherIds, namedStaffIdsThisCampus, sectionToClassMap, emsRooms, emsExamTemplateRows, emsGradingScheme, emsTargetClasses,
+      sessionName: `EMS Final Examinations ${SESSION_DEFS[0].name}`, sessionStart: SESSION_START, sessionEnd: SESSION_END, sessionIsActive: false,
+      examTypeIdx: 1, examDate: new Date('2026-03-02'), mode: 'ONLINE', fullyGraded: true,
+      targetEnrollments: emsHistoricalEnrollments,
+    });
+    await seedEmsCycle({
+      campusId: campus.id, subjectMap, teacherIds, namedStaffIdsThisCampus, sectionToClassMap, emsRooms, emsExamTemplateRows, emsGradingScheme, emsTargetClasses,
+      sessionName: `EMS Mid Term ${SESSION_DEFS[0].name}`, sessionStart: SESSION_START, sessionEnd: SESSION_END, sessionIsActive: false,
+      examTypeIdx: 0, examDate: new Date('2025-11-18'), mode: 'OFFLINE', fullyGraded: true,
+      targetEnrollments: emsHistoricalEnrollments,
+    });
+
   }
 
   // ==========================================
@@ -1486,9 +2253,12 @@ async function main() {
         const status = weightedPick([
           { value: 'Present', weight: 92 }, { value: 'Absent', weight: 5 }, { value: 'Late', weight: 3 },
         ]);
+        const currentStudentCheckIn = status === 'Late' ? '09:12' : '08:55';
         currentStudentAttendance.push({
           id: randomUUID(), enrollmentId: enrollment.id, date, status,
-          checkInTime: status === 'Late' ? '09:12' : '08:55',
+          checkInTime: status === 'Absent' ? null : currentStudentCheckIn,
+          checkOutTime: status === 'Absent' ? null : addHoursToTime(currentStudentCheckIn, 6.5),
+          faceVerified: status !== 'Absent' && faker.number.int({ min: 1, max: 100 }) <= 90,
           campusId: ctx.campusId, sessionId: currentSession.id, createdAt: new Date(), updatedAt: new Date(),
         });
       }
@@ -1501,9 +2271,13 @@ async function main() {
         const status = weightedPick([
           { value: 'Present', weight: 93 }, { value: 'Leave', weight: 4 }, { value: 'Absent', weight: 2 }, { value: 'Late', weight: 1 },
         ]);
+        const currentStaffCheckIn = status === 'Late' ? '09:10' : '08:50';
+        const currentStaffOnSite = status === 'Absent' || status === 'Leave';
         currentStaffAttendance.push({
           id: randomUUID(), staffId: staff.id, date, status,
-          checkInTime: status === 'Late' ? '09:10' : '08:50',
+          checkInTime: currentStaffOnSite ? null : currentStaffCheckIn,
+          checkOutTime: currentStaffOnSite ? null : addHoursToTime(currentStaffCheckIn, 7),
+          faceVerified: !currentStaffOnSite && faker.number.int({ min: 1, max: 100 }) <= 90,
           campusId: ctx.campusId, sessionId: currentSession.id, createdAt: new Date(), updatedAt: new Date(),
         });
       }
@@ -1646,6 +2420,63 @@ async function main() {
     }
     await batchInsert('exam_marks (current session)', prisma.examMarks, currentMarks, 5000);
     await batchInsert('report_cards (current session)', prisma.reportCard, currentReportCards, 3000);
+
+    console.log('  LMS quiz attempts and assignment submissions (current session, through today)...');
+    const currentLmsCourses: any[] = [];
+    const currentUniqueSections = Array.from(new Set(currentEnrollments.map((e) => e.sectionId)))
+      .slice(0, 20)
+      .map((sectionId) => currentEnrollments.find((e) => e.sectionId === sectionId)!);
+    currentUniqueSections.forEach((sample) => {
+      const grade = sample.section.class.grade;
+      const subjectsForGrade = CLUSTER_SUBJECTS[grade] || ['English', 'Mathematics'];
+      currentLmsCourses.push({
+        id: randomUUID(), title: `${subjectsForGrade[0]} - ${grade} (${SESSION_DEFS[1].name})`,
+        description: `Interactive ${subjectsForGrade[0]} learning resources.`, subjectId: subjectMap[subjectsForGrade[0]],
+        classId: sample.section.classId, status: 'Published', sectionId: sample.sectionId, createdAt: new Date(), updatedAt: new Date(),
+      });
+    });
+    await batchInsert('lms_courses (current session)', prisma.lMSCourse, currentLmsCourses.map(({ sectionId, ...c }) => c), 500);
+
+    const currentQuizRows: any[] = [];
+    const currentQuizAttemptRows: any[] = [];
+    const currentLmsAssignmentRows: any[] = [];
+    const currentLmsSubmissionRows: any[] = [];
+    currentLmsCourses.forEach((course) => {
+      const quizId = randomUUID();
+      currentQuizRows.push({ id: quizId, title: `${course.title} Practice Quiz`, description: `Practice quiz for ${course.title}`, durationMin: 30, maxScore: 50, createdAt: new Date() });
+      const sectionEnrollments = currentEnrollments.filter((e) => e.sectionId === course.sectionId);
+      faker.helpers.arrayElements(sectionEnrollments, Math.round(sectionEnrollments.length * 0.4)).forEach((enrollment) => {
+        currentQuizAttemptRows.push({ id: randomUUID(), quizId, studentId: enrollment.studentId, score: faker.number.int({ min: 25, max: 50 }), startedAt: new Date(), endedAt: new Date() });
+      });
+
+      const assignmentId = randomUUID();
+      currentLmsAssignmentRows.push({ id: assignmentId, title: `${course.title} Assignment 1`, description: `Complete assignment 1 for ${course.title}`, dueDate: TODAY, maxScore: 100, createdAt: new Date() });
+      faker.helpers.arrayElements(sectionEnrollments, Math.round(sectionEnrollments.length * 0.3)).forEach((enrollment) => {
+        const graded = faker.datatype.boolean();
+        currentLmsSubmissionRows.push({
+          id: randomUUID(), assignmentId, studentId: enrollment.studentId, content: 'Submitted through LMS mobile app',
+          score: graded ? faker.number.int({ min: 55, max: 98 }) : null, feedback: graded ? randomItem(['Well done', 'Good structure', 'Revise final answer']) : null,
+          submittedAt: new Date(), gradedAt: graded ? new Date() : null,
+        });
+      });
+    });
+    await batchInsert('lms_quizzes (current session)', prisma.lMSQuiz, currentQuizRows, 500);
+    await batchInsert('lms_quiz_attempts (current session)', prisma.lMSQuizAttempt, currentQuizAttemptRows, 2000);
+    await batchInsert('lms_assignments (current session)', prisma.lMSAssignment, currentLmsAssignmentRows, 500);
+    await batchInsert('lms_submissions (current session)', prisma.lMSSubmission, currentLmsSubmissionRows, 2000);
+
+    if (ctx.ems) {
+      console.log('  EMS current-session cycle (in progress, not yet fully graded)...');
+      const emsCurrentEnrollments = currentEnrollments.filter((e) => ctx.ems!.emsTargetClasses.some((c) => c.id === ctx.ems!.sectionToClassMap[e.sectionId]?.classId));
+      if (emsCurrentEnrollments.length) {
+        await seedEmsCycle({
+          campusId: ctx.campusId, subjectMap, ...ctx.ems,
+          sessionName: `EMS Unit Assessment ${SESSION_DEFS[1].name}`, sessionStart: SESSION_DEFS[1].start, sessionEnd: TODAY, sessionIsActive: true,
+          examTypeIdx: 1, examDate: new Date('2026-07-20'), mode: 'ONLINE', fullyGraded: false,
+          targetEnrollments: emsCurrentEnrollments,
+        });
+      }
+    }
   }
 
   console.log('\n=== Final validation summary ===');

@@ -16,6 +16,7 @@ import { DocumentRenderingService } from '../documents/document-rendering.servic
 import { StorageService } from '../storage/storage.service';
 import type { TenantContext } from '../prisma/tenant-context';
 import { requireCampusId } from '../prisma/tenant-context';
+import { assertPendingStatus } from '../common/assert-pending-status.util';
 import {
   CreateFeeStructureDto,
   CreateFeeInvoiceDto,
@@ -567,11 +568,7 @@ export class FeesService {
       tenantContext,
       'Refund request not found.',
     );
-    if (refund.status !== 'Requested') {
-      throw new BadRequestException(
-        `Only pending requests can be resolved (current status: ${refund.status}).`,
-      );
-    }
+    assertPendingStatus(refund.status, 'Requested', 'requests');
 
     const updated = await this.feeRepository.updateRefundStatus(id, {
       status: dto.status,

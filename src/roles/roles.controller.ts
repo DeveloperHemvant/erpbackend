@@ -13,12 +13,20 @@ import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
+import { PERMISSION_CATALOG } from '../auth/permissions.catalog';
 
 @ApiTags('Role Settings')
 @RequirePermissions('MANAGE_ROLES')
 @Controller('roles')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
+
+  // Must stay above @Get(':id') so Nest doesn't match "permissions" as an :id.
+  @Get('permissions/catalog')
+  @ApiOperation({ summary: 'List every permission string the backend enforces, grouped by module' })
+  getPermissionCatalog() {
+    return PERMISSION_CATALOG;
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new security role' })

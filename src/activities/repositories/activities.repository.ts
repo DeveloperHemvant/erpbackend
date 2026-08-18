@@ -82,6 +82,25 @@ export class ActivitiesRepository {
     });
   }
 
+  findAchievementById(id: string) {
+    return this.prisma.studentAchievement.findUnique({ where: { id } });
+  }
+
+  updateAchievement(
+    id: string,
+    data: Prisma.StudentAchievementUncheckedUpdateInput,
+  ) {
+    return this.prisma.studentAchievement.update({
+      where: { id },
+      data,
+      include: { student: true, issuedBy: true },
+    });
+  }
+
+  deleteAchievement(id: string) {
+    return this.prisma.studentAchievement.delete({ where: { id } });
+  }
+
   createStaffDuty(data: Prisma.StaffDutyAllocationUncheckedCreateInput) {
     return this.prisma.staffDutyAllocation.create({
       data,

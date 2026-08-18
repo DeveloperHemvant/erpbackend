@@ -1,5 +1,15 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { WorkflowDefinitionRepository } from './repositories/workflow-definition.repository';
+import type {
+  CreateWorkflowDefinitionDto,
+  UpdateWorkflowDefinitionDto,
+} from './dto/workflow.dto';
 
 interface Transition {
   from: string;
@@ -57,6 +67,49 @@ export class WorkflowEngineService implements OnModuleInit {
 
   async getDefinition(entityType: string) {
     return this.repository.findByEntityType(entityType);
+  }
+
+  async getAllDefinitions() {
+    return this.repository.findAll();
+  }
+
+  async createDefinition(dto: CreateWorkflowDefinitionDto) {
+    const existing = await this.repository.findByEntityTypeAndName(
+      dto.entityType,
+      dto.name,
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A workflow definition named "${dto.name}" already exists for entity type "${dto.entityType}".`,
+      );
+    }
+    return this.repository.create({
+      entityType: dto.entityType,
+      name: dto.name,
+      stages: dto.stages,
+      transitions: dto.transitions as unknown as Prisma.InputJsonValue,
+    });
+  }
+
+  async updateDefinition(id: string, dto: UpdateWorkflowDefinitionDto) {
+    const existing = await this.repository.findById(id);
+    if (!existing) {
+      throw new NotFoundException('Workflow definition not found.');
+    }
+    return this.repository.update(id, {
+      stages: dto.stages,
+      transitions: dto.transitions as unknown as
+        | Prisma.InputJsonValue
+        | undefined,
+    });
+  }
+
+  async deleteDefinition(id: string) {
+    const existing = await this.repository.findById(id);
+    if (!existing) {
+      throw new NotFoundException('Workflow definition not found.');
+    }
+    return this.repository.delete(id);
   }
 
   async validateTransition(
