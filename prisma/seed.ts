@@ -734,6 +734,14 @@ async function main() {
     await batchInsert('payroll_structures', prisma.payrollStructure, payrollRecords);
     await batchInsert('leave_balances', prisma.leaveBalance, leaveBalanceRecords);
 
+    console.log('\n29) Granting staff campus access...');
+    const staffCampusAccessRows = staffRecords.map((s) => ({
+      id: randomUUID(),
+      staffId: s.id,
+      campusId: campus.id,
+    }));
+    await batchInsert('staff_campus_access', prisma.staffCampusAccess, staffCampusAccessRows);
+
     console.log('\n4) Assigning teachers to sections and subjects...');
     const assignmentRows: any[] = [];
     const subjectTeacherList: Record<string, string[]> = {};
@@ -805,6 +813,7 @@ async function main() {
             if (slot.isBreak || slot.name === 'Assembly') {
               if (slot.name !== 'Assembly') {
                 timetablePeriods.push({
+                  id: randomUUID(),
                   timetableId: timetable.id,
                   sectionId: section.id,
                   dayOfWeek: day,
@@ -829,6 +838,7 @@ async function main() {
             }
             teacherBusy[teacherKey] = true;
             timetablePeriods.push({
+              id: randomUUID(),
               timetableId: timetable.id,
               sectionId: section.id,
               subjectId: teacherAssignment.subjectId,
@@ -963,6 +973,137 @@ async function main() {
     }
 
     sampleAccounts.push({ campus: def.name, parentEmail: parentRows[0]?.email || 'n/a', studentAdmissionNumber: studentRows[0]?.admissionNumber || 'n/a' });
+
+    console.log('\n30) Generating notifications, parent-teacher conversations, and messages...');
+    const notificationRows: any[] = [];
+    const notificationTemplates = [
+      { type: 'PUSH', title: 'Fee Due Reminder', content: 'Term fee payment is due soon. Please clear dues to avoid late fees.' },
+      { type: 'EMAIL', title: 'Attendance Alert', content: 'Your ward was marked absent today. Contact the class teacher for details.' },
+      { type: 'PUSH', title: 'Exam Result Published', content: 'Report card for the latest exam has been published on the portal.' },
+      { type: 'SMS', title: 'Homework Assigned', content: 'New homework has been assigned. Check the portal for details.' },
+      { type: 'PUSH', title: 'PTM Reminder', content: 'Parent-Teacher meeting is scheduled this weekend. Please book a slot.' },
+      { type: 'EMAIL', title: 'Holiday Notice', content: 'School will remain closed for the upcoming holiday.' },
+    ];
+    for (const portal of portalRows) {
+      const count = faker.number.int({ min: 3, max: 6 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(notificationTemplates);
+        notificationRows.push({
+          id: randomUUID(),
+          recipientId: portal.referenceId,
+          type: template.type,
+          title: template.title,
+          content: template.content,
+          priority: weightedPick([{ value: 'NORMAL', weight: 80 }, { value: 'URGENT', weight: 15 }, { value: 'LOW', weight: 5 }]),
+          readStatus: faker.datatype.boolean(),
+        });
+      }
+    }
+    for (const staff of staffRecords) {
+      const count = faker.number.int({ min: 2, max: 4 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(notificationTemplates);
+        notificationRows.push({
+          id: randomUUID(),
+          recipientId: staff.id,
+          type: template.type,
+          title: template.title,
+          content: template.content,
+          priority: weightedPick([{ value: 'NORMAL', weight: 85 }, { value: 'URGENT', weight: 10 }, { value: 'LOW', weight: 5 }]),
+          readStatus: faker.datatype.boolean(),
+        });
+      }
+    }
+    await batchInsert('notifications', prisma.notification, notificationRows, 3000);
+
+    const conversationRows: any[] = [];
+    const messageRows: any[] = [];
+    const seenConversationPairs = new Set<string>();
+    const messageTemplates = [
+      { sender: 'PARENT', content: 'My child will be absent tomorrow due to a medical appointment.' },
+      { sender: 'STAFF', content: 'Noted, thank you for informing us in advance.' },
+      { sender: 'PARENT', content: 'Could you share details about the pending homework?' },
+      { sender: 'STAFF', content: 'Sure, I will share the homework list by evening.' },
+      { sender: 'PARENT', content: 'When is the next fee installment due?' },
+      { sender: 'STAFF', content: 'Please check the Fees section on the portal for the due date.' },
+      { sender: 'PARENT', content: 'Thank you for the update on the recent test performance.' },
+      { sender: 'STAFF', content: 'Your ward is doing well, keep encouraging regular practice.' },
+    ];
+    const conversationSampleFraction = faker.number.int({ min: 40, max: 60 }) / 100;
+    const sampledFamilies = sampleItems(familyGroups, Math.max(1, Math.round(familyGroups.length * conversationSampleFraction)));
+    for (const family of sampledFamilies) {
+      const childId = randomItem(family.children);
+      const enrollment = enrollments.find((e) => e.studentId === childId);
+      const classTeacherAssignment = enrollment && assignmentRows.find((a) => a.sectionId === enrollment.sectionId && a.isClassTeacher);
+      const staffId = classTeacherAssignment?.staffId || randomItem(teacherIds);
+      const pairKey = `${family.parentId}_${staffId}`;
+      if (seenConversationPairs.has(pairKey)) continue;
+      seenConversationPairs.add(pairKey);
+
+      const conversationId = randomUUID();
+      conversationRows.push({ id: conversationId, parentId: family.parentId, staffId });
+
+      const messageCount = faker.number.int({ min: 3, max: 8 });
+      for (let i = 0; i < messageCount; i++) {
+        const template = messageTemplates[i % messageTemplates.length];
+        messageRows.push({
+          id: randomUUID(),
+          conversationId,
+          senderId: template.sender === 'PARENT' ? family.parentId : staffId,
+          senderType: template.sender,
+          content: template.content,
+          readStatus: faker.datatype.boolean(),
+        });
+      }
+    }
+    await batchInsert('conversations', prisma.conversation, conversationRows, 2000);
+    await batchInsert('messages', prisma.message, messageRows, 3000);
+
+    console.log('\n31) Creating consent requests and responses...');
+    const consentRequestRows: any[] = [];
+    const consentResponseRows: any[] = [];
+    const consentTemplates = [
+      { title: 'Annual Sports Day Participation', description: "Consent for your ward to participate in the Annual Sports Day events.", targetType: 'ALL' },
+      { title: 'Educational Field Trip Permission', description: 'Permission for the upcoming educational field trip.', targetType: 'SECTION' },
+      { title: 'Photography & Media Consent', description: "Consent to use your ward's photos/videos in school communications.", targetType: 'ALL' },
+      { title: 'Annual Health Checkup', description: "Consent for the school's annual health checkup camp.", targetType: 'ALL' },
+      { title: 'Inter-School Competition Travel', description: 'Permission for travel to an inter-school competition.', targetType: 'SECTION' },
+      { title: 'Extra-Curricular Workshop', description: 'Consent for participation in an extra-curricular workshop.', targetType: 'SECTION' },
+    ];
+    const allSections = classDefinitions.flatMap((c: any) => c.sections.map((s: any) => ({ ...s, classId: c.id })));
+    for (const template of consentTemplates) {
+      const requestId = randomUUID();
+      const targetSectionId = template.targetType === 'SECTION' ? randomItem(allSections).id : null;
+      consentRequestRows.push({
+        id: requestId,
+        title: template.title,
+        description: template.description,
+        targetType: template.targetType,
+        targetSectionId,
+        dueDate: faker.date.between({ from: SESSION_DEFS[0].start, to: SESSION_DEFS[0].end }),
+        createdById: randomItem(staffRecords).id,
+      });
+
+      const targetedEnrollments = targetSectionId ? enrollments.filter((e) => e.sectionId === targetSectionId) : enrollments;
+      for (const enrollment of targetedEnrollments) {
+        const status = weightedPick([
+          { value: 'Signed', weight: 65 },
+          { value: 'Pending', weight: 25 },
+          { value: 'Declined', weight: 10 },
+        ]);
+        const family = familyGroups.find((f) => f.children.includes(enrollment.studentId));
+        consentResponseRows.push({
+          id: randomUUID(),
+          consentRequestId: requestId,
+          studentId: enrollment.studentId,
+          status,
+          respondedAt: status === 'Pending' ? null : faker.date.recent({ days: 30 }),
+          respondedById: status === 'Pending' ? null : family?.parentId ?? null,
+        });
+      }
+    }
+    await batchInsert('consent_requests', prisma.consentRequest, consentRequestRows, 2000);
+    await batchInsert('consent_responses', prisma.consentResponse, consentResponseRows, 3000);
 
     console.log('\n7) Creating ID cards and certificates...');
     const studentIdCards = studentRows.map((student) => ({
@@ -1565,6 +1706,61 @@ async function main() {
     ].map((event) => ({ id: randomUUID(), sessionId: historicalSession.id, campusId: campus.id, ...event, createdAt: new Date() }));
     await batchInsert('acms_events', prisma.aCMSEvent, eventRows);
 
+    console.log('\n33) Seeding ACMS working days, resource bookings, and notifications...');
+    const acmsWorkingDayRows: any[] = [];
+    for (const session of [historicalSession, currentSession]) {
+      for (let dayOfWeek = 1; dayOfWeek <= 7; dayOfWeek++) {
+        acmsWorkingDayRows.push({
+          id: randomUUID(),
+          sessionId: session.id,
+          dayOfWeek,
+          isWorkingDay: dayOfWeek !== 7,
+          isHalfDay: dayOfWeek === 6,
+        });
+      }
+    }
+    await batchInsert('acms_working_days', prisma.aCMSWorkingDay, acmsWorkingDayRows);
+
+    const acmsResourceNames = ['Main Auditorium', 'Chemistry Lab', 'Physics Lab', 'Sports Ground', 'Computer Lab', 'Music Room'];
+    const acmsBookingPurposes = ['Inter-house competition', 'Guest lecture', 'Parent-teacher meeting', 'Science exhibition setup', 'Staff training session', 'Cultural rehearsal'];
+    const acmsResourceBookingRows = Array.from({ length: 15 }, () => {
+      const bookingStart = faker.date.between({ from: SESSION_DEFS[0].start, to: SESSION_DEFS[1].end });
+      const bookingEnd = new Date(bookingStart.getTime() + faker.number.int({ min: 1, max: 4 }) * 60 * 60 * 1000);
+      return {
+        id: randomUUID(),
+        resourceName: randomItem(acmsResourceNames),
+        bookedBy: randomItem(staffRecords).fullName,
+        purpose: randomItem(acmsBookingPurposes),
+        startDate: bookingStart,
+        endDate: bookingEnd,
+        status: weightedPick([{ value: 'CONFIRMED', weight: 70 }, { value: 'PENDING', weight: 20 }, { value: 'CANCELLED', weight: 10 }]),
+      };
+    });
+    await batchInsert('acms_resource_bookings', prisma.aCMSResourceBooking, acmsResourceBookingRows);
+
+    const acmsNotificationRows: any[] = [];
+    const acmsNotificationTemplates = [
+      { title: 'Holiday Reminder', message: 'School will remain closed for the upcoming holiday.' },
+      { title: 'Upcoming Event', message: 'A school event is scheduled soon — check the calendar for details.' },
+      { title: 'Working Day Update', message: 'Saturday has been marked as a half working day this week.' },
+    ];
+    const acmsNotificationTargets = [...staffRecords.map((s) => s.id), ...portalRows.map((p) => p.referenceId)];
+    for (const targetId of acmsNotificationTargets) {
+      const count = faker.number.int({ min: 2, max: 3 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(acmsNotificationTemplates);
+        acmsNotificationRows.push({
+          id: randomUUID(),
+          userId: targetId,
+          title: template.title,
+          message: template.message,
+          type: randomItem(['EMAIL', 'SMS', 'PUSH']),
+          status: weightedPick([{ value: 'UNREAD', weight: 40 }, { value: 'READ', weight: 60 }]),
+        });
+      }
+    }
+    await batchInsert('acms_notifications', prisma.aCMSNotification, acmsNotificationRows, 3000);
+
     console.log('\n17) Issuing certificates for top performers...');
     const certificateRows: any[] = [];
     const topPerformers = enrollments.filter((_, index) => index % 40 === 0).slice(0, 120);
@@ -1815,6 +2011,122 @@ async function main() {
     });
     await batchInsert('admission_inquiry_followups', prisma.admissionInquiryFollowUp, inquiryFollowUpRows, 2000);
 
+    console.log('\n34) Seeding admission documents, transport incident logs, push tokens, appointments, and document lifecycle alerts...');
+    const admissionDocumentRows: any[] = [];
+    const admissionDocTypes = ['Birth Certificate', 'Transfer Certificate', 'Aadhar Card', 'Passport Photo', 'Previous Marksheet'];
+    for (const student of studentRows) {
+      const docCount = faker.number.int({ min: 2, max: 4 });
+      for (const docType of sampleItems(admissionDocTypes, docCount)) {
+        admissionDocumentRows.push({
+          id: randomUUID(),
+          studentId: student.id,
+          documentType: docType,
+          fileUrl: `https://documents.centralacademy.edu/${student.id}/${docType.toLowerCase().replace(/\s+/g, '-')}.pdf`,
+          isVerified: weightedPick([{ value: true, weight: 85 }, { value: false, weight: 15 }]),
+          uploadedAt: faker.date.between({ from: new Date(2025, 3, 1), to: SESSION_START }),
+        });
+      }
+    }
+    await batchInsert('admission_documents', prisma.admissionDocument, admissionDocumentRows, 3000);
+
+    const transportBreakdownRows: any[] = [];
+    const transportAccidentRows: any[] = [];
+    for (const vehicle of vehicles) {
+      const breakdownCount = weightedPick([{ value: 0, weight: 50 }, { value: 1, weight: 35 }, { value: 2, weight: 15 }]);
+      for (let i = 0; i < breakdownCount; i++) {
+        const breakdownDate = faker.date.between({ from: SESSION_START, to: SESSION_END });
+        transportBreakdownRows.push({
+          id: randomUUID(),
+          vehicleId: vehicle.id,
+          driverId: driverIds.length ? randomItem(driverIds) : null,
+          date: fmt(breakdownDate),
+          time: `${faker.number.int({ min: 7, max: 17 })}:${faker.number.int({ min: 0, max: 59 }).toString().padStart(2, '0')}`,
+          location: randomItem(ROUTE_STOPS),
+          description: randomItem(['Engine overheating', 'Flat tyre', 'Brake failure warning', 'Battery discharge', 'Clutch issue']),
+          actionTaken: randomItem(['Roadside repair completed', 'Towed to garage', 'Replacement vehicle dispatched']),
+          towingRequired: faker.datatype.boolean(),
+          costIncurred: faker.number.float({ min: 500, max: 8000, fractionDigits: 2 }),
+          status: weightedPick([{ value: 'Resolved', weight: 70 }, { value: 'Under Repair', weight: 15 }, { value: 'Acknowledged', weight: 10 }, { value: 'Reported', weight: 5 }]),
+          acknowledgedBy: randomItem(teacherIds),
+          acknowledgedAt: breakdownDate,
+        });
+      }
+      const hasAccident = weightedPick([{ value: true, weight: 12 }, { value: false, weight: 88 }]);
+      if (hasAccident) {
+        const accidentDate = faker.date.between({ from: SESSION_START, to: SESSION_END });
+        transportAccidentRows.push({
+          id: randomUUID(),
+          vehicleId: vehicle.id,
+          driverId: driverIds.length ? randomItem(driverIds) : null,
+          date: fmt(accidentDate),
+          time: `${faker.number.int({ min: 7, max: 17 })}:${faker.number.int({ min: 0, max: 59 }).toString().padStart(2, '0')}`,
+          location: randomItem(ROUTE_STOPS),
+          severity: weightedPick([{ value: 'Minor', weight: 80 }, { value: 'Major', weight: 20 }]),
+          description: 'Minor collision while merging into traffic; no injuries reported.',
+          policeReport: faker.datatype.boolean(),
+          firNumber: faker.datatype.boolean() ? `FIR${faker.number.int({ min: 100000, max: 999999 })}` : null,
+          insuranceClaimed: faker.datatype.boolean(),
+          claimAmount: faker.number.float({ min: 2000, max: 25000, fractionDigits: 2 }),
+          status: weightedPick([{ value: 'Closed', weight: 60 }, { value: 'Acknowledged', weight: 25 }, { value: 'Under Investigation', weight: 15 }]),
+          acknowledgedBy: randomItem(teacherIds),
+          acknowledgedAt: accidentDate,
+        });
+      }
+    }
+    await batchInsert('transport_breakdowns', prisma.transportBreakdown, transportBreakdownRows, 2000);
+    await batchInsert('transport_accidents', prisma.transportAccident, transportAccidentRows, 2000);
+
+    const pushTokenRows: any[] = [
+      ...staffRecords.map((s) => ({ id: randomUUID(), userId: s.id, userType: 'STAFF', token: randomUUID() })),
+      ...portalRows.map((p) => ({ id: randomUUID(), userId: p.referenceId, userType: p.userType, token: randomUUID() })),
+    ];
+    await batchInsert('push_tokens', prisma.pushToken, pushTokenRows, 3000);
+
+    const appointmentRows: any[] = [];
+    const appointmentPurposes = ['Admission Inquiry', 'Vendor Meeting', 'Parent Meeting', 'Document Submission', 'Interview'];
+    for (let i = 0; i < 12; i++) {
+      const scheduledFor = faker.date.between({ from: SESSION_START, to: TODAY });
+      appointmentRows.push({
+        id: randomUUID(),
+        visitorName: faker.person.fullName(),
+        purpose: randomItem(appointmentPurposes),
+        scheduledFor,
+        hostId: randomItem(staffRecords).id,
+        status: scheduledFor < TODAY ? weightedPick([{ value: 'Completed', weight: 85 }, { value: 'Cancelled', weight: 15 }]) : 'Scheduled',
+      });
+    }
+    await batchInsert('appointments', prisma.appointment, appointmentRows, 2000);
+
+    const documentLifecycleRows: any[] = [];
+    const vehicleDocTypes = ['Registration Certificate', 'Insurance', 'Fitness Certificate', 'Permit'];
+    for (const vehicle of vehicles) {
+      for (const docType of vehicleDocTypes) {
+        documentLifecycleRows.push({
+          id: randomUUID(),
+          entityType: 'TransportVehicle',
+          entityId: vehicle.id,
+          docType,
+          docNumber: `${docType.slice(0, 3).toUpperCase()}-${faker.number.int({ min: 100000, max: 999999 })}`,
+          expiryDate: faker.date.between({ from: TODAY, to: new Date(TODAY.getFullYear() + 1, TODAY.getMonth(), TODAY.getDate()) }),
+          alertDays: 30,
+          status: 'Active',
+        });
+      }
+    }
+    for (const driverId of driverIds) {
+      documentLifecycleRows.push({
+        id: randomUUID(),
+        entityType: 'Staff',
+        entityId: driverId,
+        docType: 'Driving License',
+        docNumber: `DL-${faker.number.int({ min: 1000000, max: 9999999 })}`,
+        expiryDate: faker.date.between({ from: TODAY, to: new Date(TODAY.getFullYear() + 2, TODAY.getMonth(), TODAY.getDate()) }),
+        alertDays: 45,
+        status: 'Active',
+      });
+    }
+    await batchInsert('document_lifecycles', prisma.documentLifecycle, documentLifecycleRows, 2000);
+
     console.log('\n23) Seeding transport fuel/odometer/daily-check logs, maintenance, documents, and fleet vendors...');
     const transportVendorRows = [
       { id: randomUUID(), vendorName: 'Bengaluru Auto Garage', contactPerson: faker.person.fullName(), phone: '9' + faker.string.numeric(9), email: 'contact@blrautogarage.example', address: 'Peenya Industrial Area, Bengaluru', vendorType: 'Garage', status: 'Active', createdAt: new Date() },
@@ -1892,12 +2204,12 @@ async function main() {
         id: randomUUID(), vehicleId: vehicle.id, tyreNumber: `TYR-${vehicle.vehicleNumber}-${faker.number.int({ min: 1000, max: 9999 })}`,
         brand: randomItem(['MRF', 'CEAT', 'Apollo', 'JK Tyre']), type: 'Front Left', installedDate: '2025-04-05',
         installedOdo: 4500, currentOdo: odometer, treadDepth: Number(faker.number.float({ min: 3, max: 9, fractionDigits: 1 })),
-        status: 'In Use', warrantyExpiry: '2027-04-05', vendorId: tyreVendor.id, createdAt: new Date('2025-04-05'),
+        status: 'In Use', warrantyExpiry: '2027-04-05', createdAt: new Date('2025-04-05'),
       } as any);
       batteryRows.push({
         id: randomUUID(), vehicleId: vehicle.id, batteryNumber: `BAT-${vehicle.vehicleNumber}-${faker.number.int({ min: 1000, max: 9999 })}`,
         brand: randomItem(['Exide', 'Amaron', 'Amco']), capacity: '150Ah', installedDate: '2025-04-05',
-        status: 'In Use', warrantyExpiry: '2027-04-05', vendorId: batteryVendor.id, createdAt: new Date('2025-04-05'),
+        status: 'In Use', warrantyExpiry: '2027-04-05', createdAt: new Date('2025-04-05'),
       } as any);
 
       ['RC', 'Insurance', 'Permit', 'Fitness', 'Pollution'].forEach((documentType) => {
@@ -1970,10 +2282,16 @@ async function main() {
     const teacherSubstitutionRows: any[] = [];
     staffLeaveRows.filter((leave) => leave.status === 'Approved' && teacherIds.includes(leave.staffId)).slice(0, 40).forEach((leave) => {
       const substitute = randomItem(teacherIds.filter((id) => id !== leave.staffId));
-      teacherSubstitutionRows.push({
-        id: randomUUID(), leaveApplicationId: leave.id, primaryTeacherId: leave.staffId, substituteTeacherId: substitute,
-        date: leave.startDate, status: 'Confirmed', createdAt: leave.appliedAt,
-      });
+      const period = timetablePeriods.find((tp) => {
+        const assignment = assignmentRows.find((a) => a.id === tp.assignmentId);
+        return assignment && assignment.staffId === leave.staffId;
+      }) || timetablePeriods[0];
+      if (period) {
+        teacherSubstitutionRows.push({
+          id: randomUUID(), leaveApplicationId: leave.id, primaryTeacherId: leave.staffId, substituteTeacherId: substitute,
+          date: leave.startDate, timetablePeriodId: period.id, status: 'Confirmed', createdAt: leave.appliedAt, updatedAt: leave.appliedAt,
+        });
+      }
     });
     await batchInsert('teacher_substitutions', prisma.teacherSubstitution, teacherSubstitutionRows, 2000);
 
@@ -2165,6 +2483,236 @@ async function main() {
     ];
     await batchInsert('document_templates', prisma.documentTemplate, documentTemplateRows);
 
+    console.log('\n32) Seeding LMS chapters/topics/lessons, question banks, rubrics, gradebooks, live classes, discussions, portfolios, and AI generation logs...');
+    const lmsChapterRows: any[] = [];
+    const lmsTopicRows: any[] = [];
+    const lmsLessonRows: any[] = [];
+    for (const unit of lmsUnitRows) {
+      for (let c = 1; c <= 2; c++) {
+        const chapterId = randomUUID();
+        lmsChapterRows.push({
+          id: chapterId,
+          unitId: unit.id,
+          title: `Chapter ${c}: ${randomItem(['Introduction', 'Deep Dive', 'Practical Application', 'Review & Practice'])}`,
+          description: `Chapter ${c} content for ${unit.title}.`,
+          learningOutcomes: 'Students will understand and apply the core concepts covered in this chapter.',
+          orderIndex: c - 1,
+          createdAt: new Date(),
+        });
+        for (let t = 1; t <= 2; t++) {
+          const topicId = randomUUID();
+          lmsTopicRows.push({
+            id: topicId,
+            chapterId,
+            title: `Topic ${t}: ${randomItem(['Key Concepts', 'Worked Examples', 'Common Mistakes', 'Real-World Use'])}`,
+            orderIndex: t - 1,
+            createdAt: new Date(),
+          });
+          for (let l = 1; l <= 2; l++) {
+            lmsLessonRows.push({
+              id: randomUUID(),
+              topicId,
+              title: `Lesson ${l}`,
+              content: `<p>Lesson content covering ${unit.title}.</p>`,
+              durationMin: randomItem([20, 30, 40, 45]),
+              orderIndex: l - 1,
+              isDraft: false,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+          }
+        }
+      }
+    }
+    await batchInsert('lms_chapters', prisma.lMSChapter, lmsChapterRows, 2000);
+    await batchInsert('lms_topics', prisma.lMSTopic, lmsTopicRows, 3000);
+    await batchInsert('lms_lessons', prisma.lMSLesson, lmsLessonRows, 5000);
+
+    const lmsQuestionBankRows: any[] = [];
+    const lmsQuestionRows: any[] = [];
+    for (const subjectName of Object.keys(subjectMap)) {
+      const bankId = randomUUID();
+      lmsQuestionBankRows.push({
+        id: bankId,
+        title: `${subjectName} Question Bank`,
+        description: `Curated question bank for ${subjectName}.`,
+        subjectId: subjectMap[subjectName],
+        createdAt: new Date(),
+      });
+      for (let i = 1; i <= 15; i++) {
+        const type = weightedPick([{ value: 'MCQ', weight: 60 }, { value: 'TRUE_FALSE', weight: 25 }, { value: 'ESSAY', weight: 15 }]);
+        let options: any = null;
+        if (type === 'MCQ') {
+          options = [
+            { id: 1, text: 'Option A', isCorrect: true },
+            { id: 2, text: 'Option B', isCorrect: false },
+            { id: 3, text: 'Option C', isCorrect: false },
+            { id: 4, text: 'Option D', isCorrect: false },
+          ];
+        } else if (type === 'TRUE_FALSE') {
+          const isTrueCorrect = faker.datatype.boolean();
+          options = [
+            { id: 1, text: 'True', isCorrect: isTrueCorrect },
+            { id: 2, text: 'False', isCorrect: !isTrueCorrect },
+          ];
+        }
+        lmsQuestionRows.push({
+          id: randomUUID(),
+          questionBankId: bankId,
+          type,
+          text: `${subjectName} practice question ${i}: explain the key concept covered in this unit.`,
+          options,
+          explanation: type === 'ESSAY' ? null : 'Refer to the chapter notes for the detailed explanation.',
+          difficulty: randomItem(['EASY', 'MEDIUM', 'HARD']),
+          createdAt: new Date(),
+        });
+      }
+    }
+    await batchInsert('lms_question_banks', prisma.lMSQuestionBank, lmsQuestionBankRows, 500);
+    await batchInsert('lms_questions', prisma.lMSQuestion, lmsQuestionRows, 3000);
+
+    const lmsRubricRows: any[] = [];
+    const rubricCriteria = ['Content Accuracy', 'Clarity & Structure', 'Timeliness', 'Creativity & Effort'];
+    for (const assignment of lmsAssignmentRows) {
+      const criteriaCount = faker.number.int({ min: 2, max: 3 });
+      for (const criteria of sampleItems(rubricCriteria, criteriaCount)) {
+        lmsRubricRows.push({
+          id: randomUUID(),
+          assignmentId: assignment.id,
+          criteria,
+          maxPoints: randomItem([10, 15, 20, 25]),
+          createdAt: new Date(),
+        });
+      }
+    }
+    await batchInsert('lms_rubrics', prisma.lMSRubric, lmsRubricRows, 3000);
+
+    const lmsGradebookRows: any[] = [];
+    const lmsGradeRows: any[] = [];
+    for (const course of lmsCourses) {
+      const gradebookId = randomUUID();
+      lmsGradebookRows.push({ id: gradebookId, courseId: course.id, createdAt: new Date() });
+      const courseSection = courseSections.find((cs) => cs.courseId === course.id);
+      const enrolledInSection = courseSection ? enrollments.filter((e) => e.sectionId === courseSection.sectionId) : [];
+      for (const enrollment of enrolledInSection) {
+        const totalScore = faker.number.int({ min: 55, max: 98 });
+        lmsGradeRows.push({
+          id: randomUUID(),
+          gradebookId,
+          studentId: enrollment.studentId,
+          totalScore,
+          letterGrade: totalScore >= 90 ? 'A+' : totalScore >= 80 ? 'A' : totalScore >= 70 ? 'B+' : totalScore >= 60 ? 'B' : 'C',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+    }
+    await batchInsert('lms_gradebooks', prisma.lMSGradebook, lmsGradebookRows, 2000);
+    await batchInsert('lms_grades', prisma.lMSGrade, lmsGradeRows, 5000);
+
+    const lmsLiveClassRows: any[] = [];
+    for (const course of lmsCourses) {
+      const courseSection = courseSections.find((cs) => cs.courseId === course.id);
+      for (let i = 1; i <= 2; i++) {
+        lmsLiveClassRows.push({
+          id: randomUUID(),
+          courseId: course.id,
+          title: `${course.title} — Live Session ${i}`,
+          meetingUrl: `https://meet.centralacademy.edu/${course.id}/session-${i}`,
+          scheduledAt: faker.date.between({ from: SESSION_DEFS[0].start, to: SESSION_DEFS[0].end }),
+          durationMin: randomItem([45, 60]),
+          hostId: courseSection?.teacherId ?? randomItem(teacherIds),
+          createdAt: new Date(),
+        });
+      }
+    }
+    await batchInsert('lms_live_classes', prisma.lMSLiveClass, lmsLiveClassRows, 3000);
+
+    const lmsDiscussionThreadRows: any[] = [];
+    const lmsDiscussionPostRows: any[] = [];
+    const discussionPostTemplates = [
+      'Can someone explain this concept in simpler terms?',
+      'Great explanation, thanks!',
+      'I found this part confusing — any tips?',
+      'Here is a helpful resource I found on this topic.',
+      'Does this apply to the upcoming exam too?',
+    ];
+    for (const course of lmsCourses) {
+      const courseSection = courseSections.find((cs) => cs.courseId === course.id);
+      const enrolledInSection = courseSection ? enrollments.filter((e) => e.sectionId === courseSection.sectionId) : [];
+      const threadCount = faker.number.int({ min: 1, max: 2 });
+      for (let t = 1; t <= threadCount; t++) {
+        const threadId = randomUUID();
+        lmsDiscussionThreadRows.push({
+          id: threadId,
+          courseId: course.id,
+          title: `Discussion: ${randomItem(['Doubts & Questions', 'Study Group', 'Exam Preparation', 'Extra Resources'])}`,
+          authorId: courseSection?.teacherId ?? null,
+          createdAt: new Date(),
+        });
+        const postCount = faker.number.int({ min: 3, max: 5 });
+        for (let p = 0; p < postCount; p++) {
+          const authorId = p % 2 === 0 && enrolledInSection.length ? randomItem(enrolledInSection).studentId : courseSection?.teacherId ?? null;
+          lmsDiscussionPostRows.push({
+            id: randomUUID(),
+            threadId,
+            content: randomItem(discussionPostTemplates),
+            authorId,
+            createdAt: new Date(),
+          });
+        }
+      }
+    }
+    await batchInsert('lms_discussion_threads', prisma.lMSDiscussionThread, lmsDiscussionThreadRows, 2000);
+    await batchInsert('lms_discussion_posts', prisma.lMSDiscussionPost, lmsDiscussionPostRows, 3000);
+
+    const lmsPortfolioRows: any[] = [];
+    const lmsBadgeRows: any[] = [];
+    const badgeNames = ['Perfect Attendance', 'Top Scorer', 'Quiz Champion', 'Reading Star', 'Science Fair Winner'];
+    for (const student of studentRows) {
+      const portfolioId = randomUUID();
+      lmsPortfolioRows.push({
+        id: portfolioId,
+        studentId: student.id,
+        totalXP: faker.number.int({ min: 0, max: 2000 }),
+        createdAt: new Date(),
+      });
+      const badgeCount = weightedPick([{ value: 0, weight: 40 }, { value: 1, weight: 30 }, { value: 2, weight: 20 }, { value: 3, weight: 10 }]);
+      for (const badgeName of sampleItems(badgeNames, badgeCount)) {
+        lmsBadgeRows.push({
+          id: randomUUID(),
+          portfolioId,
+          name: badgeName,
+          iconUrl: null,
+          earnedAt: faker.date.between({ from: SESSION_DEFS[0].start, to: SESSION_DEFS[0].end }),
+        });
+      }
+    }
+    await batchInsert('lms_student_portfolios', prisma.lMSStudentPortfolio, lmsPortfolioRows, 2000);
+    await batchInsert('lms_badges', prisma.lMSBadge, lmsBadgeRows, 3000);
+
+    const lmsAiGenerationRows: any[] = [];
+    const aiGenTemplates = [
+      { type: 'LESSON_PLAN', prompt: 'Generate a lesson plan for teaching fractions to Grade 5.', result: 'A structured 40-minute lesson plan covering introduction, guided practice, and assessment.' },
+      { type: 'QUIZ_GEN', prompt: 'Create a 10-question quiz on the water cycle.', result: 'A 10-question MCQ quiz covering evaporation, condensation, and precipitation.' },
+      { type: 'STUDENT_TUTOR', prompt: 'Explain photosynthesis in simple terms for a struggling student.', result: 'A simplified, analogy-based explanation of photosynthesis.' },
+    ];
+    for (const teacherId of teacherIds) {
+      const count = faker.number.int({ min: 2, max: 4 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(aiGenTemplates);
+        lmsAiGenerationRows.push({
+          id: randomUUID(),
+          userId: teacherId,
+          prompt: template.prompt,
+          result: template.result,
+          type: template.type,
+          createdAt: new Date(),
+        });
+      }
+    }
+    await batchInsert('lms_ai_generations', prisma.lMSAIGeneration, lmsAiGenerationRows, 3000);
+
     console.log('\n28) Seeding EMS scaffolding (rooms, exam types/templates, grading scheme) and the historical-session cycle...');
     const emsRooms = Array.from({ length: 4 }).map((_, i) => ({
       id: randomUUID(), name: `Exam Hall ${i + 1}`, capacity: 150, campusId: campus.id, status: 'Active', createdAt: new Date(), updatedAt: new Date(),
@@ -2207,7 +2755,199 @@ async function main() {
       targetEnrollments: emsHistoricalEnrollments,
     });
 
+    console.log('\n35) Attaching comments and file attachments to case records...');
+    const commentRows: any[] = [];
+    const attachmentRows: any[] = [];
+    const commentableSources: { entityType: string; rows: any[] }[] = [
+      { entityType: 'DisciplineIncident', rows: disciplineIncidentRows },
+      { entityType: 'AdmissionInquiry', rows: admissionInquiryRows },
+      { entityType: 'LeaveApplication', rows: staffLeaveRows },
+      { entityType: 'StudentLeaveApplication', rows: studentLeaveRows },
+      { entityType: 'ConsentRequest', rows: consentRequestRows },
+      { entityType: 'Certificate', rows: certificateRows },
+      { entityType: 'FeeRefund', rows: feeRefundRows },
+      { entityType: 'TransportBreakdown', rows: transportBreakdownRows },
+      { entityType: 'TransportAccident', rows: transportAccidentRows },
+    ];
+    const commentBodies = [
+      'Reviewed and verified — looks in order.',
+      'Following up with the concerned party for additional details.',
+      'Escalated to the department head for further action.',
+      'Resolved after discussion; no further action needed.',
+    ];
+    for (const source of commentableSources) {
+      if (!source.rows.length) continue;
+      const sampled = sampleItems(source.rows, Math.max(1, Math.round(source.rows.length * 0.3)));
+      for (const record of sampled) {
+        const commentCount = faker.number.int({ min: 1, max: 3 });
+        for (let i = 0; i < commentCount; i++) {
+          commentRows.push({
+            id: randomUUID(),
+            entityType: source.entityType,
+            entityId: record.id,
+            authorId: randomItem(staffRecords).id,
+            body: randomItem(commentBodies),
+            createdAt: new Date(),
+          });
+        }
+        if (faker.datatype.boolean()) {
+          const attachmentCount = faker.number.int({ min: 1, max: 2 });
+          for (let i = 0; i < attachmentCount; i++) {
+            attachmentRows.push({
+              id: randomUUID(),
+              entityType: source.entityType,
+              entityId: record.id,
+              fileName: `${source.entityType.toLowerCase()}-${String(record.id).slice(0, 8)}-doc-${i + 1}.pdf`,
+              sizeBytes: faker.number.int({ min: 20000, max: 4000000 }),
+              uploadedById: randomItem(staffRecords).id,
+              url: `https://documents.centralacademy.edu/${source.entityType.toLowerCase()}/${record.id}/attachment-${i + 1}.pdf`,
+              uploadedAt: new Date(),
+            });
+          }
+        }
+      }
+    }
+    await batchInsert('comments', prisma.comment, commentRows, 3000);
+    await batchInsert('attachments', prisma.attachment, attachmentRows, 3000);
+
+    console.log('\n36) Generating audit trail entries...');
+    const auditLogRows: any[] = [];
+    const auditActionTemplates: { action: string; tableName: string; pick: () => string | null }[] = [
+      { action: 'LOGIN', tableName: 'staff', pick: () => randomItem(staffRecords).id },
+      { action: 'MARK_ATTENDANCE', tableName: 'attendance_records', pick: () => (enrollments.length ? randomItem(enrollments).id : null) },
+      { action: 'UPDATE_FEE_INVOICE', tableName: 'fee_invoices', pick: () => (invoiceRows.length ? randomItem(invoiceRows).id : null) },
+      { action: 'APPROVE_LEAVE', tableName: 'leave_applications', pick: () => (staffLeaveRows.length ? randomItem(staffLeaveRows).id : null) },
+      { action: 'PUBLISH_RESULT', tableName: 'report_cards', pick: () => (reportCardRows.length ? randomItem(reportCardRows).id : null) },
+      { action: 'CREATE_STUDENT', tableName: 'students', pick: () => (studentRows.length ? randomItem(studentRows).id : null) },
+    ];
+    for (const staff of staffRecords) {
+      const count = faker.number.int({ min: 5, max: 10 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(auditActionTemplates);
+        const recordId = template.pick();
+        if (!recordId) continue;
+        auditLogRows.push({
+          id: randomUUID(),
+          userId: staff.id,
+          userEmail: staff.email,
+          action: template.action,
+          tableName: template.tableName,
+          recordId,
+          oldValue: null,
+          newValue: { action: template.action, changedBy: staff.fullName },
+          ipAddress: faker.internet.ipv4(),
+          userAgent: 'Mozilla/5.0 (SchoolERP Portal)',
+          timestamp: faker.date.between({ from: SESSION_START, to: TODAY }),
+        });
+      }
+    }
+    await batchInsert('audit_logs', prisma.auditLog, auditLogRows, 5000);
+
+    const acmsAuditLogRows: any[] = [];
+    for (const event of eventRows) {
+      acmsAuditLogRows.push({
+        id: randomUUID(),
+        action: 'EVENT_CREATED',
+        entityType: 'ACMSEvent',
+        entityId: event.id,
+        performedBy: randomItem(staffRecords).id,
+        timestamp: event.createdAt,
+        details: `Calendar event "${event.title}" created.`,
+      });
+    }
+    for (let i = 0; i < 10; i++) {
+      acmsAuditLogRows.push({
+        id: randomUUID(),
+        action: randomItem(['HOLIDAY_UPDATED', 'TERM_CONFIGURED', 'WORKING_DAY_UPDATED']),
+        entityType: randomItem(['ACMSHolidayMaster', 'ACMSAcademicTerm', 'ACMSWorkingDay']),
+        entityId: randomUUID(),
+        performedBy: randomItem(staffRecords).id,
+        timestamp: faker.date.between({ from: SESSION_START, to: TODAY }),
+        details: 'Academic calendar configuration updated.',
+      });
+    }
+    await batchInsert('acms_audit_logs', prisma.aCMSAuditLog, acmsAuditLogRows, 3000);
+
+    const systemAuditLogRows: any[] = [];
+    const systemAuditActions = [
+      { action: 'MOBILE_LOGIN', module: 'AUTH', role: 'TEACHER' },
+      { action: 'ATTENDANCE_MARKED', module: 'ATTENDANCE', role: 'TEACHER' },
+      { action: 'BUS_LOCATION_PING', module: 'TRANSPORT', role: 'DRIVER' },
+      { action: 'GATE_CHECK_IN', module: 'TRANSPORT', role: 'CONDUCTOR' },
+      { action: 'FEE_STATUS_VIEWED', module: 'FEES', role: 'PARENT' },
+    ];
+    const systemAuditActors = [...teacherIds, ...driverIds, ...familyGroups.map((f) => f.parentId)];
+    for (const actorId of sampleItems(systemAuditActors, Math.min(systemAuditActors.length, 150))) {
+      const count = faker.number.int({ min: 2, max: 5 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(systemAuditActions);
+        systemAuditLogRows.push({
+          id: randomUUID(),
+          action: template.action,
+          module: template.module,
+          entityType: null,
+          entityId: null,
+          performedBy: actorId,
+          role: template.role,
+          details: { source: 'mobile-app', appVersion: '2.4.0' },
+          ipAddress: faker.internet.ipv4(),
+          deviceInfo: randomItem(['Android 14 / Pixel 7', 'iOS 17 / iPhone 13', 'Android 13 / Redmi Note 12']),
+          timestamp: faker.date.between({ from: SESSION_START, to: TODAY }),
+        });
+      }
+    }
+    await batchInsert('system_audit_logs', prisma.systemAuditLog, systemAuditLogRows, 5000);
+
   }
+
+  // ==========================================
+  // GLOBAL — workflow/rule configuration and the daily news digest are
+  // school-wide, not campus-scoped, so they run once here rather than
+  // inside the per-campus loop above.
+  // ==========================================
+  console.log('\nGlobal) Seeding workflow definitions, business rules, and daily news digest...');
+  const workflowDefinitionRows = [
+    { id: randomUUID(), entityType: 'LeaveApplication', name: 'Staff Leave Approval', stages: ['Submitted', 'PendingApproval', 'Approved', 'Rejected'], transitions: { Submitted: ['PendingApproval'], PendingApproval: ['Approved', 'Rejected'], Approved: [], Rejected: [] } },
+    { id: randomUUID(), entityType: 'FeeRefund', name: 'Fee Refund Approval', stages: ['Requested', 'UnderReview', 'Approved', 'Rejected', 'Processed'], transitions: { Requested: ['UnderReview'], UnderReview: ['Approved', 'Rejected'], Approved: ['Processed'], Rejected: [], Processed: [] } },
+    { id: randomUUID(), entityType: 'AdmissionInquiry', name: 'Admission Inquiry Pipeline', stages: ['New', 'Contacted', 'CampusVisitScheduled', 'ApplicationSent', 'Converted', 'Lost'], transitions: { New: ['Contacted'], Contacted: ['CampusVisitScheduled', 'Lost'], CampusVisitScheduled: ['ApplicationSent', 'Lost'], ApplicationSent: ['Converted', 'Lost'], Converted: [], Lost: [] } },
+    { id: randomUUID(), entityType: 'ConsentRequest', name: 'Parental Consent Collection', stages: ['Open', 'Closed'], transitions: { Open: ['Closed'], Closed: [] } },
+    { id: randomUUID(), entityType: 'DisciplineIncident', name: 'Discipline Incident Resolution', stages: ['Open', 'Escalated', 'Resolved'], transitions: { Open: ['Escalated', 'Resolved'], Escalated: ['Resolved'], Resolved: [] } },
+  ].map((row) => ({ ...row, createdAt: new Date(), updatedAt: new Date() }));
+  await batchInsert('workflow_definitions', prisma.workflowDefinition, workflowDefinitionRows);
+
+  const ruleRows = [
+    { key: 'ATTENDANCE_MIN_PERCENT_FOR_PROMOTION', entityType: 'StudentEnrollment', description: 'Minimum attendance percentage required for a student to be eligible for promotion.', definition: { minPercent: 75 } },
+    { key: 'FEE_LATE_PENALTY_PERCENT', entityType: 'FeeInvoice', description: 'Late payment penalty applied to overdue fee invoices.', definition: { flatAmount: 500 } },
+    { key: 'LEAVE_MAX_DAYS_PER_TERM', entityType: 'LeaveApplication', description: 'Maximum consecutive leave days a staff member can take per term without special approval.', definition: { maxDays: 15 } },
+    { key: 'PROMOTION_PASS_PERCENT', entityType: 'ReportCard', description: 'Minimum overall percentage required for automatic promotion to the next grade.', definition: { minPercent: 35 } },
+    { key: 'LMS_BADGE_XP_THRESHOLD', entityType: 'LMSStudentPortfolio', description: 'XP threshold at which a student portfolio automatically qualifies for a badge review.', definition: { xpThreshold: 500 } },
+    { key: 'CONSENT_REMINDER_DAYS', entityType: 'ConsentRequest', description: 'Number of days before the due date to send a consent reminder notification.', definition: { reminderDays: 3 } },
+    { key: 'HOSTEL_OUTPASS_MAX_HOURS', entityType: 'HostelOutpass', description: 'Maximum hours a student can be away from the hostel on a single outpass.', definition: { maxHours: 12 } },
+    { key: 'LIBRARY_MAX_BOOKS_PER_STUDENT', entityType: 'BookIssue', description: 'Maximum number of books a student may have issued at the same time.', definition: { maxBooks: 3 } },
+  ].map((row) => ({ id: randomUUID(), ...row, active: true, createdAt: new Date(), updatedAt: new Date() }));
+  await batchInsert('rules', prisma.rule, ruleRows);
+
+  const dailyNewsDates = Array.from(new Set([...schoolDays, ...currentSessionDays]));
+  const dailyNewsTemplates = [
+    { national: 'Parliament session continues with debates on the new education policy.', international: 'Global leaders convene for the annual climate summit.', sports: 'National cricket team wins the ongoing test series.', weather: 'Partly cloudy with a mild breeze; pleasant conditions expected through the day.' },
+    { national: 'Government announces new infrastructure projects for rural development.', international: 'International trade talks progress between major economies.', sports: 'Local football league enters its semi-final round.', weather: 'Clear skies with warm daytime temperatures; light winds in the evening.' },
+    { national: 'State governments roll out digital literacy programs in schools.', international: 'Scientific mission reports new findings from space exploration.', sports: 'Athletics championship sees a new national record set.', weather: 'Humid with a chance of light showers in the afternoon.' },
+  ];
+  const dailyNewsRows = dailyNewsDates.map((dateStr) => {
+    const template = randomItem(dailyNewsTemplates);
+    return {
+      id: randomUUID(),
+      date: new Date(dateStr),
+      national: template.national,
+      international: template.international,
+      sports: template.sports,
+      weather: template.weather,
+      importantDay: null,
+      festival: null,
+      createdAt: new Date(),
+    };
+  });
+  await batchInsert('daily_news_items', prisma.dailyNewsItem, dailyNewsRows, 3000);
 
   // ==========================================
   // PROMOTION — real PromotionsService, not hand-rolled enrollment inserts.
@@ -2477,6 +3217,288 @@ async function main() {
         });
       }
     }
+
+    console.log('  Notifications, messages, consent, LMS activity, ACMS alerts, and audit trail (current session, through today)...');
+    const currentStudentIds = currentEnrollments.map((e) => e.studentId);
+    const currentParentLinks = await prisma.parentStudent.findMany({ where: { studentId: { in: currentStudentIds } } });
+    const currentParentIds = Array.from(new Set(currentParentLinks.map((p) => p.parentId)));
+    const parentByCurrentStudent = new Map(currentParentLinks.map((p) => [p.studentId, p.parentId]));
+
+    const currentNotificationTemplates = [
+      { type: 'PUSH', title: 'New Session Update', content: `Welcome to ${SESSION_DEFS[1].name}. Your class and section details have been updated.` },
+      { type: 'EMAIL', title: 'Fee Due Reminder', content: 'Term fee payment for the new session is due soon.' },
+      { type: 'PUSH', title: 'Timetable Published', content: 'The updated timetable for this session is now available on the portal.' },
+    ];
+    const currentNotificationRows: any[] = [];
+    for (const staff of currentStaff) {
+      const count = faker.number.int({ min: 1, max: 3 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(currentNotificationTemplates);
+        currentNotificationRows.push({
+          id: randomUUID(), recipientId: staff.id, type: template.type, title: template.title, content: template.content,
+          priority: 'NORMAL', readStatus: faker.datatype.boolean(),
+        });
+      }
+    }
+    for (const enrollment of currentEnrollments) {
+      const count = faker.number.int({ min: 1, max: 3 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(currentNotificationTemplates);
+        currentNotificationRows.push({
+          id: randomUUID(), recipientId: enrollment.studentId, type: template.type, title: template.title, content: template.content,
+          priority: 'NORMAL', readStatus: faker.datatype.boolean(),
+        });
+      }
+    }
+    await batchInsert('notifications (current session)', prisma.notification, currentNotificationRows, 3000);
+
+    const relevantConversations = await prisma.conversation.findMany({ where: { parentId: { in: currentParentIds } } });
+    const currentMessageTemplates = [
+      { sender: 'PARENT', content: 'Checking in on how the new session is going so far.' },
+      { sender: 'STAFF', content: 'Off to a good start — settling into the new grade well.' },
+      { sender: 'PARENT', content: 'Please share the updated timetable for this session.' },
+      { sender: 'STAFF', content: 'The timetable has been shared on the portal.' },
+    ];
+    const currentMessageRows: any[] = [];
+    for (const conversation of relevantConversations) {
+      const count = faker.number.int({ min: 1, max: 3 });
+      for (let i = 0; i < count; i++) {
+        const template = currentMessageTemplates[i % currentMessageTemplates.length];
+        currentMessageRows.push({
+          id: randomUUID(), conversationId: conversation.id,
+          senderId: template.sender === 'PARENT' ? conversation.parentId : conversation.staffId,
+          senderType: template.sender, content: template.content, readStatus: faker.datatype.boolean(),
+        });
+      }
+    }
+    await batchInsert('messages (current session)', prisma.message, currentMessageRows, 3000);
+
+    const currentConsentRequestId = randomUUID();
+    await batchInsert('consent_requests (current session)', prisma.consentRequest, [{
+      id: currentConsentRequestId, title: 'Annual Sports Day Participation',
+      description: `Consent for your ward to participate in the Annual Sports Day for ${SESSION_DEFS[1].name}.`,
+      targetType: 'ALL', targetSectionId: null,
+      dueDate: new Date(TODAY.getTime() + 20 * 24 * 60 * 60 * 1000),
+      createdById: randomItem(currentStaff).id,
+    }], 500);
+    const currentConsentResponseRows = currentEnrollments.map((enrollment) => {
+      const status = weightedPick([{ value: 'Pending', weight: 55 }, { value: 'Signed', weight: 35 }, { value: 'Declined', weight: 10 }]);
+      return {
+        id: randomUUID(), consentRequestId: currentConsentRequestId, studentId: enrollment.studentId, status,
+        respondedAt: status === 'Pending' ? null : faker.date.recent({ days: 10 }),
+        respondedById: status === 'Pending' ? null : (parentByCurrentStudent.get(enrollment.studentId) ?? null),
+      };
+    });
+    await batchInsert('consent_responses (current session)', prisma.consentResponse, currentConsentResponseRows, 3000);
+
+    const currentGradebookRows: any[] = [];
+    const currentGradeRows: any[] = [];
+    const currentLiveClassRows: any[] = [];
+    const currentDiscussionThreadRows: any[] = [];
+    const currentDiscussionPostRows: any[] = [];
+    const currentDiscussionPostTemplates = ['Can someone explain this concept in simpler terms?', 'Great explanation, thanks!', 'Does this apply to the upcoming exam too?'];
+    for (const course of currentLmsCourses) {
+      const gradebookId = randomUUID();
+      currentGradebookRows.push({ id: gradebookId, courseId: course.id, createdAt: new Date() });
+      const sectionEnrollments = currentEnrollments.filter((e) => e.sectionId === course.sectionId);
+      for (const enrollment of sectionEnrollments) {
+        const totalScore = faker.number.int({ min: 50, max: 95 });
+        currentGradeRows.push({
+          id: randomUUID(), gradebookId, studentId: enrollment.studentId, totalScore,
+          letterGrade: totalScore >= 90 ? 'A+' : totalScore >= 80 ? 'A' : totalScore >= 70 ? 'B+' : totalScore >= 60 ? 'B' : 'C',
+          createdAt: new Date(), updatedAt: new Date(),
+        });
+      }
+      currentLiveClassRows.push({
+        id: randomUUID(), courseId: course.id, title: `${course.title} — Live Session 1`,
+        meetingUrl: `https://meet.centralacademy.edu/${course.id}/session-1`,
+        scheduledAt: faker.date.between({ from: SESSION_DEFS[1].start, to: TODAY }),
+        durationMin: randomItem([45, 60]), hostId: randomItem(currentStaff).id, createdAt: new Date(),
+      });
+      const threadId = randomUUID();
+      currentDiscussionThreadRows.push({ id: threadId, courseId: course.id, title: 'Discussion: Doubts & Questions', authorId: randomItem(currentStaff).id, createdAt: new Date() });
+      const postCount = faker.number.int({ min: 2, max: 4 });
+      for (let p = 0; p < postCount; p++) {
+        currentDiscussionPostRows.push({
+          id: randomUUID(), threadId, content: randomItem(currentDiscussionPostTemplates),
+          authorId: p % 2 === 0 && sectionEnrollments.length ? randomItem(sectionEnrollments).studentId : randomItem(currentStaff).id,
+          createdAt: new Date(),
+        });
+      }
+    }
+    await batchInsert('lms_gradebooks (current session)', prisma.lMSGradebook, currentGradebookRows, 500);
+    await batchInsert('lms_grades (current session)', prisma.lMSGrade, currentGradeRows, 2000);
+    await batchInsert('lms_live_classes (current session)', prisma.lMSLiveClass, currentLiveClassRows, 500);
+    await batchInsert('lms_discussion_threads (current session)', prisma.lMSDiscussionThread, currentDiscussionThreadRows, 500);
+    await batchInsert('lms_discussion_posts (current session)', prisma.lMSDiscussionPost, currentDiscussionPostRows, 2000);
+
+    const currentPortfolios = await prisma.lMSStudentPortfolio.findMany({ where: { studentId: { in: currentStudentIds } } });
+    const currentBadgeRows: any[] = [];
+    for (const portfolio of sampleItems(currentPortfolios, Math.round(currentPortfolios.length * 0.15))) {
+      currentBadgeRows.push({
+        id: randomUUID(), portfolioId: portfolio.id, name: randomItem(['Perfect Attendance', 'Top Scorer', 'Quiz Champion']),
+        iconUrl: null, earnedAt: faker.date.between({ from: SESSION_DEFS[1].start, to: TODAY }),
+      });
+    }
+    await batchInsert('lms_badges (current session)', prisma.lMSBadge, currentBadgeRows, 2000);
+
+    const currentAiGenTemplates = [
+      { type: 'LESSON_PLAN', prompt: 'Generate a lesson plan for the first week of the new session.', result: 'A structured lesson plan for orientation week.' },
+      { type: 'QUIZ_GEN', prompt: 'Create a diagnostic quiz for the start of the new session.', result: 'A 10-question diagnostic quiz covering prior-grade fundamentals.' },
+    ];
+    const currentAiGenerationRows: any[] = [];
+    for (const staff of sampleItems(currentStaff, Math.min(currentStaff.length, 25))) {
+      const count = faker.number.int({ min: 1, max: 2 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(currentAiGenTemplates);
+        currentAiGenerationRows.push({ id: randomUUID(), userId: staff.id, prompt: template.prompt, result: template.result, type: template.type, createdAt: new Date() });
+      }
+    }
+    await batchInsert('lms_ai_generations (current session)', prisma.lMSAIGeneration, currentAiGenerationRows, 2000);
+
+    const currentAcmsNotificationTemplates = [
+      { title: 'New Session Welcome', message: `Welcome to ${SESSION_DEFS[1].name}! Check the portal for the updated calendar.` },
+      { title: 'Upcoming Event', message: 'A school event is scheduled soon this session — check the calendar for details.' },
+    ];
+    const currentAcmsNotificationRows: any[] = [];
+    for (const targetId of [...currentStaff.map((s) => s.id), ...currentStudentIds]) {
+      const count = faker.number.int({ min: 1, max: 2 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(currentAcmsNotificationTemplates);
+        currentAcmsNotificationRows.push({
+          id: randomUUID(), userId: targetId, title: template.title, message: template.message,
+          type: randomItem(['EMAIL', 'SMS', 'PUSH']), status: weightedPick([{ value: 'UNREAD', weight: 55 }, { value: 'READ', weight: 45 }]),
+        });
+      }
+    }
+    await batchInsert('acms_notifications (current session)', prisma.aCMSNotification, currentAcmsNotificationRows, 3000);
+
+    const currentTransportBreakdownRows: any[] = [];
+    if (ctx.vehicles.length) {
+      for (const vehicle of sampleItems(ctx.vehicles, Math.min(ctx.vehicles.length, 3))) {
+        const breakdownDate = faker.date.between({ from: SESSION_DEFS[1].start, to: TODAY });
+        currentTransportBreakdownRows.push({
+          id: randomUUID(), vehicleId: vehicle.id, driverId: ctx.driverIds.length ? randomItem(ctx.driverIds) : null,
+          date: fmt(breakdownDate), time: `${faker.number.int({ min: 7, max: 17 })}:${faker.number.int({ min: 0, max: 59 }).toString().padStart(2, '0')}`,
+          location: randomItem(ROUTE_STOPS), description: randomItem(['Flat tyre', 'Engine overheating', 'Battery discharge']),
+          actionTaken: 'Roadside repair completed', towingRequired: false,
+          costIncurred: faker.number.float({ min: 500, max: 5000, fractionDigits: 2 }),
+          status: 'Resolved', acknowledgedBy: randomItem(currentStaff).id, acknowledgedAt: breakdownDate,
+        });
+      }
+    }
+    await batchInsert('transport_breakdowns (current session)', prisma.transportBreakdown, currentTransportBreakdownRows, 500);
+
+    const currentTransportAccidentRows: any[] = [];
+    if (ctx.vehicles.length && weightedPick([{ value: true, weight: 15 }, { value: false, weight: 85 }])) {
+      const vehicle = randomItem(ctx.vehicles);
+      const accidentDate = faker.date.between({ from: SESSION_DEFS[1].start, to: TODAY });
+      currentTransportAccidentRows.push({
+        id: randomUUID(), vehicleId: vehicle.id, driverId: ctx.driverIds.length ? randomItem(ctx.driverIds) : null,
+        date: fmt(accidentDate), time: `${faker.number.int({ min: 7, max: 17 })}:${faker.number.int({ min: 0, max: 59 }).toString().padStart(2, '0')}`,
+        location: randomItem(ROUTE_STOPS), severity: 'Minor',
+        description: 'Minor collision while merging into traffic; no injuries reported.',
+        policeReport: false, firNumber: null, insuranceClaimed: faker.datatype.boolean(),
+        claimAmount: faker.number.float({ min: 2000, max: 15000, fractionDigits: 2 }),
+        status: 'Under Investigation', acknowledgedBy: randomItem(currentStaff).id, acknowledgedAt: accidentDate,
+      });
+    }
+    await batchInsert('transport_accidents (current session)', prisma.transportAccident, currentTransportAccidentRows, 500);
+
+    const currentAppointmentRows: any[] = [];
+    for (let i = 0; i < 6; i++) {
+      const scheduledFor = faker.date.between({ from: SESSION_DEFS[1].start, to: new Date(TODAY.getTime() + 14 * 24 * 60 * 60 * 1000) });
+      currentAppointmentRows.push({
+        id: randomUUID(), visitorName: faker.person.fullName(), purpose: randomItem(['Admission Inquiry', 'Parent Meeting', 'Vendor Meeting']),
+        scheduledFor, hostId: randomItem(currentStaff).id,
+        status: scheduledFor < TODAY ? 'Completed' : 'Scheduled',
+      });
+    }
+    await batchInsert('appointments (current session)', prisma.appointment, currentAppointmentRows, 500);
+
+    const currentCommentRows: any[] = [];
+    const currentAttachmentRows: any[] = [];
+    const currentCommentableSources: { entityType: string; rows: any[] }[] = [
+      { entityType: 'FeeInvoice', rows: currentInvoiceRows.filter((r) => r.status === 'Unpaid') },
+      { entityType: 'ReportCard', rows: currentReportCards },
+      { entityType: 'TransportBreakdown', rows: currentTransportBreakdownRows },
+    ];
+    for (const source of currentCommentableSources) {
+      if (!source.rows.length) continue;
+      const sampled = sampleItems(source.rows, Math.max(1, Math.round(source.rows.length * 0.1)));
+      for (const record of sampled) {
+        currentCommentRows.push({
+          id: randomUUID(), entityType: source.entityType, entityId: record.id, authorId: randomItem(currentStaff).id,
+          body: 'Reviewed for the current session.', createdAt: new Date(),
+        });
+      }
+    }
+    await batchInsert('comments (current session)', prisma.comment, currentCommentRows, 2000);
+
+    if (currentReportCards.length) {
+      for (const rc of sampleItems(currentReportCards, Math.max(1, Math.round(currentReportCards.length * 0.05)))) {
+        currentAttachmentRows.push({
+          id: randomUUID(), entityType: 'ReportCard', entityId: rc.id, fileName: `report-card-${String(rc.id).slice(0, 8)}.pdf`,
+          sizeBytes: faker.number.int({ min: 50000, max: 500000 }), uploadedById: randomItem(currentStaff).id,
+          url: `https://documents.centralacademy.edu/reportcard/${rc.id}/attachment.pdf`, uploadedAt: new Date(),
+        });
+      }
+    }
+    await batchInsert('attachments (current session)', prisma.attachment, currentAttachmentRows, 2000);
+
+    const currentAuditActionTemplates: { action: string; tableName: string; pick: () => string | null }[] = [
+      { action: 'LOGIN', tableName: 'staff', pick: () => (currentStaff.length ? randomItem(currentStaff).id : null) },
+      { action: 'MARK_ATTENDANCE', tableName: 'attendance_records', pick: () => (currentEnrollments.length ? randomItem(currentEnrollments).id : null) },
+      { action: 'UPDATE_FEE_INVOICE', tableName: 'fee_invoices', pick: () => (currentInvoiceRows.length ? randomItem(currentInvoiceRows).id : null) },
+      { action: 'PUBLISH_RESULT', tableName: 'report_cards', pick: () => (currentReportCards.length ? randomItem(currentReportCards).id : null) },
+    ];
+    const currentAuditLogRows: any[] = [];
+    for (const staff of currentStaff) {
+      const count = faker.number.int({ min: 2, max: 5 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(currentAuditActionTemplates);
+        const recordId = template.pick();
+        if (!recordId) continue;
+        currentAuditLogRows.push({
+          id: randomUUID(), userId: staff.id, userEmail: null, action: template.action, tableName: template.tableName, recordId,
+          oldValue: null, newValue: { action: template.action }, ipAddress: faker.internet.ipv4(),
+          userAgent: 'Mozilla/5.0 (SchoolERP Portal)', timestamp: faker.date.between({ from: SESSION_DEFS[1].start, to: TODAY }),
+        });
+      }
+    }
+    await batchInsert('audit_logs (current session)', prisma.auditLog, currentAuditLogRows, 5000);
+
+    const currentAcmsAuditLogRows: any[] = [];
+    for (let i = 0; i < 6; i++) {
+      currentAcmsAuditLogRows.push({
+        id: randomUUID(), action: randomItem(['EVENT_CREATED', 'WORKING_DAY_UPDATED']), entityType: 'ACMSEvent', entityId: randomUUID(),
+        performedBy: randomItem(currentStaff).id, timestamp: faker.date.between({ from: SESSION_DEFS[1].start, to: TODAY }),
+        details: `Calendar activity logged for ${SESSION_DEFS[1].name}.`,
+      });
+    }
+    await batchInsert('acms_audit_logs (current session)', prisma.aCMSAuditLog, currentAcmsAuditLogRows, 2000);
+
+    const currentSystemAuditActions = [
+      { action: 'MOBILE_LOGIN', module: 'AUTH', role: 'TEACHER' },
+      { action: 'ATTENDANCE_MARKED', module: 'ATTENDANCE', role: 'TEACHER' },
+      { action: 'BUS_LOCATION_PING', module: 'TRANSPORT', role: 'DRIVER' },
+      { action: 'FEE_STATUS_VIEWED', module: 'FEES', role: 'PARENT' },
+    ];
+    const currentSystemAuditActors = [...currentStaff.map((s) => s.id), ...ctx.driverIds, ...currentParentIds];
+    const currentSystemAuditLogRows: any[] = [];
+    for (const actorId of sampleItems(currentSystemAuditActors, Math.min(currentSystemAuditActors.length, 80))) {
+      const count = faker.number.int({ min: 1, max: 3 });
+      for (let i = 0; i < count; i++) {
+        const template = randomItem(currentSystemAuditActions);
+        currentSystemAuditLogRows.push({
+          id: randomUUID(), action: template.action, module: template.module, entityType: null, entityId: null,
+          performedBy: actorId, role: template.role, details: { source: 'mobile-app', appVersion: '2.4.0' },
+          ipAddress: faker.internet.ipv4(), deviceInfo: randomItem(['Android 14 / Pixel 7', 'iOS 17 / iPhone 13']),
+          timestamp: faker.date.between({ from: SESSION_DEFS[1].start, to: TODAY }),
+        });
+      }
+    }
+    await batchInsert('system_audit_logs (current session)', prisma.systemAuditLog, currentSystemAuditLogRows, 5000);
   }
 
   console.log('\n=== Final validation summary ===');
