@@ -4,6 +4,7 @@ import { HrService } from './hr.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentRenderingService } from '../documents/document-rendering.service';
 import { StorageService } from '../storage/storage.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 describe('HrService', () => {
   let service: HrService;
@@ -13,15 +14,21 @@ describe('HrService', () => {
   };
   const mockRenderer = { renderPayslip: jest.fn() };
   const mockStorage = { uploadFile: jest.fn() };
+  const mockNotificationsService = {
+    getTokensForUsers: jest.fn().mockResolvedValue([]),
+    sendPushNotifications: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockNotificationsService.getTokensForUsers.mockResolvedValue([]);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         HrService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: DocumentRenderingService, useValue: mockRenderer },
         { provide: StorageService, useValue: mockStorage },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
     service = module.get<HrService>(HrService);

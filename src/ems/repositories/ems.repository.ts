@@ -66,6 +66,35 @@ export class EmsRepository {
     });
   }
 
+  // Resolve who to notify when a new exam schedule is created — the schedule
+  // itself only carries sessionId+subjectId, so the teachers and enrolled
+  // students/families are found via TeacherAssignment (sessionId+subjectId
+  // -> staffId+sectionId) then StudentEnrollment (sectionId+sessionId).
+  async findRecipientsForSubjectSchedule(sessionId: string, subjectId: string) {
+    const assignments = await this.prisma.teacherAssignment.findMany({
+      where: { sessionId, subjectId, status: 'Active' },
+      select: { staffId: true, sectionId: true },
+    });
+    const staffIds = [...new Set(assignments.map((a) => a.staffId))];
+    const sectionIds = [
+      ...new Set(
+        assignments
+          .map((a) => a.sectionId)
+          .filter((s): s is string => Boolean(s)),
+      ),
+    ];
+
+    const enrollments = sectionIds.length
+      ? await this.prisma.studentEnrollment.findMany({
+          where: { sectionId: { in: sectionIds }, sessionId },
+          select: { studentId: true },
+        })
+      : [];
+    const studentIds = [...new Set(enrollments.map((e) => e.studentId))];
+
+    return { staffIds, studentIds };
+  }
+
   findAllSchedules() {
     return this.prisma.eMSExamSchedule.findMany({
       include: {

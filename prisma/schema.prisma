@@ -603,6 +603,7 @@ model Notification {
   content     String
   priority    String   @default("NORMAL") // "URGENT" | "NORMAL" | "LOW"
   readStatus  Boolean  @default(false)
+  data        Json?    @db.JsonB // e.g. { "route": "/modules/shared/leave-approvals" } — deep-link target for tap-to-open
   createdAt   DateTime @default(now())
 
   @@map("notifications")

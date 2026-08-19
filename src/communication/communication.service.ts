@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import twilio from 'twilio';
 import sgMail from '@sendgrid/mail';
 
@@ -11,7 +12,10 @@ export class CommunicationService {
   private twilioFromNumber: string | null = null;
   private sendgridFromEmail: string | null = null;
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+  ) {
     const {
       TWILIO_ACCOUNT_SID,
       TWILIO_AUTH_TOKEN,
@@ -84,6 +88,34 @@ export class CommunicationService {
     }
   }
 
+  /** Sends a real push (via Expo) and writes the in-app Notification row with a
+   * deep-link `route` in `data`, so both the push tap and the in-app list can
+   * navigate straight to the relevant mobile screen. */
+  private async notifyPortalAccount(
+    portalAccount: { id: string; referenceId: string; userType: string },
+    title: string,
+    content: string,
+    priority: 'URGENT' | 'NORMAL' | 'LOW',
+    route: string,
+  ) {
+    await this.prisma.notification.create({
+      data: {
+        recipientId: portalAccount.id,
+        type: 'PUSH',
+        title,
+        content,
+        priority,
+        data: { route },
+      },
+    });
+
+    const tokens = await this.notificationsService.getTokensForUsers(
+      [portalAccount.referenceId],
+      portalAccount.userType,
+    );
+    await this.notificationsService.sendPushNotifications(tokens, title, content, { route });
+  }
+
   // ---------------------------------------------------------
   // BUSINESS LOGIC TRIGGERS
   // ---------------------------------------------------------
@@ -110,15 +142,13 @@ export class CommunicationService {
         where: { referenceId: parent.id },
       });
       if (portalAccount) {
-        await this.prisma.notification.create({
-          data: {
-            recipientId: portalAccount.id,
-            type: 'PUSH',
-            title: 'Absence Alert',
-            content: msg,
-            priority: 'URGENT',
-          },
-        });
+        await this.notifyPortalAccount(
+          portalAccount,
+          'Absence Alert',
+          msg,
+          'URGENT',
+          '/modules/student/attendance',
+        );
       }
     }
   }
@@ -143,15 +173,13 @@ export class CommunicationService {
         where: { referenceId: parent.id },
       });
       if (portalAccount) {
-        await this.prisma.notification.create({
-          data: {
-            recipientId: portalAccount.id,
-            type: 'PUSH',
-            title: 'Fee Reminder',
-            content: msg,
-            priority: 'NORMAL',
-          },
-        });
+        await this.notifyPortalAccount(
+          portalAccount,
+          'Fee Reminder',
+          msg,
+          'NORMAL',
+          '/modules/student/fees',
+        );
       }
     }
   }
@@ -176,20 +204,23 @@ export class CommunicationService {
         where: { referenceId: parent.id },
       });
       if (portalAccount) {
-        await this.prisma.notification.create({
-          data: {
-            recipientId: portalAccount.id,
-            type: 'PUSH',
-            title: 'New Report Card',
-            content: msg,
-            priority: 'NORMAL',
-          },
-        });
+        await this.notifyPortalAccount(
+          portalAccount,
+          'New Report Card',
+          msg,
+          'NORMAL',
+          '/modules/student/grades',
+        );
       }
     }
   }
 
-  async sendCustomAlert(studentId: string, title: string, body: string) {
+  async sendCustomAlert(
+    studentId: string,
+    title: string,
+    body: string,
+    route = '/modules/shared/notifications',
+  ) {
     const student = await this.prisma.student.findUnique({
       where: { id: studentId },
       include: { parents: { include: { parent: true } } },
@@ -205,15 +236,7 @@ export class CommunicationService {
         where: { referenceId: parent.id },
       });
       if (portalAccount) {
-        await this.prisma.notification.create({
-          data: {
-            recipientId: portalAccount.id,
-            type: 'PUSH',
-            title: title,
-            content: body,
-            priority: 'NORMAL',
-          },
-        });
+        await this.notifyPortalAccount(portalAccount, title, body, 'NORMAL', route);
       }
     }
   }
@@ -265,15 +288,13 @@ export class CommunicationService {
       where: { referenceId: reporterId, userType },
     });
     if (portalAccount) {
-      await this.prisma.notification.create({
-        data: {
-          recipientId: portalAccount.id,
-          type: 'PUSH',
-          title: 'Grievance Resolved',
-          content: msg,
-          priority: 'NORMAL',
-        },
-      });
+      await this.notifyPortalAccount(
+        portalAccount,
+        'Grievance Resolved',
+        msg,
+        'NORMAL',
+        '/modules/shared/grievances',
+      );
     }
   }
 

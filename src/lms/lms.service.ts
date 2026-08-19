@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CommunicationService } from '../communication/communication.service';
 
 @Injectable()
 export class LmsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly communicationService: CommunicationService,
+  ) {}
 
   // --- COURSES ---
   async createCourse(data: any) {
@@ -100,7 +104,35 @@ export class LmsService {
 
   // --- PHASE 2: ASSESSMENTS & GRADEBOOK ---
   async createAssignment(teacherId: string, data: any) {
-    return this.prisma.lMSAssignment.create({ data: { ...data, teacherId } });
+    const assignment = await this.prisma.lMSAssignment.create({
+      data: { ...data, teacherId },
+    });
+
+    if (assignment.sectionId) {
+      this.notifyAssignmentCreated(assignment.sectionId, assignment.title).catch(
+        (err) => console.error('Failed to notify homework created', err),
+      );
+    }
+
+    return assignment;
+  }
+
+  /** Notifies students/families in the assignment's section — previously
+   * creating homework triggered no notification of any kind. */
+  private async notifyAssignmentCreated(sectionId: string, title: string) {
+    const enrollments = await this.prisma.studentEnrollment.findMany({
+      where: { sectionId },
+      select: { studentId: true },
+    });
+    const msg = `New homework "${title}" has been posted.`;
+    for (const { studentId } of enrollments) {
+      await this.communicationService.sendCustomAlert(
+        studentId,
+        'New Homework Assigned',
+        msg,
+        '/modules/student/homework',
+      );
+    }
   }
 
   async getAssignments(

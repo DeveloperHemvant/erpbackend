@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { EmsService } from './ems.service';
 import { EmsRepository } from './repositories/ems.repository';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CommunicationService } from '../communication/communication.service';
 import { OwnershipService } from '../auth/ownership.service';
 import { DocumentRenderingService } from '../documents/document-rendering.service';
 import { StorageService } from '../storage/storage.service';
@@ -33,6 +34,7 @@ describe('EmsService — hall tickets', () => {
         EmsService,
         { provide: EmsRepository, useValue: mockRepository },
         { provide: NotificationsService, useValue: {} },
+        { provide: CommunicationService, useValue: {} },
         { provide: OwnershipService, useValue: {} },
         { provide: DocumentRenderingService, useValue: mockRenderer },
         { provide: StorageService, useValue: mockStorage },

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { EmsRepository } from './repositories/ems.repository';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CommunicationService } from '../communication/communication.service';
 import { OwnershipService } from '../auth/ownership.service';
 import { AuthenticatedUser } from '../auth/current-user.decorator';
 import { DocumentRenderingService } from '../documents/document-rendering.service';
@@ -38,6 +39,7 @@ export class EmsService {
   constructor(
     private readonly emsRepository: EmsRepository,
     private readonly notificationsService: NotificationsService,
+    private readonly communicationService: CommunicationService,
     private readonly ownershipService: OwnershipService,
     private readonly renderer: DocumentRenderingService,
     private readonly storage: StorageService,
@@ -88,7 +90,7 @@ export class EmsService {
 
   // --- Exam Schedules ---
   async createSchedule(data: CreateExamScheduleDto) {
-    return this.emsRepository.createSchedule({
+    const schedule = await this.emsRepository.createSchedule({
       sessionId: data.sessionId,
       templateId: data.templateId,
       subjectId: data.subjectId,
@@ -96,6 +98,48 @@ export class EmsService {
       startTime: new Date(`${data.date}T${data.startTime}`),
       endTime: new Date(`${data.date}T${data.endTime}`),
     });
+
+    this.notifyScheduleCreated(schedule).catch((err) =>
+      console.error('Failed to notify exam schedule created', err),
+    );
+
+    return schedule;
+  }
+
+  /** Notifies the subject's assigned teacher(s) and enrolled students/families
+   * when a new exam is scheduled — previously this fired no notification of
+   * any kind. Recipients are resolved via TeacherAssignment (schedule only
+   * carries sessionId+subjectId, no direct class/section). */
+  private async notifyScheduleCreated(schedule: {
+    id: string;
+    sessionId: string;
+    subjectId: string;
+    date: Date;
+    subject: { name: string };
+    template: { name: string };
+  }) {
+    const { staffIds, studentIds } =
+      await this.emsRepository.findRecipientsForSubjectSchedule(
+        schedule.sessionId,
+        schedule.subjectId,
+      );
+    const dateStr = schedule.date.toISOString().split('T')[0];
+    const title = 'New Exam Scheduled';
+    const msg = `${schedule.template.name} for ${schedule.subject.name} has been scheduled on ${dateStr}.`;
+
+    if (staffIds.length) {
+      const tokens = await this.notificationsService.getTokensForUsers(
+        staffIds,
+        'STAFF',
+      );
+      await this.notificationsService.sendPushNotifications(tokens, title, msg, {
+        route: '/modules/staff/exams-desk',
+      });
+    }
+
+    for (const studentId of studentIds) {
+      await this.communicationService.sendCustomAlert(studentId, title, msg);
+    }
   }
 
   async getSchedules() {

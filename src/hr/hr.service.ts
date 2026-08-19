@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { DocumentRenderingService } from '../documents/document-rendering.service';
 import { StorageService } from '../storage/storage.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class HrService {
@@ -13,6 +14,7 @@ export class HrService {
     private prisma: PrismaService,
     private readonly renderer: DocumentRenderingService,
     private readonly storage: StorageService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ---------------------------------------------------------
@@ -103,10 +105,25 @@ export class HrService {
       }
     }
 
-    return this.prisma.leaveApplication.update({
+    const updated = await this.prisma.leaveApplication.update({
       where: { id },
       data: { status, resolvedById, resolvedAt: new Date() },
     });
+
+    const tokens = await this.notificationsService.getTokensForUsers(
+      [leave.staffId],
+      'STAFF',
+    );
+    this.notificationsService
+      .sendPushNotifications(
+        tokens,
+        `Leave ${status}`,
+        `Your ${leave.leaveType} leave request has been ${status.toLowerCase()}.`,
+        { route: '/modules/shared/my-leave' },
+      )
+      .catch((err) => console.error('Failed to notify leave decision', err));
+
+    return updated;
   }
 
   // ---------------------------------------------------------

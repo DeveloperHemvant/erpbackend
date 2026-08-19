@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CommunicationService } from './communication.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 describe('CommunicationService', () => {
   let service: CommunicationService;
@@ -10,19 +11,27 @@ describe('CommunicationService', () => {
       findFirst: jest.fn(),
     },
     notification: {
+      create: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
     },
   };
 
+  const mockNotificationsService = {
+    getTokensForUsers: jest.fn().mockResolvedValue([]),
+    sendPushNotifications: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockNotificationsService.getTokensForUsers.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CommunicationService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 
