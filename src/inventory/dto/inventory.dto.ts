@@ -22,9 +22,12 @@ export class CreateAssetDto {
   @IsNotEmpty()
   categoryId: string;
 
+  // Optional for the same reason as CreatePurchaseRequisitionDto.campusId
+  // below: campus-fixed staff never need to send this, the controller fills
+  // it in from the authenticated user's own campusId.
   @IsUUID()
-  @IsNotEmpty()
-  campusId: string;
+  @IsOptional()
+  campusId?: string;
 
   @IsString()
   @IsNotEmpty()

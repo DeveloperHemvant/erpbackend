@@ -246,6 +246,41 @@ export class StudentsService {
     return student;
   }
 
+  async getAttendanceSummary(id: string, tenantContext: TenantContext) {
+    const grouped = await this.studentRepository.summaryAttendanceByStudentId(
+      id,
+      tenantContext,
+    );
+    const summary: Record<string, number> = {
+      Present: 0,
+      Absent: 0,
+      Late: 0,
+      Leave: 0,
+    };
+    let total = 0;
+    for (const row of grouped) {
+      summary[row.status] = row._count._all;
+      total += row._count._all;
+    }
+    return { studentId: id, total, byStatus: summary };
+  }
+
+  async getFees(id: string, tenantContext: TenantContext) {
+    const invoices = await this.studentRepository.findFeesByStudentId(
+      id,
+      tenantContext,
+    );
+    const totalDue = invoices
+      .filter((inv) => inv.status !== 'Paid')
+      .reduce((sum, inv) => sum + Number(inv.totalAmount ?? inv.amount), 0);
+    const totalPaid = invoices.reduce(
+      (sum, inv) =>
+        sum + inv.payments.reduce((s, p) => s + Number(p.amountPaid), 0),
+      0,
+    );
+    return { studentId: id, totalDue, totalPaid, invoices };
+  }
+
   async updateParentCredentials(
     parentId: string,
     dto: UpdateParentCredentialsDto,

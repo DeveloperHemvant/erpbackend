@@ -6,6 +6,8 @@ import {
   IsUUID,
   IsOptional,
   IsIn,
+  IsNumber,
+  Min,
 } from 'class-validator';
 
 export class CreateStaffDto {
@@ -76,4 +78,35 @@ export class CreateStaffDto {
   @IsUUID()
   @IsOptional()
   campusId?: string;
+
+  @ApiProperty({
+    description:
+      'Starting basic monthly salary. When provided, a PayrollStructure is created for this staff member atomically with the record itself, so they are picked up by the next payroll run. Omitted staff are not included in payroll until one is set later via PUT /hr/payroll-structure/:staffId.',
+    example: 45000,
+    required: false,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  basicSalary?: number;
+
+  @ApiProperty({
+    description: 'Monthly allowances on top of the basic salary.',
+    example: 5000,
+    required: false,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  allowances?: number;
+
+  @ApiProperty({
+    description: 'Fixed standard monthly deductions (before any loss-of-pay calculation).',
+    example: 1500,
+    required: false,
+  })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  deductions?: number;
 }

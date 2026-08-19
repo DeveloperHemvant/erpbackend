@@ -110,6 +110,58 @@ export class HrService {
   }
 
   // ---------------------------------------------------------
+  // PAYROLL STRUCTURE (the base salary a staff member is on — separate
+  // from the monthly payslips runPayroll() below generates from it)
+  // ---------------------------------------------------------
+  async getPayrollStructure(staffId: string) {
+    return this.prisma.payrollStructure.findUnique({ where: { staffId } });
+  }
+
+  async upsertPayrollStructure(
+    staffId: string,
+    data: { basicSalary: number; allowances?: number; deductions?: number },
+  ) {
+    return this.prisma.payrollStructure.upsert({
+      where: { staffId },
+      create: {
+        staffId,
+        basicSalary: data.basicSalary,
+        allowances: data.allowances ?? 0,
+        deductions: data.deductions ?? 0,
+      },
+      update: {
+        basicSalary: data.basicSalary,
+        allowances: data.allowances ?? 0,
+        deductions: data.deductions ?? 0,
+      },
+    });
+  }
+
+  /** Every active staff member with their current structure (or null if
+   * never set) — the source for the HR-wide "who's missing a salary"
+   * view, so gaps are caught before a payroll run silently skips them. */
+  async listPayrollStructures() {
+    const staff = await this.prisma.staff.findMany({
+      where: { status: 'Active' },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: { select: { name: true } },
+        payrollStructure: true,
+      },
+      orderBy: { fullName: 'asc' },
+    });
+    return staff.map((s) => ({
+      staffId: s.id,
+      fullName: s.fullName,
+      email: s.email,
+      role: s.role?.name,
+      payrollStructure: s.payrollStructure,
+    }));
+  }
+
+  // ---------------------------------------------------------
   // PAYROLL PROCESSING
   // ---------------------------------------------------------
   async runPayroll(month: number, year: number) {

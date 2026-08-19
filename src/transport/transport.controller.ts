@@ -212,6 +212,11 @@ export class TransportController {
     return this.transportService.logTripLocation(id, data);
   }
 
+  @Get('trips/:id/logs')
+  getTripLogs(@Param('id') id: string) {
+    return this.transportService.getTripLogs(id);
+  }
+
   // --- ATTENDANCE ---
   @Post('attendance')
   @RequirePermissions('MANAGE_TRANSPORT')

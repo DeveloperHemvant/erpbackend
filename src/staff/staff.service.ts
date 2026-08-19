@@ -80,25 +80,46 @@ export class StaffService {
       campusId = ownCampusId;
     }
 
-    const staff = await this.prisma.staff.create({
-      data: {
-        email: createStaffDto.email,
-        fullName: createStaffDto.fullName,
-        passwordHash,
-        roleId: createStaffDto.roleId,
-        status: createStaffDto.status || 'Active',
-        details: createStaffDto.details || undefined,
-        createdBy: createStaffDto.createdBy || 'SYSTEM',
-        campusId,
-      },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        status: true,
-        role: { select: { id: true, name: true } },
-        createdAt: true,
-      },
+    const staff = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.staff.create({
+        data: {
+          email: createStaffDto.email,
+          fullName: createStaffDto.fullName,
+          passwordHash,
+          roleId: createStaffDto.roleId,
+          status: createStaffDto.status || 'Active',
+          details: createStaffDto.details || undefined,
+          createdBy: createStaffDto.createdBy || 'SYSTEM',
+          campusId,
+        },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          status: true,
+          role: { select: { id: true, name: true } },
+          createdAt: true,
+        },
+      });
+
+      // Salary is optional at the DTO level (existing callers, imports, and
+      // tests that don't send it must keep working), but when the caller
+      // does provide a starting basicSalary we create the PayrollStructure
+      // in the same transaction as the staff row itself — otherwise this
+      // person is silently invisible to every future payroll run with no
+      // error anywhere, which was the exact gap being fixed here.
+      if (createStaffDto.basicSalary != null) {
+        await tx.payrollStructure.create({
+          data: {
+            staffId: created.id,
+            basicSalary: createStaffDto.basicSalary,
+            allowances: createStaffDto.allowances ?? 0,
+            deductions: createStaffDto.deductions ?? 0,
+          },
+        });
+      }
+
+      return created;
     });
 
     return { ...staff, generatedPassword };
@@ -410,6 +431,12 @@ export class StaffService {
     }
   }
 
+  // Mirrors HrService.applyLeave's balance check (backend/src/hr/hr.service.ts)
+  // — this endpoint and /hr/leave-applications both create the same
+  // LeaveApplication row from two different mobile screens (bottom-tab
+  // Attendance vs. My Leave), and previously only the HR path enforced a
+  // balance check, letting a staff member bypass it entirely by using this
+  // one instead. Same rule now applies regardless of which screen is used.
   async applyLeave(
     staffId: string,
     data: {
@@ -421,6 +448,15 @@ export class StaffService {
     tenantContext: TenantContext,
   ) {
     await this.assertStaffAccessibleById(staffId, tenantContext);
+
+    const currentYear = new Date(data.startDate).getFullYear();
+    const balance = await this.prisma.leaveBalance.findFirst({
+      where: { staffId, leaveType: data.leaveType, year: currentYear },
+    });
+    if (!balance || balance.used >= balance.totalAllowed) {
+      throw new BadRequestException('Insufficient leave balance for this type.');
+    }
+
     return this.prisma.leaveApplication.create({
       data: {
         staffId,

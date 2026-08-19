@@ -5,6 +5,7 @@ import {
   IsUUID,
   IsIn,
   IsInt,
+  IsNumber,
   Min,
   Max,
 } from 'class-validator';
@@ -72,4 +73,20 @@ export class LogPerformanceReviewDto {
   @IsString()
   @IsOptional()
   comments?: string;
+}
+
+export class UpsertPayrollStructureDto {
+  @IsNumber()
+  @Min(0)
+  basicSalary: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  allowances?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  deductions?: number;
 }

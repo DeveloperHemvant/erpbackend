@@ -179,12 +179,14 @@ export class AcmsService {
 
     const calendar = [
       ...holidays.map((h) => ({
+        id: h.id,
         type: 'HOLIDAY',
         title: h.name,
         date: h.date,
         details: h.type,
       })),
       ...events.map((e) => ({
+        id: e.id,
         type: 'EVENT',
         title: e.title,
         date: e.startDate,
@@ -192,12 +194,14 @@ export class AcmsService {
         imageUrl: e.imageUrl,
       })),
       ...exams.map((e) => ({
+        id: e.id,
         type: 'EXAM',
         title: `${e.subject?.name || 'Exam'}`,
         date: e.date,
         details: 'Academic Exam',
       })),
       ...homework.map((h) => ({
+        id: h.id,
         type: 'HOMEWORK',
         title: h.title,
         date: h.dueDate as Date,

@@ -45,8 +45,17 @@ export class InventoryController {
 
   @Post('assets')
   @ApiOperation({ summary: 'Add Asset' })
-  async addAsset(@Body() data: CreateAssetDto) {
-    return this.inventoryService.addAsset(data);
+  async addAsset(
+    @Body() data: CreateAssetDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const campusId = data.campusId || user.campusId;
+    if (!campusId) {
+      throw new BadRequestException(
+        'campusId is required: select a campus before adding an asset.',
+      );
+    }
+    return this.inventoryService.addAsset({ ...data, campusId });
   }
 
   @Get('assets')

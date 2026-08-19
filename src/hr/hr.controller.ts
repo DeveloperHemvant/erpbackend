@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
   Param,
   ParseUUIDPipe,
@@ -17,6 +18,7 @@ import {
   ProcessLeaveDto,
   RunPayrollDto,
   LogPerformanceReviewDto,
+  UpsertPayrollStructureDto,
 } from './dto/hr.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireSelfOrPermission } from '../auth/self-or-permission.decorator';
@@ -95,6 +97,43 @@ export class HrController {
   @ApiOperation({ summary: 'Run Payroll' })
   async runPayroll(@Body() data: RunPayrollDto) {
     return this.hrService.runPayroll(data.month, data.year);
+  }
+
+  @Get('payroll-structures')
+  @RequirePermissions('MANAGE_HR')
+  @ApiOperation({
+    summary:
+      'List every active staff member with their current salary structure (or null if never set) — the gap-finder view so HR can spot who is missing one before a payroll run silently skips them',
+  })
+  async listPayrollStructures() {
+    return this.hrService.listPayrollStructures();
+  }
+
+  @Get('payroll-structure/:staffId')
+  @UseGuards(SelfOrPermissionGuard)
+  @RequireSelfOrPermission('staffId', 'MANAGE_HR')
+  @RequirePermissions()
+  @ApiOperation({
+    summary:
+      "Get a staff member's salary structure — their own, or any for HR/admins",
+  })
+  @ApiParam({ name: 'staffId', format: 'uuid' })
+  async getPayrollStructure(@Param('staffId', ParseUUIDPipe) staffId: string) {
+    return this.hrService.getPayrollStructure(staffId);
+  }
+
+  @Put('payroll-structure/:staffId')
+  @RequirePermissions('MANAGE_HR')
+  @ApiOperation({
+    summary:
+      "Set or update a staff member's salary structure (basic/allowances/deductions)",
+  })
+  @ApiParam({ name: 'staffId', format: 'uuid' })
+  async upsertPayrollStructure(
+    @Param('staffId', ParseUUIDPipe) staffId: string,
+    @Body() data: UpsertPayrollStructureDto,
+  ) {
+    return this.hrService.upsertPayrollStructure(staffId, data);
   }
 
   @Get('payslips')

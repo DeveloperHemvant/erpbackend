@@ -349,6 +349,16 @@ export class TransportService {
     });
   }
 
+  // Lets the mobile Boarding screen reconstruct "which stops has this trip
+  // already reached" on load, instead of only tracking it in local
+  // component state that resets on every remount/refresh.
+  async getTripLogs(tripId: string) {
+    return this.prisma.transportTripLog.findMany({
+      where: { tripId },
+      orderBy: { timestamp: 'asc' },
+    });
+  }
+
   async logTripLocation(tripId: string, data: any) {
     const log = await this.prisma.transportTripLog.create({
       data: { tripId, ...data },

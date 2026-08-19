@@ -31,10 +31,16 @@ describe('StaffService — Campus Isolation Phase 3, Milestone 5', () => {
       update: jest.fn(),
     },
     leaveApplication: { create: jest.fn() },
+    payrollStructure: { create: jest.fn() },
     teacherAssignment: { deleteMany: jest.fn(), createMany: jest.fn() },
     academicSession: { findFirst: jest.fn() },
     transportVehicleStaff: { deleteMany: jest.fn(), create: jest.fn() },
     transportTrip: { deleteMany: jest.fn(), create: jest.fn() },
+    // create() wraps the staff row + optional PayrollStructure in a single
+    // transaction (see staff.service.ts) — the mock transaction client is
+    // just mockPrisma itself, since every model mock lives at this same
+    // top level and the callback only ever calls tx.<model>.<method>.
+    $transaction: jest.fn((callback: any) => callback(mockPrisma)),
   };
 
   const mockStorage = { uploadFile: jest.fn() };

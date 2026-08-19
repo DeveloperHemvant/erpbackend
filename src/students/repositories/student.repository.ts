@@ -142,6 +142,41 @@ export class StudentRepository {
     });
   }
 
+  // Same shape as AttendanceRepository.summaryBySection (mirrors its
+  // enrollment-relation campus-scoping), keyed by studentId instead of
+  // sectionId — feeds the admin-scoped per-student attendance tab that
+  // previously had no backend support anywhere (the only prior per-student
+  // route was portal-scoped, locked to self-access).
+  summaryAttendanceByStudentId(studentId: string, tenantContext: TenantContext) {
+    return this.prisma.attendanceRecord.groupBy({
+      by: ['status'],
+      where: {
+        enrollment: {
+          studentId,
+          ...(tenantContext.canAccessAllCampuses
+            ? {}
+            : { section: { class: { campusId: requireCampusId(tenantContext) } } }),
+        },
+      },
+      _count: { _all: true },
+    });
+  }
+
+  findFeesByStudentId(studentId: string, tenantContext: TenantContext) {
+    return this.prisma.feeInvoice.findMany({
+      where: {
+        enrollment: {
+          studentId,
+          ...(tenantContext.canAccessAllCampuses
+            ? {}
+            : { campusId: requireCampusId(tenantContext) }),
+        },
+      },
+      include: { payments: true },
+      orderBy: { dueDate: 'desc' },
+    });
+  }
+
   findActiveAcademicSession() {
     return this.prisma.academicSession.findFirst({ where: { isActive: true } });
   }

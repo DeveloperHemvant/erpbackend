@@ -113,6 +113,40 @@ export class StudentsController {
     return this.studentsService.getStudentProfile(id, tenantContext);
   }
 
+  @Get('students/:id/attendance-summary')
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission('VIEW_STUDENTS', 'MANAGE_TRANSPORT')
+  @RequirePermissions()
+  @UseInterceptors(TenantContextInterceptor)
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOperation({
+    summary:
+      "Admin-scoped attendance count-by-status summary for one student (Student 360's Attendance tab)",
+  })
+  getStudentAttendanceSummary(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.studentsService.getAttendanceSummary(id, tenantContext);
+  }
+
+  @Get('students/:id/fees')
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission('VIEW_STUDENTS', 'MANAGE_TRANSPORT')
+  @RequirePermissions()
+  @UseInterceptors(TenantContextInterceptor)
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOperation({
+    summary:
+      "Admin-scoped fee invoices/payments summary for one student (Student 360's Fees tab)",
+  })
+  getStudentFees(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentTenant() tenantContext: TenantContext,
+  ) {
+    return this.studentsService.getFees(id, tenantContext);
+  }
+
   @Patch('parents/:id/credentials')
   @RequirePermissions('MANAGE_USERS')
   @ApiParam({ name: 'id', format: 'uuid' })
