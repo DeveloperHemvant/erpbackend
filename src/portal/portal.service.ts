@@ -505,34 +505,40 @@ export class PortalService {
     );
   }
 
-  async getClassTeacherDesk(staffId: string, sectionId: string) {
+  async getClassTeacherDesk(staffId: string, sectionId: string, date?: string) {
     const todayStr = new Date().toISOString().split('T')[0];
+    const targetDate = date || todayStr;
+    const isToday = targetDate === todayStr;
 
     // Get all students enrolled in this section
     const enrollments = await this.prisma.studentEnrollment.findMany({
       where: { sectionId },
       include: {
         student: true,
-        // Include today's attendance record
+        // Attendance record for the requested date (defaults to today)
         attendance: {
-          where: { date: todayStr },
+          where: { date: targetDate },
         },
-        // Check for today's leaves
-        studentLeaveApplications: {
-          where: {
-            startDate: { lte: new Date() },
-            endDate: { gte: new Date() },
-            status: 'Approved',
-          },
-        },
-        // Check transport attendance for today
-        TransportAttendance: {
-          where: {
-            timestamp: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
-          },
-          orderBy: { timestamp: 'desc' },
-          take: 1,
-        },
+        // "Suggested status" (leave/transport) only makes sense when marking
+        // today's attendance — skip it entirely when reviewing a past date.
+        studentLeaveApplications: isToday
+          ? {
+              where: {
+                startDate: { lte: new Date() },
+                endDate: { gte: new Date() },
+                status: 'Approved',
+              },
+            }
+          : false,
+        TransportAttendance: isToday
+          ? {
+              where: {
+                timestamp: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+              },
+              orderBy: { timestamp: 'desc' },
+              take: 1,
+            }
+          : false,
       },
       orderBy: { student: { fullName: 'asc' } },
     });
@@ -541,7 +547,7 @@ export class PortalService {
       let suggestedStatus = 'Present'; // Default
 
       // If marked absent in transport
-      if (enr.TransportAttendance.length > 0) {
+      if (enr.TransportAttendance && enr.TransportAttendance.length > 0) {
         if (enr.TransportAttendance[0].status === 'Absent') {
           suggestedStatus = 'Absent';
         } else if (
@@ -553,7 +559,7 @@ export class PortalService {
       }
 
       // If approved leave
-      if (enr.studentLeaveApplications.length > 0) {
+      if (enr.studentLeaveApplications && enr.studentLeaveApplications.length > 0) {
         suggestedStatus = 'Leave';
       }
 

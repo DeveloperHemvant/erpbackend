@@ -204,8 +204,9 @@ export class PortalController {
   getClassTeacherDesk(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('sectionId', ParseUUIDPipe) sectionId: string,
+    @Query('date') date?: string,
   ) {
-    return this.portalService.getClassTeacherDesk(id, sectionId);
+    return this.portalService.getClassTeacherDesk(id, sectionId, date);
   }
 
   @Post('staff/:id/class-attendance')

@@ -32,6 +32,7 @@ export class TeacherWorkloadDto {
 }
 
 export class PromotionReadinessByClassDto {
+  @ApiProperty({ example: 'clx1234567890' }) classId: string;
   @ApiProperty({ example: 'Grade 5' }) grade: string;
   @ApiProperty({ example: 42 }) totalStudents: number;
   @ApiProperty({ example: 38 }) passing: number;

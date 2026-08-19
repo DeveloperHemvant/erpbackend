@@ -1,8 +1,10 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JobsService } from './jobs.service';
 import { GenerateFeesDto } from './dto/generate-fees.dto';
 import { RequirePermissions } from '../auth/permissions.decorator';
+import { RequireAnyPermission } from '../auth/any-permission.decorator';
+import { AnyPermissionGuard } from '../auth/any-permission.guard';
 
 // MANAGE_ROLES reuses the same permission audit-log.controller.ts and
 // monitoring.controller.ts use (matching web-app's "reqModule: roles"
@@ -14,7 +16,14 @@ import { RequirePermissions } from '../auth/permissions.decorator';
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
+  // Triggered from the Fees & Finance page (bulk invoice generation), not
+  // the admin-only Background Tasks page -- Accountant/finance staff need
+  // this specifically, unlike the other routes below which stay
+  // MANAGE_ROLES-only (job status/retry/monitoring is genuinely admin-only).
   @Post('fee-generation')
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission('MANAGE_FEES', 'MANAGE_ROLES')
+  @RequirePermissions()
   @ApiOperation({ summary: 'Trigger bulk fee generation job' })
   async generateFees(@Body() body: GenerateFeesDto) {
     return this.jobsService.generateBulkInvoices(

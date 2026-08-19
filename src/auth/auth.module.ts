@@ -28,7 +28,7 @@ const jwtSecret = requireJwtSecret();
     PassportModule,
     JwtModule.register({
       secret: jwtSecret,
-      signOptions: { expiresIn: '1d' },
+      signOptions: { expiresIn: '1h' },
     }),
   ],
   controllers: [AuthController],

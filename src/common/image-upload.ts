@@ -6,15 +6,15 @@ import * as fs from 'fs';
 
 const UPLOAD_ROOT = 'uploads';
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+const DOCUMENT_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
 
-/**
- * Real disk-backed multer config for a given subfolder (e.g. "events",
- * "announcements") — replaces the mock-URL pattern used elsewhere in this
- * codebase (staff.controller.ts, attachments.service.ts) with an actual
- * bytes-on-disk store, served back via app.useStaticAssets() in main.ts.
- */
-export function imageUploadOptions(subfolder: string) {
+function makeUploadOptions(
+  subfolder: string,
+  allowedExtensions: string[],
+  maxSizeBytes: number,
+) {
   const uploadDir = join(process.cwd(), UPLOAD_ROOT, subfolder);
 
   if (!fs.existsSync(uploadDir)) {
@@ -40,10 +40,10 @@ export function imageUploadOptions(subfolder: string) {
       cb: (error: Error | null, accept: boolean) => void,
     ) => {
       const ext = extname(file.originalname).toLowerCase();
-      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      if (!allowedExtensions.includes(ext)) {
         cb(
           new BadRequestException(
-            `Unsupported image type "${ext}". Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`,
+            `Unsupported file type "${ext}". Allowed: ${allowedExtensions.join(', ')}`,
           ),
           false,
         );
@@ -51,8 +51,24 @@ export function imageUploadOptions(subfolder: string) {
       }
       cb(null, true);
     },
-    limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
+    limits: { fileSize: maxSizeBytes },
   };
+}
+
+/**
+ * Real disk-backed multer config for a given subfolder (e.g. "events",
+ * "announcements") — replaces the mock-URL pattern used elsewhere in this
+ * codebase (staff.controller.ts, attachments.service.ts) with an actual
+ * bytes-on-disk store, served back via app.useStaticAssets() in main.ts.
+ */
+export function imageUploadOptions(subfolder: string) {
+  return makeUploadOptions(subfolder, IMAGE_EXTENSIONS, MAX_IMAGE_SIZE_BYTES);
+}
+
+/** Same as imageUploadOptions but also allows PDFs — for content uploads
+ * (e.g. LMS resources) where course material is often a PDF, not an image. */
+export function fileUploadOptions(subfolder: string) {
+  return makeUploadOptions(subfolder, DOCUMENT_EXTENSIONS, MAX_FILE_SIZE_BYTES);
 }
 
 export function imageUrlFor(subfolder: string, filename: string): string {

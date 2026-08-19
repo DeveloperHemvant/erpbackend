@@ -1,9 +1,10 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateMyProfileDto } from './dto/update-profile.dto';
 import { Public } from './public.decorator';
 import { RequirePermissions } from './permissions.decorator';
 import { CurrentUser } from './current-user.decorator';
@@ -39,5 +40,22 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.authService.changePassword(user.userId, dto);
+  }
+
+  @Get('me/profile')
+  @RequirePermissions()
+  @ApiOperation({ summary: "Get the current user's own profile settings" })
+  getMyProfile(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.getMyProfile(user.userId);
+  }
+
+  @Patch('me/profile')
+  @RequirePermissions()
+  @ApiOperation({ summary: "Update the current user's own profile settings" })
+  updateMyProfile(
+    @Body() dto: UpdateMyProfileDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.authService.updateMyProfile(user.userId, dto);
   }
 }

@@ -18,6 +18,7 @@ import {
   CreateAcademicTermDto,
   CreateHolidayDto,
   CreateWorkingDayDto,
+  UpdateWorkingDayDto,
   CreateAcmsEventDto,
   UpdateAcmsEventDto,
   CreateResourceBookingDto,
@@ -69,6 +70,14 @@ export class AcmsController {
   @Post('working-days')
   createWorkingDay(@Body() data: CreateWorkingDayDto) {
     return this.acmsService.createWorkingDay(data);
+  }
+
+  @Put('working-days/:id')
+  updateWorkingDay(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() data: UpdateWorkingDayDto,
+  ) {
+    return this.acmsService.updateWorkingDay(id, data);
   }
 
   @Get('events')

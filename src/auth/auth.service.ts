@@ -9,6 +9,7 @@ import * as bcrypt from 'bcrypt';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateMyProfileDto as UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class AuthService {
@@ -159,5 +160,54 @@ export class AuthService {
     }
 
     throw new NotFoundException('Account not found.');
+  }
+
+  // System Settings (web-app dashboard) is staff-only, so this only covers
+  // Staff — same identity-resolution note as changePassword above.
+  async getMyProfile(userId: string) {
+    const staff = await this.prisma.staff.findUnique({ where: { id: userId } });
+    if (!staff) throw new NotFoundException('Account not found.');
+    const details = (staff.details as Record<string, any>) || {};
+    return {
+      fullName: staff.fullName,
+      email: staff.email,
+      notificationPreferences: {
+        smsAlerts: details.notificationPreferences?.smsAlerts ?? true,
+        dailyDigest: details.notificationPreferences?.dailyDigest ?? true,
+      },
+    };
+  }
+
+  async updateMyProfile(userId: string, dto: UpdateProfileDto) {
+    const staff = await this.prisma.staff.findUnique({ where: { id: userId } });
+    if (!staff) throw new NotFoundException('Account not found.');
+
+    const details = (staff.details as Record<string, any>) || {};
+    const updated = await this.prisma.staff.update({
+      where: { id: userId },
+      data: {
+        ...(dto.fullName !== undefined && { fullName: dto.fullName }),
+        ...(dto.email !== undefined && { email: dto.email }),
+        ...(dto.notificationPreferences !== undefined && {
+          details: {
+            ...details,
+            notificationPreferences: {
+              ...details.notificationPreferences,
+              ...dto.notificationPreferences,
+            },
+          },
+        }),
+      },
+    });
+
+    const updatedDetails = (updated.details as Record<string, any>) || {};
+    return {
+      fullName: updated.fullName,
+      email: updated.email,
+      notificationPreferences: {
+        smsAlerts: updatedDetails.notificationPreferences?.smsAlerts ?? true,
+        dailyDigest: updatedDetails.notificationPreferences?.dailyDigest ?? true,
+      },
+    };
   }
 }

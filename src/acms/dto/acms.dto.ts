@@ -78,6 +78,16 @@ export class CreateWorkingDayDto {
   isHalfDay?: boolean;
 }
 
+export class UpdateWorkingDayDto {
+  @IsBoolean()
+  @IsOptional()
+  isWorkingDay?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isHalfDay?: boolean;
+}
+
 export class CreateAcmsEventDto {
   @IsUUID()
   @IsNotEmpty()

@@ -12,8 +12,8 @@ import {
 import { EmsService } from './ems.service';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireSelfAccess } from '../auth/self-access.decorator';
-import { RequireStudentAccess } from '../auth/student-access.decorator';
-import { StudentAccessGuard } from '../auth/student-access.guard';
+import { RequireStudentAccessOrPermission } from '../auth/student-access-or-permission.decorator';
+import { StudentAccessOrPermissionGuard } from '../auth/student-access-or-permission.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { OwnershipService } from '../auth/ownership.service';
@@ -379,16 +379,16 @@ export class EmsController {
 
   @Get('students/:studentId/exams')
   @RequirePermissions()
-  @UseGuards(StudentAccessGuard)
-  @RequireStudentAccess('studentId')
+  @UseGuards(StudentAccessOrPermissionGuard)
+  @RequireStudentAccessOrPermission('studentId', ['VIEW_STUDENTS', 'MANAGE_EXAMS'])
   getStudentExams(@Param('studentId') studentId: string) {
     return this.emsService.getStudentExams(studentId);
   }
 
   @Get('students/:studentId/results')
   @RequirePermissions()
-  @UseGuards(StudentAccessGuard)
-  @RequireStudentAccess('studentId')
+  @UseGuards(StudentAccessOrPermissionGuard)
+  @RequireStudentAccessOrPermission('studentId', ['VIEW_STUDENTS', 'MANAGE_EXAMS'])
   getStudentResults(@Param('studentId') studentId: string) {
     return this.emsService.getStudentResults(studentId);
   }

@@ -63,6 +63,15 @@ export class AcmsService {
     return this.prisma.aCMSWorkingDay.create({ data });
   }
 
+  async updateWorkingDay(
+    id: string,
+    data: { isWorkingDay?: boolean; isHalfDay?: boolean },
+  ) {
+    const existing = await this.prisma.aCMSWorkingDay.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Working day entry not found');
+    return this.prisma.aCMSWorkingDay.update({ where: { id }, data });
+  }
+
   // ==========================================
   // EVENTS (Phase 2)
   // ==========================================

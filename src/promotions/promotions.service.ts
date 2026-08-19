@@ -168,10 +168,17 @@ export class PromotionsService {
       });
     }
 
+    // When every class in this session has 0 remaining enrolled students,
+    // it isn't an empty/broken result — it means every student here was
+    // already promoted/graduated/repeated in a prior commit. Surface that
+    // explicitly so the UI can explain it instead of just showing zeros.
+    const alreadyPromoted = results.length > 0 && results.every((r) => r.totalStudents === 0);
+
     return {
       fromSessionId: dto.fromSessionId,
       passThreshold: threshold,
       classes: results,
+      alreadyPromoted,
     };
   }
 
@@ -184,7 +191,8 @@ export class PromotionsService {
       where: { grade, campusId, sessionId },
     });
     if (existing) return existing;
-    return this.prisma.class.create({
+
+    const created = await this.prisma.class.create({
       data: {
         grade,
         campusId,
@@ -193,6 +201,30 @@ export class PromotionsService {
       },
       include: { sections: true },
     });
+
+    // A brand-new class has no curriculum (ClassSubject) yet — without it,
+    // nothing downstream (Auto-Generate Timetable, homework/exam subject
+    // pickers) can work for this class. Subject curriculum is consistent
+    // per grade regardless of session/cohort (unlike teacher staffing,
+    // which genuinely changes year to year and stays a deliberate admin
+    // step), so reconstruct it from whatever other session already has a
+    // "grade" class with subjects configured — normally the source
+    // session's own seed data.
+    const referenceClass = await this.prisma.class.findFirst({
+      where: { grade, campusId, subjects: { some: {} } },
+      include: { subjects: true },
+    });
+    if (referenceClass && referenceClass.subjects.length > 0) {
+      await this.prisma.classSubject.createMany({
+        data: referenceClass.subjects.map((cs) => ({
+          classId: created.id,
+          subjectId: cs.subjectId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    return created;
   }
 
   async commit(dto: CommitPromotionDto) {

@@ -147,7 +147,21 @@ export class TimetableService {
       await this.timetableRepository.findTimetableByIdWithSession(timetableId);
     if (!timetable) throw new NotFoundException('Timetable not found');
 
-    // Clear existing periods
+    // Periods with a real substitution record can't be deleted (Postgres
+    // RESTRICT — see repository comment), so leave them alone entirely:
+    // skip clearing them, and skip regenerating anything that would land on
+    // the same section/day/slot as one, to avoid a duplicate/conflicting row.
+    const protectedPeriods =
+      await this.timetableRepository.findProtectedPeriodsByTimetable(
+        timetableId,
+      );
+    const protectedKeys = new Set(
+      protectedPeriods.map(
+        (p) => `${p.sectionId}|${p.dayOfWeek}|${p.startTime}`,
+      ),
+    );
+
+    // Clear existing periods (protected ones are excluded automatically)
     await this.timetableRepository.deletePeriodsByTimetable(timetableId);
 
     // Fetch required data
@@ -197,6 +211,10 @@ export class TimetableService {
         const isFirstPeriod = i === 0;
 
         for (const section of sections) {
+          if (protectedKeys.has(`${section.id}|${day}|${slot.startTime}`)) {
+            continue; // A substitution is already pinned to this exact slot
+          }
+
           const sectionAssignments = assignments.filter(
             (a) => a.sectionId === section.id,
           );

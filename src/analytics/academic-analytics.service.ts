@@ -97,6 +97,7 @@ export class AcademicAnalyticsService {
     });
 
     const byClass = preview.classes.map((c) => ({
+      classId: c.classId,
       grade: c.grade,
       totalStudents: c.totalStudents,
       passing: c.passing,

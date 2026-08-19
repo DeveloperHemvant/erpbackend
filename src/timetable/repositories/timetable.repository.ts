@@ -78,8 +78,21 @@ export class TimetableRepository {
     });
   }
 
+  // Periods with a real TeacherSubstitution record pointing at them can't be
+  // deleted (Postgres RESTRICT on teacher_substitutions.timetablePeriodId —
+  // deleting one would silently orphan a real "who covered whom" record).
+  // Re-running Auto-Generate must leave these alone rather than crash.
+  findProtectedPeriodsByTimetable(timetableId: string) {
+    return this.prisma.timetablePeriod.findMany({
+      where: { timetableId, substitutions: { some: {} } },
+      select: { id: true, sectionId: true, dayOfWeek: true, startTime: true },
+    });
+  }
+
   deletePeriodsByTimetable(timetableId: string) {
-    return this.prisma.timetablePeriod.deleteMany({ where: { timetableId } });
+    return this.prisma.timetablePeriod.deleteMany({
+      where: { timetableId, substitutions: { none: {} } },
+    });
   }
 
   findSectionsBySession(sessionId: string) {

@@ -7,13 +7,17 @@ import {
   Patch,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { LmsService } from './lms.service';
 import { RequirePermissions } from '../auth/permissions.decorator';
 import { RequireAnyPermission } from '../auth/any-permission.decorator';
 import { AnyPermissionGuard } from '../auth/any-permission.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
+import { fileUploadOptions, imageUrlFor } from '../common/image-upload';
 import {
   CreateCourseDto,
   UpdateCourseDto,
@@ -23,6 +27,7 @@ import {
   CreateTopicDto,
   CreateLessonDto,
   UploadResourceDto,
+  UploadResourceFileDto,
   CreateLmsAssignmentDto,
   CreateQuizDto,
   CreateLiveClassDto,
@@ -102,6 +107,25 @@ export class LmsController {
   @Post('resources')
   uploadResource(@Body() data: UploadResourceDto) {
     return this.lmsService.uploadResource(data);
+  }
+
+  // Real file upload (image or PDF) — the JSON route above only ever
+  // accepted a pre-hosted URL string, with no way to actually upload a file
+  // from web or mobile. Reuses the same disk-backed multer pattern already
+  // proven by ACMS event images, just with PDF added to the allowed types.
+  @Post('resources/upload')
+  @UseInterceptors(FileInterceptor('file', fileUploadOptions('lms-resources')))
+  uploadResourceFile(
+    @Body() data: UploadResourceFileDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.lmsService.uploadResource({
+      lessonId: data.lessonId,
+      title: data.title,
+      type: data.type,
+      url: imageUrlFor('lms-resources', file.filename),
+      sizeBytes: file.size,
+    });
   }
 
   @UseGuards(AnyPermissionGuard)

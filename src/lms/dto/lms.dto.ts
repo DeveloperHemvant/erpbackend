@@ -176,6 +176,20 @@ export class UploadResourceDto {
   uploadedBy?: string;
 }
 
+export class UploadResourceFileDto {
+  @IsUUID()
+  @IsOptional()
+  lessonId?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @IsString()
+  @IsNotEmpty()
+  type: string;
+}
+
 export class CreateLmsAssignmentDto {
   @IsUUID()
   @IsOptional()

@@ -154,8 +154,8 @@ describe('AcademicAnalyticsService', () => {
       expect(result.failing).toBe(7);
       expect(result.readinessRate).toBe(91); // round(68/75*100)
       expect(result.byClass).toEqual([
-        { grade: 'Grade 5', totalStudents: 40, passing: 38, failing: 2 },
-        { grade: 'Grade 6', totalStudents: 35, passing: 30, failing: 5 },
+        { classId: 'c1', grade: 'Grade 5', totalStudents: 40, passing: 38, failing: 2 },
+        { classId: 'c2', grade: 'Grade 6', totalStudents: 35, passing: 30, failing: 5 },
       ]);
     });
 

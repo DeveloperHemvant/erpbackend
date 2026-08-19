@@ -468,7 +468,7 @@ async function main() {
     { name: 'Transport Manager', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_TRANSPORT', 'MANAGE_TRANSPORT_FLEET', 'VIEW_REPORTS'] },
     { name: 'Driver', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_TRANSPORT', 'VIEW_REPORTS'] },
     { name: 'Conductor', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_TRANSPORT'] },
-    { name: 'Admin Staff', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_USERS', 'MANAGE_COMMUNICATION', 'VIEW_REPORTS', 'MANAGE_ADMISSIONS_PIPELINE', 'MANAGE_GRIEVANCES', 'MANAGE_DIARY', 'MANAGE_NEWS', 'MANAGE_LOST_FOUND', 'MANAGE_DOCUMENTS'] },
+    { name: 'Admin Staff', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_USERS', 'MANAGE_COMMUNICATION', 'VIEW_REPORTS', 'MANAGE_ADMISSIONS_PIPELINE', 'MANAGE_GRIEVANCES', 'MANAGE_DIARY', 'MANAGE_NEWS', 'MANAGE_LOST_FOUND', 'MANAGE_DOCUMENTS', 'MANAGE_HR'] },
     { name: 'Nurse', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_HEALTH_RECORDS', 'VIEW_REPORTS'] },
     { name: 'Reception', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_VISITORS', 'VIEW_REPORTS'] },
     { name: 'Security', permissions: ['VIEW_OWN_PROFILE', 'VIEW_OWN_SCHEDULE', 'MANAGE_VISITORS', 'VIEW_REPORTS'] },
@@ -607,6 +607,7 @@ async function main() {
     console.log('\n1b) Creating campus-restricted named accounts...');
     const namedStaffIdsThisCampus: string[] = [];
     let namedDriverIdThisCampus: string | null = null;
+    let namedTeacherIdThisCampus: string | null = null;
     for (const named of CAMPUS_SPECIFIC_NAMED_ROLES) {
       const email = `${named.slug}.${def.slug}@centralacademy.edu`;
       const account = await prisma.staff.create({
@@ -623,6 +624,7 @@ async function main() {
       namedAccounts.push({ role: named.role, fullName: account.fullName, email, password: STAFF_PASSWORD, campus: def.name });
       namedStaffIdsThisCampus.push(account.id);
       if (named.role === 'Driver') namedDriverIdThisCampus = account.id;
+      if (named.role === 'Teacher') namedTeacherIdThisCampus = account.id;
     }
 
     console.log('\n2) Creating classes, sections, and fee structures...');
@@ -728,6 +730,19 @@ async function main() {
           teacherPool[role.name].push(staffId);
         }
       }
+    }
+
+    // The named demo "Teacher" account (created in step 1b, above) was never
+    // part of this bulk-generated pool — every downstream consumer of
+    // teacherIds/teacherPool (class-teacher/subject TeacherAssignment,
+    // EMSInvigilator, EMSEvaluationRecord) sampled exclusively from bulk
+    // teachers, leaving the named account with zero assignments/duties in
+    // any session. Join it into the same pool so it participates like any
+    // other teacher, with no new seeding logic needed.
+    if (namedTeacherIdThisCampus) {
+      teacherIds.push(namedTeacherIdThisCampus);
+      if (!teacherPool['Teacher']) teacherPool['Teacher'] = [];
+      teacherPool['Teacher'].push(namedTeacherIdThisCampus);
     }
 
     await batchInsert('staff', prisma.staff, staffRecords);
@@ -944,11 +959,16 @@ async function main() {
       for (const childId of family.children) {
         parentStudentRows.push({ id: randomUUID(), parentId: family.parentId, studentId: childId, relationship: 'Parent' });
       }
-      portalRows.push({ username: `parent.${family.parentId}@centralacademy.edu`, passwordHash: parentHash, userType: 'PARENT', referenceId: family.parentId, status: 'Active' });
+      // id pre-generated (not left to the DB default) so notification-seeding
+      // below can set Notification.recipientId to the PortalAccount's own id
+      // — the FK the app actually queries by (see communication.service.ts's
+      // getNotifications: portalAccount lookup by referenceId, then
+      // notification lookup by recipientId = that account's id).
+      portalRows.push({ id: randomUUID(), username: `parent.${family.parentId}@centralacademy.edu`, passwordHash: parentHash, userType: 'PARENT', referenceId: family.parentId, status: 'Active' });
     }
 
     for (const student of studentRows) {
-      portalRows.push({ username: student.admissionNumber, passwordHash: parentHash, userType: 'STUDENT', referenceId: student.id, status: 'Active' });
+      portalRows.push({ id: randomUUID(), username: student.admissionNumber, passwordHash: parentHash, userType: 'STUDENT', referenceId: student.id, status: 'Active' });
     }
 
     await batchInsert('school_houses', prisma.schoolHouse, SCHOOL_HOUSES.map((h) => ({ id: h.id, name: h.name, campusId: campus.id })), 10);
@@ -976,41 +996,40 @@ async function main() {
 
     console.log('\n30) Generating notifications, parent-teacher conversations, and messages...');
     const notificationRows: any[] = [];
+    // `data.route` matches the deep-link convention notifyPortalAccount() (in
+    // communication.service.ts) now attaches to every real alert — seeding it
+    // here means tapping a seeded notification on mobile actually navigates
+    // somewhere, instead of only working for notifications sent after seeding.
     const notificationTemplates = [
-      { type: 'PUSH', title: 'Fee Due Reminder', content: 'Term fee payment is due soon. Please clear dues to avoid late fees.' },
-      { type: 'EMAIL', title: 'Attendance Alert', content: 'Your ward was marked absent today. Contact the class teacher for details.' },
-      { type: 'PUSH', title: 'Exam Result Published', content: 'Report card for the latest exam has been published on the portal.' },
-      { type: 'SMS', title: 'Homework Assigned', content: 'New homework has been assigned. Check the portal for details.' },
-      { type: 'PUSH', title: 'PTM Reminder', content: 'Parent-Teacher meeting is scheduled this weekend. Please book a slot.' },
-      { type: 'EMAIL', title: 'Holiday Notice', content: 'School will remain closed for the upcoming holiday.' },
+      { type: 'PUSH', title: 'Fee Due Reminder', content: 'Term fee payment is due soon. Please clear dues to avoid late fees.', route: '/modules/student/fees' },
+      { type: 'EMAIL', title: 'Attendance Alert', content: 'Your ward was marked absent today. Contact the class teacher for details.', route: '/modules/student/attendance' },
+      { type: 'PUSH', title: 'Exam Result Published', content: 'Report card for the latest exam has been published on the portal.', route: '/modules/student/grades' },
+      { type: 'SMS', title: 'Homework Assigned', content: 'New homework has been assigned. Check the portal for details.', route: '/modules/student/homework' },
+      { type: 'PUSH', title: 'PTM Reminder', content: 'Parent-Teacher meeting is scheduled this weekend. Please book a slot.', route: '/modules/shared/ptm' },
+      { type: 'EMAIL', title: 'Holiday Notice', content: 'School will remain closed for the upcoming holiday.', route: '/modules/shared/notifications' },
     ];
+    // Note: staff have no PortalAccount in this schema (only PARENT/STUDENT
+    // do — see portalRows above; staff auth is a separate Staff.passwordHash
+    // flow with no "setup portal" step anywhere). The in-app Notification
+    // list is PortalAccount-keyed (communication.service.ts's
+    // getNotifications), so a staff-targeted row here would be permanently
+    // unreachable through the API — not seeded, to avoid dead rows. Staff
+    // still get real push notifications (leave decisions, exam schedules,
+    // substitutions) since those key off Staff.id directly via PushToken,
+    // no PortalAccount required.
     for (const portal of portalRows) {
       const count = faker.number.int({ min: 3, max: 6 });
       for (let i = 0; i < count; i++) {
         const template = randomItem(notificationTemplates);
         notificationRows.push({
           id: randomUUID(),
-          recipientId: portal.referenceId,
+          recipientId: portal.id,
           type: template.type,
           title: template.title,
           content: template.content,
           priority: weightedPick([{ value: 'NORMAL', weight: 80 }, { value: 'URGENT', weight: 15 }, { value: 'LOW', weight: 5 }]),
           readStatus: faker.datatype.boolean(),
-        });
-      }
-    }
-    for (const staff of staffRecords) {
-      const count = faker.number.int({ min: 2, max: 4 });
-      for (let i = 0; i < count; i++) {
-        const template = randomItem(notificationTemplates);
-        notificationRows.push({
-          id: randomUUID(),
-          recipientId: staff.id,
-          type: template.type,
-          title: template.title,
-          content: template.content,
-          priority: weightedPick([{ value: 'NORMAL', weight: 85 }, { value: 'URGENT', weight: 10 }, { value: 'LOW', weight: 5 }]),
-          readStatus: faker.datatype.boolean(),
+          data: { route: template.route },
         });
       }
     }
@@ -2310,7 +2329,12 @@ async function main() {
     await batchInsert('payslips', prisma.payslip, payslipRows, 5000);
 
     const performanceReviewRows: any[] = [];
-    faker.helpers.arrayElements(teacherIds, Math.round(teacherIds.length * 0.5)).forEach((staffId) => {
+    // Random 50% sample would only *maybe* include the named demo teacher —
+    // guarantee it explicitly so the account used for testing/demoing always
+    // has review history to show.
+    const reviewedTeacherIds = new Set(faker.helpers.arrayElements(teacherIds, Math.round(teacherIds.length * 0.5)));
+    if (namedTeacherIdThisCampus) reviewedTeacherIds.add(namedTeacherIdThisCampus);
+    Array.from(reviewedTeacherIds).forEach((staffId) => {
       ['2025 Q2', '2025 Q4'].forEach((cycle) => {
         performanceReviewRows.push({
           id: randomUUID(), staffId, reviewerId: namedStaffIdsThisCampus[1] ?? namedStaffIdsThisCampus[0], cycle,
@@ -3224,29 +3248,33 @@ async function main() {
     const currentParentIds = Array.from(new Set(currentParentLinks.map((p) => p.parentId)));
     const parentByCurrentStudent = new Map(currentParentLinks.map((p) => [p.studentId, p.parentId]));
 
+    // recipientId must be the student's PortalAccount id, not Student.id
+    // itself — communication.service.ts's getNotifications resolves a portal
+    // account by referenceId first, then looks up notifications by that
+    // account's own id. Staff notifications are intentionally not seeded
+    // here — staff have no PortalAccount in this schema (see the historical
+    // block's comment above), so they'd be unreachable dead rows.
+    const currentStudentPortalAccounts = await prisma.portalAccount.findMany({
+      where: { referenceId: { in: currentStudentIds }, userType: 'STUDENT' },
+      select: { id: true, referenceId: true },
+    });
+    const portalAccountIdByCurrentStudent = new Map(currentStudentPortalAccounts.map((p) => [p.referenceId, p.id]));
+
     const currentNotificationTemplates = [
-      { type: 'PUSH', title: 'New Session Update', content: `Welcome to ${SESSION_DEFS[1].name}. Your class and section details have been updated.` },
-      { type: 'EMAIL', title: 'Fee Due Reminder', content: 'Term fee payment for the new session is due soon.' },
-      { type: 'PUSH', title: 'Timetable Published', content: 'The updated timetable for this session is now available on the portal.' },
+      { type: 'PUSH', title: 'New Session Update', content: `Welcome to ${SESSION_DEFS[1].name}. Your class and section details have been updated.`, route: '/modules/shared/notifications' },
+      { type: 'EMAIL', title: 'Fee Due Reminder', content: 'Term fee payment for the new session is due soon.', route: '/modules/student/fees' },
+      { type: 'PUSH', title: 'Timetable Published', content: 'The updated timetable for this session is now available on the portal.', route: '/modules/student/dashboard' },
     ];
     const currentNotificationRows: any[] = [];
-    for (const staff of currentStaff) {
-      const count = faker.number.int({ min: 1, max: 3 });
-      for (let i = 0; i < count; i++) {
-        const template = randomItem(currentNotificationTemplates);
-        currentNotificationRows.push({
-          id: randomUUID(), recipientId: staff.id, type: template.type, title: template.title, content: template.content,
-          priority: 'NORMAL', readStatus: faker.datatype.boolean(),
-        });
-      }
-    }
     for (const enrollment of currentEnrollments) {
+      const recipientId = portalAccountIdByCurrentStudent.get(enrollment.studentId);
+      if (!recipientId) continue;
       const count = faker.number.int({ min: 1, max: 3 });
       for (let i = 0; i < count; i++) {
         const template = randomItem(currentNotificationTemplates);
         currentNotificationRows.push({
-          id: randomUUID(), recipientId: enrollment.studentId, type: template.type, title: template.title, content: template.content,
-          priority: 'NORMAL', readStatus: faker.datatype.boolean(),
+          id: randomUUID(), recipientId, type: template.type, title: template.title, content: template.content,
+          priority: 'NORMAL', readStatus: faker.datatype.boolean(), data: { route: template.route },
         });
       }
     }

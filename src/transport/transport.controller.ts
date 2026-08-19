@@ -8,10 +8,13 @@ import {
   Delete,
   Put,
   Query,
+  UseGuards,
   ForbiddenException,
 } from '@nestjs/common';
 import { TransportService } from './transport.service';
 import { RequirePermissions } from '../auth/permissions.decorator';
+import { RequireAnyPermission } from '../auth/any-permission.decorator';
+import { AnyPermissionGuard } from '../auth/any-permission.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { OwnershipService } from '../auth/ownership.service';
@@ -150,7 +153,9 @@ export class TransportController {
   }
 
   @Get('students/:enrollmentId')
-  @RequirePermissions('MANAGE_TRANSPORT')
+  @UseGuards(AnyPermissionGuard)
+  @RequireAnyPermission('VIEW_STUDENTS', 'MANAGE_TRANSPORT')
+  @RequirePermissions()
   getStudentTransport(@Param('enrollmentId') enrollmentId: string) {
     return this.transportService.getStudentTransport(enrollmentId);
   }
