@@ -121,6 +121,79 @@ export class AuthService {
     };
   }
 
+  // Re-issues a token for an already-authenticated user, re-reading their
+  // role's permissions fresh from the DB instead of reusing the snapshot
+  // baked into their current (possibly stale) token. Lets a user pick up a
+  // permission change made after they logged in without a full logout —
+  // same Staff-then-PortalAccount identity resolution as changePassword.
+  async refreshSession(userId: string, identifier: string) {
+    let user;
+    let roleName;
+    let permissions;
+
+    const staff = await this.prisma.staff.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
+
+    if (staff) {
+      if (staff.status !== 'Active')
+        throw new UnauthorizedException('Account suspended.');
+      user = {
+        id: staff.id,
+        email: staff.email,
+        fullName: staff.fullName,
+        campusId: staff.campusId,
+      };
+      roleName = staff.role.name;
+      permissions = staff.role.permissions;
+    } else {
+      const portalUser = await this.prisma.portalAccount.findFirst({
+        where: { referenceId: userId },
+      });
+      if (!portalUser) throw new NotFoundException('Account not found.');
+      if (portalUser.status !== 'Active')
+        throw new UnauthorizedException('Account suspended.');
+
+      const role = await this.prisma.role.findUnique({
+        where: {
+          name: portalUser.userType === 'STUDENT' ? 'Student' : 'Parent',
+        },
+      });
+
+      user = {
+        id: portalUser.referenceId,
+        referenceId: portalUser.referenceId,
+        username: portalUser.username,
+        userType: portalUser.userType,
+        campusId: null,
+      };
+      roleName = role ? role.name : portalUser.userType;
+      permissions = role ? role.permissions : [];
+    }
+
+    const canAccessAllCampuses = permissions.includes('*');
+
+    const payload = {
+      sub: user.id,
+      identifier,
+      role: roleName,
+      permissions,
+      campusId: user.campusId ?? null,
+      canAccessAllCampuses,
+    };
+
+    return {
+      message: 'Session refreshed',
+      token: this.jwtService.sign(payload),
+      user: {
+        ...user,
+        role: roleName,
+        permissions,
+      },
+    };
+  }
+
   // JWT `sub`/`userId` is a Staff id for staff logins, or the Student/Parent's
   // own id (PortalAccount.referenceId) for portal logins — never the
   // PortalAccount row's own id — so we try Staff first, then fall back.

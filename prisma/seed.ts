@@ -5,6 +5,8 @@ import * as bcrypt from 'bcrypt';
 import { faker } from '@faker-js/faker';
 import { randomUUID } from 'crypto';
 import { PromotionsService } from '../src/promotions/promotions.service';
+import { DocumentRenderingService } from '../src/documents/document-rendering.service';
+import { StorageService } from '../src/storage/storage.service';
 
 const prisma = new PrismaClient();
 
@@ -1781,6 +1783,39 @@ async function main() {
     await batchInsert('acms_notifications', prisma.aCMSNotification, acmsNotificationRows, 3000);
 
     console.log('\n17) Issuing certificates for top performers...');
+    // None of these are backed by a real DocumentTemplate — they simulate
+    // "already issued" certificates for demo browsing, not a real
+    // issue-workflow run. Still render one real, viewable PDF (via the same
+    // DocumentRenderingService/StorageService the live issue-certificate
+    // flow uses) and share its URL across all 120 rows — real/valid file,
+    // not a fabricated URL on a domain that doesn't resolve to anything.
+    const documentRenderer = new DocumentRenderingService();
+    const storageService = new StorageService();
+    const sampleCertificateBuffer = await documentRenderer.renderCertificate(
+      {
+        designJson: {
+          fields: [
+            { key: '[SCHOOL_NAME]', x: 260, y: 80, fontSize: 20, fontWeight: 'bold' },
+            { key: '[TITLE]', x: 260, y: 220, fontSize: 36, fontWeight: 'bold' },
+            { key: '[TYPE]', x: 260, y: 280, fontSize: 14 },
+            { key: '[DATE]', x: 260, y: 480, fontSize: 12 },
+          ],
+        },
+      },
+      {
+        schoolName: 'Central Academy',
+        title: 'Merit Certificate',
+        type: 'Awarded for outstanding academic performance',
+        date: new Date('2026-03-15').toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }),
+      },
+    );
+    const { url: sampleCertificateUrl } = await storageService.uploadFile(
+      sampleCertificateBuffer,
+      'certificates',
+      'merit-sample.pdf',
+      'application/pdf',
+    );
+
     const certificateRows: any[] = [];
     const topPerformers = enrollments.filter((_, index) => index % 40 === 0).slice(0, 120);
     for (const enrollment of topPerformers) {
@@ -1789,7 +1824,7 @@ async function main() {
         studentId: enrollment.studentId,
         type: 'MERIT',
         title: 'Merit Certificate',
-        fileUrl: 'https://centralacademy.edu/certificates/merit.pdf',
+        fileUrl: sampleCertificateUrl,
         issueDate: new Date('2026-03-15'),
       });
     }

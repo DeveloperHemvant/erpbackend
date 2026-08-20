@@ -258,7 +258,21 @@ export class TemplateService {
     return this.prisma.certificate.findMany({
       where: studentId ? { studentId } : undefined,
       include: {
-        student: { select: { id: true, fullName: true, admissionNumber: true } },
+        student: {
+          select: {
+            id: true,
+            fullName: true,
+            admissionNumber: true,
+            enrollments: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: {
+                section: { select: { name: true, class: { select: { grade: true } } } },
+                session: { select: { name: true } },
+              },
+            },
+          },
+        },
         template: { select: { id: true, name: true } },
       },
       orderBy: { issueDate: 'desc' },

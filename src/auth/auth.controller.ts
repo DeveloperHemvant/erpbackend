@@ -42,6 +42,16 @@ export class AuthController {
     return this.authService.changePassword(user.userId, dto);
   }
 
+  @Post('refresh-session')
+  @RequirePermissions()
+  @ApiOperation({
+    summary:
+      "Re-issue the current user's token with their role's current permissions, without a full logout",
+  })
+  refreshSession(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.refreshSession(user.userId, user.identifier);
+  }
+
   @Get('me/profile')
   @RequirePermissions()
   @ApiOperation({ summary: "Get the current user's own profile settings" })

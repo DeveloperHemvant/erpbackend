@@ -276,9 +276,15 @@ export class AnalyticsRepository {
     });
   }
 
+  // Scoped to the active session only — unscoped, this returned one Class
+  // row per grade PER SESSION (e.g. two separate "Grade 2" rows, one
+  // historical and one current), which the service's revenueByClass map
+  // then surfaced as duplicate same-named entries (React key collisions on
+  // mobile, and a misleading report mixing closed-session revenue into a
+  // "current fee collection by class" view).
   findClassRevenueBreakdown(tenantContext: TenantContext) {
     return this.prisma.class.findMany({
-      where: campusFilter(tenantContext),
+      where: { ...campusFilter(tenantContext), session: { isActive: true } },
       include: {
         sections: { include: { enrollments: { include: { invoices: true } } } },
       },

@@ -90,10 +90,11 @@ describe('AnalyticsRepository — Campus Isolation Phase 3 (Milestones 2 & 3)', 
       });
     });
 
-    it('findClassRevenueBreakdown filters by campusId (required column, requireCampusId) when restricted', async () => {
+    it('findClassRevenueBreakdown filters by campusId (required column, requireCampusId) and the active session when restricted', async () => {
       await repo.findClassRevenueBreakdown(restricted);
       expect(mockPrisma.class.findMany.mock.calls[0][0].where).toEqual({
         campusId: 'campus-a',
+        session: { isActive: true },
       });
     });
 
